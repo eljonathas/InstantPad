@@ -12,6 +12,10 @@ public sealed class AppSettings
     public double MonitorVolume { get; set; } = 0.6;
     public bool MicEnabled { get; set; } = true;
     public string? ActiveInterfaceId { get; set; }
+
+    /// <summary>Language tag such as "en" or "pt". Null follows the system language.</summary>
+    public string? Language { get; set; }
+
     public NumericScheme NumericScheme { get; set; } = NumericScheme.Numpad;
 
     /// <summary>Overrides the stop key of the numeric scheme when set.</summary>

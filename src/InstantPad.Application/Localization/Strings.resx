@@ -1,0 +1,427 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AddToPad" xml:space="preserve">
+    <value>+ Pad</value>
+  </data>
+  <data name="AudioDeviceNotResponding" xml:space="preserve">
+    <value>An audio device is not responding. If you just installed VB-CABLE, restart your PC.</value>
+  </data>
+  <data name="AudioFileFilter" xml:space="preserve">
+    <value>Audio|*.mp3;*.wav;*.m4a;*.aac;*.wma;*.flac|All files|*.*</value>
+  </data>
+  <data name="AudioFileType" xml:space="preserve">
+    <value>Audio</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="CatalogNoConnection" xml:space="preserve">
+    <value>No connection to MyInstants.</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Color" xml:space="preserve">
+    <value>Color</value>
+  </data>
+  <data name="Columns" xml:space="preserve">
+    <value>Columns</value>
+  </data>
+  <data name="ConfigureInterfaceTitle" xml:space="preserve">
+    <value>Configure interface</value>
+  </data>
+  <data name="ConfigureThisInterface" xml:space="preserve">
+    <value>Configure this interface</value>
+  </data>
+  <data name="DefaultInterfaceName" xml:space="preserve">
+    <value>Main</value>
+  </data>
+  <data name="DefaultNewInterfaceName" xml:space="preserve">
+    <value>Interface {0}</value>
+  </data>
+  <data name="DeleteInterfaceQuestion" xml:space="preserve">
+    <value>Delete "{0}" and remove its {1} sounds from the pads? Your favorites stay saved.</value>
+  </data>
+  <data name="DeleteInterfaceTitle" xml:space="preserve">
+    <value>Delete interface</value>
+  </data>
+  <data name="DevelopmentVersion" xml:space="preserve">
+    <value>Development version</value>
+  </data>
+  <data name="DeviceUnavailable" xml:space="preserve">
+    <value>Device unavailable: {0}</value>
+  </data>
+  <data name="Downloading" xml:space="preserve">
+    <value>Downloading {0}</value>
+  </data>
+  <data name="DownloadingVersion" xml:space="preserve">
+    <value>Downloading version {0}: {1}%</value>
+  </data>
+  <data name="DriverDownloading" xml:space="preserve">
+    <value>Downloading the driver from the official site...</value>
+  </data>
+  <data name="DriverFailed" xml:space="preserve">
+    <value>Failed: {0}</value>
+  </data>
+  <data name="DriverFound" xml:space="preserve">
+    <value>Driver found.</value>
+  </data>
+  <data name="DriverInstallCanceled" xml:space="preserve">
+    <value>Installation canceled.</value>
+  </data>
+  <data name="DriverMissing" xml:space="preserve">
+    <value>No virtual cable found. Without one, your sounds will not reach the game.</value>
+  </data>
+  <data name="DriverOpeningSetup" xml:space="preserve">
+    <value>Opening the installer. Click "Install Driver" and restart your PC when it finishes.</value>
+  </data>
+  <data name="DriverSearching" xml:space="preserve">
+    <value>Looking for the latest VB-CABLE version...</value>
+  </data>
+  <data name="DriverSetupMissing" xml:space="preserve">
+    <value>{0} was not in the downloaded package.</value>
+  </data>
+  <data name="DriverSignatureInvalid" xml:space="preserve">
+    <value>The downloaded installer has no valid digital signature. Installation canceled.</value>
+  </data>
+  <data name="DriverSignatureUnreadable" xml:space="preserve">
+    <value>Could not read the installer's signature.</value>
+  </data>
+  <data name="DriverSignerUnexpected" xml:space="preserve">
+    <value>The installer was signed by an unexpected publisher: {0}</value>
+  </data>
+  <data name="DriverVerifying" xml:space="preserve">
+    <value>Checking the digital signature...</value>
+  </data>
+  <data name="EmptyPad" xml:space="preserve">
+    <value>Pad {0} is empty</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="FailedSound" xml:space="preserve">
+    <value>{0} failed: {1}</value>
+  </data>
+  <data name="Favorite" xml:space="preserve">
+    <value>Favorite</value>
+  </data>
+  <data name="FavoritesCount" xml:space="preserve">
+    <value>{0} favorites</value>
+  </data>
+  <data name="FavoritesEmpty" xml:space="preserve">
+    <value>No favorites yet. Use the star on a result, or right-click a pad.</value>
+  </data>
+  <data name="FavoritesOne" xml:space="preserve">
+    <value>1 favorite</value>
+  </data>
+  <data name="FavoritesTab" xml:space="preserve">
+    <value>★ Favorites</value>
+  </data>
+  <data name="Game" xml:space="preserve">
+    <value>Game</value>
+  </data>
+  <data name="GameInstruction" xml:space="preserve">
+    <value>Open the voice settings of your game or Discord and select "{0}" as the microphone.</value>
+  </data>
+  <data name="GameMicrophoneHint" xml:space="preserve">
+    <value>In the game, choose the microphone: {0}</value>
+  </data>
+  <data name="Headphones" xml:space="preserve">
+    <value>Headphones</value>
+  </data>
+  <data name="HotkeyInUse" xml:space="preserve">
+    <value>Shortcut in use by another program: {0}</value>
+  </data>
+  <data name="HotkeyPrompt" xml:space="preserve">
+    <value>Press the key or combination.
+Esc cancels.</value>
+  </data>
+  <data name="HotkeyTitle" xml:space="preserve">
+    <value>Set shortcut</value>
+  </data>
+  <data name="InGame" xml:space="preserve">
+    <value>In the game</value>
+  </data>
+  <data name="InGameSound" xml:space="preserve">
+    <value>In the game: {0}</value>
+  </data>
+  <data name="InstallVbCable" xml:space="preserve">
+    <value>Install VB-CABLE</value>
+  </data>
+  <data name="InterfaceFull" xml:space="preserve">
+    <value>The {0} interface is full.</value>
+  </data>
+  <data name="InterfaceFullHint" xml:space="preserve">
+    <value>This interface is full. Create another one or choose a pad.</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="LanguageSystem" xml:space="preserve">
+    <value>System language</value>
+  </data>
+  <data name="Listening" xml:space="preserve">
+    <value>Listening to {0}</value>
+  </data>
+  <data name="LoadMore" xml:space="preserve">
+    <value>Load more</value>
+  </data>
+  <data name="Loading" xml:space="preserve">
+    <value>Loading...</value>
+  </data>
+  <data name="MenuConfigure" xml:space="preserve">
+    <value>Configure...</value>
+  </data>
+  <data name="MenuDownload" xml:space="preserve">
+    <value>Download to computer...</value>
+  </data>
+  <data name="MenuFavorite" xml:space="preserve">
+    <value>Add to favorites</value>
+  </data>
+  <data name="MenuLoadFile" xml:space="preserve">
+    <value>Load audio file...</value>
+  </data>
+  <data name="MenuMoveLeft" xml:space="preserve">
+    <value>Move left</value>
+  </data>
+  <data name="MenuMoveRight" xml:space="preserve">
+    <value>Move right</value>
+  </data>
+  <data name="MenuRemoveFromPad" xml:space="preserve">
+    <value>Remove from pad</value>
+  </data>
+  <data name="MenuRemoveShortcut" xml:space="preserve">
+    <value>Remove shortcut</value>
+  </data>
+  <data name="MenuRename" xml:space="preserve">
+    <value>Rename...</value>
+  </data>
+  <data name="MenuSendToInterface" xml:space="preserve">
+    <value>Send to interface</value>
+  </data>
+  <data name="MenuSetShortcut" xml:space="preserve">
+    <value>Set shortcut...</value>
+  </data>
+  <data name="MenuUnfavorite" xml:space="preserve">
+    <value>Remove from favorites</value>
+  </data>
+  <data name="Mic" xml:space="preserve">
+    <value>Mic</value>
+  </data>
+  <data name="MicMuted" xml:space="preserve">
+    <value>Mic muted</value>
+  </data>
+  <data name="MicOpen" xml:space="preserve">
+    <value>Mic open</value>
+  </data>
+  <data name="MicStopped" xml:space="preserve">
+    <value>The microphone stopped: {0}</value>
+  </data>
+  <data name="Minimize" xml:space="preserve">
+    <value>Minimize</value>
+  </data>
+  <data name="Missing" xml:space="preserve">
+    <value>missing</value>
+  </data>
+  <data name="Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="NewInterfaceTitle" xml:space="preserve">
+    <value>New interface</value>
+  </data>
+  <data name="NextInterface" xml:space="preserve">
+    <value>Next interface</value>
+  </data>
+  <data name="NoCatalogConnection" xml:space="preserve">
+    <value>No connection to MyInstants</value>
+  </data>
+  <data name="NoDriverHint" xml:space="preserve">
+    <value>No virtual driver: open Settings and install it</value>
+  </data>
+  <data name="NothingFound" xml:space="preserve">
+    <value>Nothing found</value>
+  </data>
+  <data name="NumericAltDigits" xml:space="preserve">
+    <value>Alt + 1 to 0</value>
+  </data>
+  <data name="NumericCtrlNumpad" xml:space="preserve">
+    <value>Ctrl + numeric keypad</value>
+  </data>
+  <data name="NumericHint" xml:space="preserve">
+    <value>{0} to {1} play the first 10 pads of the active interface. {2} and {3} switch interfaces. {4} stops everything.</value>
+  </data>
+  <data name="NumericHintNumpad" xml:space="preserve">
+    <value> Keep NumLock on. While the app is open, these keys are reserved for it.</value>
+  </data>
+  <data name="NumericHintOff" xml:space="preserve">
+    <value>Only the shortcuts you set on each pad work.</value>
+  </data>
+  <data name="NumericNumpad" xml:space="preserve">
+    <value>Numeric keypad (default)</value>
+  </data>
+  <data name="NumericOff" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="NumericShortcuts" xml:space="preserve">
+    <value>Numeric shortcuts</value>
+  </data>
+  <data name="Ok" xml:space="preserve">
+    <value>ok</value>
+  </data>
+  <data name="OpenSoundSettings" xml:space="preserve">
+    <value>Open Windows sound settings</value>
+  </data>
+  <data name="Output" xml:space="preserve">
+    <value>Output</value>
+  </data>
+  <data name="OutputStopped" xml:space="preserve">
+    <value>The audio output stopped: {0}</value>
+  </data>
+  <data name="PadCount" xml:space="preserve">
+    <value>{0} pads</value>
+  </data>
+  <data name="PadCountTooSmall" xml:space="preserve">
+    <value>{0} pads cannot hold the {1} sounds in this interface.</value>
+  </data>
+  <data name="PadNameTitle" xml:space="preserve">
+    <value>Pad name</value>
+  </data>
+  <data name="PadSelected" xml:space="preserve">
+    <value>Pad {0} selected: choose a sound</value>
+  </data>
+  <data name="PlayInGame" xml:space="preserve">
+    <value>Play in the game now</value>
+  </data>
+  <data name="PreviewOnHeadphones" xml:space="preserve">
+    <value>Listen on your headphones only</value>
+  </data>
+  <data name="PreviousInterface" xml:space="preserve">
+    <value>Previous interface</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="RefreshDevices" xml:space="preserve">
+    <value>Refresh devices</value>
+  </data>
+  <data name="RestartNow" xml:space="preserve">
+    <value>Restart now</value>
+  </data>
+  <data name="RoutingStatus" xml:space="preserve">
+    <value>Mic {0}   Output {1}   Driver {2}</value>
+  </data>
+  <data name="Rows" xml:space="preserve">
+    <value>Rows</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="SaveToComputer" xml:space="preserve">
+    <value>Download to computer</value>
+  </data>
+  <data name="SaveToPad" xml:space="preserve">
+    <value>Save to a pad</value>
+  </data>
+  <data name="Saved" xml:space="preserve">
+    <value>Saved: {0}</value>
+  </data>
+  <data name="Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="SentTo" xml:space="preserve">
+    <value>Sent to {0}</value>
+  </data>
+  <data name="SetShortcut" xml:space="preserve">
+    <value>Set shortcut</value>
+  </data>
+  <data name="SettingsTab" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="SetupGameOutput" xml:space="preserve">
+    <value>2. Output to the game</value>
+  </data>
+  <data name="SetupMicrophone" xml:space="preserve">
+    <value>1. Your microphone</value>
+  </data>
+  <data name="SetupMonitor" xml:space="preserve">
+    <value>3. Where you listen</value>
+  </data>
+  <data name="SoundCopyFailed" xml:space="preserve">
+    <value>Could not copy the file: {0}</value>
+  </data>
+  <data name="SoundDownloadFailed" xml:space="preserve">
+    <value>Could not download the sound: {0}</value>
+  </data>
+  <data name="SoundFileMissing" xml:space="preserve">
+    <value>The sound file no longer exists.</value>
+  </data>
+  <data name="SoundHasNoAudio" xml:space="preserve">
+    <value>The file has no audio.</value>
+  </data>
+  <data name="SoundOpenFailed" xml:space="preserve">
+    <value>Could not open the sound: {0}</value>
+  </data>
+  <data name="SoundSaveFailed" xml:space="preserve">
+    <value>Could not save the file: {0}</value>
+  </data>
+  <data name="StopAll" xml:space="preserve">
+    <value>■  Stop</value>
+  </data>
+  <data name="StopShortcut" xml:space="preserve">
+    <value>Shortcut to stop everything</value>
+  </data>
+  <data name="Stopped" xml:space="preserve">
+    <value>Stopped</value>
+  </data>
+  <data name="SystemOutputOnCable" xml:space="preserve">
+    <value>Windows is sending all PC sound into the cable. That mixes every app into your mic and you stop hearing them. Set your headphones as the output device in the Windows sound settings.</value>
+  </data>
+  <data name="SystemOutputOnCableHint" xml:space="preserve">
+    <value>Windows output is on the cable: open Settings to fix it</value>
+  </data>
+  <data name="Trending" xml:space="preserve">
+    <value>Trending</value>
+  </data>
+  <data name="TrendingTitle" xml:space="preserve">
+    <value>Trending in Brazil</value>
+  </data>
+  <data name="Update" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="UpdateBadChecksum" xml:space="preserve">
+    <value>The published update has no valid checksum. Nothing was changed.</value>
+  </data>
+  <data name="UpdateDownloadFailed" xml:space="preserve">
+    <value>Could not download the update. Check your connection.</value>
+  </data>
+  <data name="UpdateHashMismatch" xml:space="preserve">
+    <value>The downloaded file does not match the published version. Nothing was changed.</value>
+  </data>
+  <data name="UpdateNoPermission" xml:space="preserve">
+    <value>No permission to update in "{0}". Move InstantPad to a folder of yours, such as Documents, and try again.</value>
+  </data>
+  <data name="Version" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
+  <data name="VersionInstalled" xml:space="preserve">
+    <value>Version {0} is installed. It opens the next time you start the app.</value>
+  </data>
+  <data name="VirtualDriver" xml:space="preserve">
+    <value>Virtual driver</value>
+  </data>
+  <data name="Volume" xml:space="preserve">
+    <value>Volume</value>
+  </data>
+</root>

@@ -1,0 +1,427 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AddToPad" xml:space="preserve">
+    <value>+ Pad</value>
+  </data>
+  <data name="AudioDeviceNotResponding" xml:space="preserve">
+    <value>Um dispositivo de áudio não está respondendo. Se você acabou de instalar o VB-CABLE, reinicie o PC.</value>
+  </data>
+  <data name="AudioFileFilter" xml:space="preserve">
+    <value>Áudio|*.mp3;*.wav;*.m4a;*.aac;*.wma;*.flac|Todos os arquivos|*.*</value>
+  </data>
+  <data name="AudioFileType" xml:space="preserve">
+    <value>Áudio</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Cancelar</value>
+  </data>
+  <data name="CatalogNoConnection" xml:space="preserve">
+    <value>Sem conexão com o MyInstants.</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Fechar</value>
+  </data>
+  <data name="Color" xml:space="preserve">
+    <value>Cor</value>
+  </data>
+  <data name="Columns" xml:space="preserve">
+    <value>Colunas</value>
+  </data>
+  <data name="ConfigureInterfaceTitle" xml:space="preserve">
+    <value>Configurar interface</value>
+  </data>
+  <data name="ConfigureThisInterface" xml:space="preserve">
+    <value>Configurar esta interface</value>
+  </data>
+  <data name="DefaultInterfaceName" xml:space="preserve">
+    <value>Principal</value>
+  </data>
+  <data name="DefaultNewInterfaceName" xml:space="preserve">
+    <value>Interface {0}</value>
+  </data>
+  <data name="DeleteInterfaceQuestion" xml:space="preserve">
+    <value>Excluir "{0}" e tirar os {1} sons dos pads? Os favoritos continuam salvos.</value>
+  </data>
+  <data name="DeleteInterfaceTitle" xml:space="preserve">
+    <value>Excluir interface</value>
+  </data>
+  <data name="DevelopmentVersion" xml:space="preserve">
+    <value>Versão de desenvolvimento</value>
+  </data>
+  <data name="DeviceUnavailable" xml:space="preserve">
+    <value>Dispositivo indisponível: {0}</value>
+  </data>
+  <data name="Downloading" xml:space="preserve">
+    <value>Baixando {0}</value>
+  </data>
+  <data name="DownloadingVersion" xml:space="preserve">
+    <value>Baixando a versão {0}: {1}%</value>
+  </data>
+  <data name="DriverDownloading" xml:space="preserve">
+    <value>Baixando o driver do site oficial...</value>
+  </data>
+  <data name="DriverFailed" xml:space="preserve">
+    <value>Falhou: {0}</value>
+  </data>
+  <data name="DriverFound" xml:space="preserve">
+    <value>Driver encontrado.</value>
+  </data>
+  <data name="DriverInstallCanceled" xml:space="preserve">
+    <value>Instalação cancelada.</value>
+  </data>
+  <data name="DriverMissing" xml:space="preserve">
+    <value>Nenhum cabo virtual encontrado. Sem ele os sons não chegam ao jogo.</value>
+  </data>
+  <data name="DriverOpeningSetup" xml:space="preserve">
+    <value>Abrindo o instalador. Clique em "Install Driver" e reinicie o PC ao terminar.</value>
+  </data>
+  <data name="DriverSearching" xml:space="preserve">
+    <value>Procurando a versão mais recente do VB-CABLE...</value>
+  </data>
+  <data name="DriverSetupMissing" xml:space="preserve">
+    <value>{0} não veio no pacote baixado.</value>
+  </data>
+  <data name="DriverSignatureInvalid" xml:space="preserve">
+    <value>O instalador baixado não tem assinatura digital válida. Instalação cancelada.</value>
+  </data>
+  <data name="DriverSignatureUnreadable" xml:space="preserve">
+    <value>Não foi possível ler a assinatura do instalador.</value>
+  </data>
+  <data name="DriverSignerUnexpected" xml:space="preserve">
+    <value>Instalador assinado por um emissor inesperado: {0}</value>
+  </data>
+  <data name="DriverVerifying" xml:space="preserve">
+    <value>Conferindo a assinatura digital...</value>
+  </data>
+  <data name="EmptyPad" xml:space="preserve">
+    <value>Pad {0} vazio</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>Erro</value>
+  </data>
+  <data name="FailedSound" xml:space="preserve">
+    <value>Falhou {0}: {1}</value>
+  </data>
+  <data name="Favorite" xml:space="preserve">
+    <value>Favoritar</value>
+  </data>
+  <data name="FavoritesCount" xml:space="preserve">
+    <value>{0} favoritos</value>
+  </data>
+  <data name="FavoritesEmpty" xml:space="preserve">
+    <value>Nenhum favorito ainda. Use a estrela nos resultados ou o botão direito em um pad.</value>
+  </data>
+  <data name="FavoritesOne" xml:space="preserve">
+    <value>1 favorito</value>
+  </data>
+  <data name="FavoritesTab" xml:space="preserve">
+    <value>★ Favoritos</value>
+  </data>
+  <data name="Game" xml:space="preserve">
+    <value>Jogo</value>
+  </data>
+  <data name="GameInstruction" xml:space="preserve">
+    <value>Abra as configurações de voz do jogo (ou Discord) e selecione "{0}" como microfone.</value>
+  </data>
+  <data name="GameMicrophoneHint" xml:space="preserve">
+    <value>No jogo, escolha o microfone: {0}</value>
+  </data>
+  <data name="Headphones" xml:space="preserve">
+    <value>Fones</value>
+  </data>
+  <data name="HotkeyInUse" xml:space="preserve">
+    <value>Atalho em uso por outro programa: {0}</value>
+  </data>
+  <data name="HotkeyPrompt" xml:space="preserve">
+    <value>Pressione a tecla ou combinação.
+Esc cancela.</value>
+  </data>
+  <data name="HotkeyTitle" xml:space="preserve">
+    <value>Definir atalho</value>
+  </data>
+  <data name="InGame" xml:space="preserve">
+    <value>No jogo</value>
+  </data>
+  <data name="InGameSound" xml:space="preserve">
+    <value>No jogo: {0}</value>
+  </data>
+  <data name="InstallVbCable" xml:space="preserve">
+    <value>Instalar VB-CABLE</value>
+  </data>
+  <data name="InterfaceFull" xml:space="preserve">
+    <value>A interface {0} está cheia.</value>
+  </data>
+  <data name="InterfaceFullHint" xml:space="preserve">
+    <value>Esta interface está cheia. Crie outra ou escolha um pad.</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>Idioma</value>
+  </data>
+  <data name="LanguageSystem" xml:space="preserve">
+    <value>Idioma do sistema</value>
+  </data>
+  <data name="Listening" xml:space="preserve">
+    <value>Ouvindo {0}</value>
+  </data>
+  <data name="LoadMore" xml:space="preserve">
+    <value>Carregar mais</value>
+  </data>
+  <data name="Loading" xml:space="preserve">
+    <value>Carregando...</value>
+  </data>
+  <data name="MenuConfigure" xml:space="preserve">
+    <value>Configurar...</value>
+  </data>
+  <data name="MenuDownload" xml:space="preserve">
+    <value>Baixar no computador...</value>
+  </data>
+  <data name="MenuFavorite" xml:space="preserve">
+    <value>Favoritar</value>
+  </data>
+  <data name="MenuLoadFile" xml:space="preserve">
+    <value>Carregar arquivo de áudio...</value>
+  </data>
+  <data name="MenuMoveLeft" xml:space="preserve">
+    <value>Mover para a esquerda</value>
+  </data>
+  <data name="MenuMoveRight" xml:space="preserve">
+    <value>Mover para a direita</value>
+  </data>
+  <data name="MenuRemoveFromPad" xml:space="preserve">
+    <value>Remover do pad</value>
+  </data>
+  <data name="MenuRemoveShortcut" xml:space="preserve">
+    <value>Remover atalho</value>
+  </data>
+  <data name="MenuRename" xml:space="preserve">
+    <value>Renomear...</value>
+  </data>
+  <data name="MenuSendToInterface" xml:space="preserve">
+    <value>Enviar para interface</value>
+  </data>
+  <data name="MenuSetShortcut" xml:space="preserve">
+    <value>Definir atalho...</value>
+  </data>
+  <data name="MenuUnfavorite" xml:space="preserve">
+    <value>Remover dos favoritos</value>
+  </data>
+  <data name="Mic" xml:space="preserve">
+    <value>Mic</value>
+  </data>
+  <data name="MicMuted" xml:space="preserve">
+    <value>Mic mudo</value>
+  </data>
+  <data name="MicOpen" xml:space="preserve">
+    <value>Mic aberto</value>
+  </data>
+  <data name="MicStopped" xml:space="preserve">
+    <value>Microfone parou: {0}</value>
+  </data>
+  <data name="Minimize" xml:space="preserve">
+    <value>Minimizar</value>
+  </data>
+  <data name="Missing" xml:space="preserve">
+    <value>ausente</value>
+  </data>
+  <data name="Name" xml:space="preserve">
+    <value>Nome</value>
+  </data>
+  <data name="NewInterfaceTitle" xml:space="preserve">
+    <value>Nova interface</value>
+  </data>
+  <data name="NextInterface" xml:space="preserve">
+    <value>Próxima interface</value>
+  </data>
+  <data name="NoCatalogConnection" xml:space="preserve">
+    <value>Sem conexão com o MyInstants</value>
+  </data>
+  <data name="NoDriverHint" xml:space="preserve">
+    <value>Sem driver virtual: abra Ajustes e instale</value>
+  </data>
+  <data name="NothingFound" xml:space="preserve">
+    <value>Nada encontrado</value>
+  </data>
+  <data name="NumericAltDigits" xml:space="preserve">
+    <value>Alt + 1 a 0</value>
+  </data>
+  <data name="NumericCtrlNumpad" xml:space="preserve">
+    <value>Ctrl + teclado numérico</value>
+  </data>
+  <data name="NumericHint" xml:space="preserve">
+    <value>{0} a {1} tocam os 10 primeiros pads da interface ativa. {2} e {3} trocam de interface. {4} para tudo.</value>
+  </data>
+  <data name="NumericHintNumpad" xml:space="preserve">
+    <value> Deixe o NumLock ligado. Com o app aberto, essas teclas ficam reservadas para ele.</value>
+  </data>
+  <data name="NumericHintOff" xml:space="preserve">
+    <value>Só valem os atalhos que você definir em cada pad.</value>
+  </data>
+  <data name="NumericNumpad" xml:space="preserve">
+    <value>Teclado numérico (padrão)</value>
+  </data>
+  <data name="NumericOff" xml:space="preserve">
+    <value>Desligado</value>
+  </data>
+  <data name="NumericShortcuts" xml:space="preserve">
+    <value>Atalhos numéricos</value>
+  </data>
+  <data name="Ok" xml:space="preserve">
+    <value>ok</value>
+  </data>
+  <data name="OpenSoundSettings" xml:space="preserve">
+    <value>Abrir configurações de som do Windows</value>
+  </data>
+  <data name="Output" xml:space="preserve">
+    <value>Saída</value>
+  </data>
+  <data name="OutputStopped" xml:space="preserve">
+    <value>Saída de áudio parou: {0}</value>
+  </data>
+  <data name="PadCount" xml:space="preserve">
+    <value>{0} pads</value>
+  </data>
+  <data name="PadCountTooSmall" xml:space="preserve">
+    <value>{0} pads não comportam os {1} sons desta interface.</value>
+  </data>
+  <data name="PadNameTitle" xml:space="preserve">
+    <value>Nome do pad</value>
+  </data>
+  <data name="PadSelected" xml:space="preserve">
+    <value>Pad {0} selecionado: escolha um som</value>
+  </data>
+  <data name="PlayInGame" xml:space="preserve">
+    <value>Tocar no jogo agora</value>
+  </data>
+  <data name="PreviewOnHeadphones" xml:space="preserve">
+    <value>Ouvir só nos fones</value>
+  </data>
+  <data name="PreviousInterface" xml:space="preserve">
+    <value>Interface anterior</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>Pronto</value>
+  </data>
+  <data name="RefreshDevices" xml:space="preserve">
+    <value>Atualizar dispositivos</value>
+  </data>
+  <data name="RestartNow" xml:space="preserve">
+    <value>Reiniciar agora</value>
+  </data>
+  <data name="RoutingStatus" xml:space="preserve">
+    <value>Mic {0}   Saída {1}   Driver {2}</value>
+  </data>
+  <data name="Rows" xml:space="preserve">
+    <value>Linhas</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Salvar</value>
+  </data>
+  <data name="SaveToComputer" xml:space="preserve">
+    <value>Baixar no computador</value>
+  </data>
+  <data name="SaveToPad" xml:space="preserve">
+    <value>Salvar em um pad</value>
+  </data>
+  <data name="Saved" xml:space="preserve">
+    <value>Salvo: {0}</value>
+  </data>
+  <data name="Search" xml:space="preserve">
+    <value>Buscar</value>
+  </data>
+  <data name="SentTo" xml:space="preserve">
+    <value>Enviado para {0}</value>
+  </data>
+  <data name="SetShortcut" xml:space="preserve">
+    <value>Definir atalho</value>
+  </data>
+  <data name="SettingsTab" xml:space="preserve">
+    <value>Ajustes</value>
+  </data>
+  <data name="SetupGameOutput" xml:space="preserve">
+    <value>2. Saída para o jogo</value>
+  </data>
+  <data name="SetupMicrophone" xml:space="preserve">
+    <value>1. Seu microfone</value>
+  </data>
+  <data name="SetupMonitor" xml:space="preserve">
+    <value>3. Onde você ouve</value>
+  </data>
+  <data name="SoundCopyFailed" xml:space="preserve">
+    <value>Não foi possível copiar o arquivo: {0}</value>
+  </data>
+  <data name="SoundDownloadFailed" xml:space="preserve">
+    <value>Não foi possível baixar o som: {0}</value>
+  </data>
+  <data name="SoundFileMissing" xml:space="preserve">
+    <value>O arquivo do som não existe mais.</value>
+  </data>
+  <data name="SoundHasNoAudio" xml:space="preserve">
+    <value>O arquivo não contém áudio.</value>
+  </data>
+  <data name="SoundOpenFailed" xml:space="preserve">
+    <value>Não foi possível abrir o som: {0}</value>
+  </data>
+  <data name="SoundSaveFailed" xml:space="preserve">
+    <value>Não foi possível salvar o arquivo: {0}</value>
+  </data>
+  <data name="StopAll" xml:space="preserve">
+    <value>■  Parar</value>
+  </data>
+  <data name="StopShortcut" xml:space="preserve">
+    <value>Atalho para parar tudo</value>
+  </data>
+  <data name="Stopped" xml:space="preserve">
+    <value>Parado</value>
+  </data>
+  <data name="SystemOutputOnCable" xml:space="preserve">
+    <value>O Windows está mandando todo o som do PC para o cabo. Isso mistura os outros apps no seu mic e você para de ouvi-los. Escolha seus fones como dispositivo de saída nas configurações de som do Windows.</value>
+  </data>
+  <data name="SystemOutputOnCableHint" xml:space="preserve">
+    <value>A saída do Windows está no cabo: abra Ajustes para corrigir</value>
+  </data>
+  <data name="Trending" xml:space="preserve">
+    <value>Em alta</value>
+  </data>
+  <data name="TrendingTitle" xml:space="preserve">
+    <value>Em alta no Brasil</value>
+  </data>
+  <data name="Update" xml:space="preserve">
+    <value>Atualização</value>
+  </data>
+  <data name="UpdateBadChecksum" xml:space="preserve">
+    <value>A atualização publicada não tem um checksum válido. Nada foi alterado.</value>
+  </data>
+  <data name="UpdateDownloadFailed" xml:space="preserve">
+    <value>Não foi possível baixar a atualização. Verifique sua conexão.</value>
+  </data>
+  <data name="UpdateHashMismatch" xml:space="preserve">
+    <value>O arquivo baixado não confere com a versão publicada. Nada foi alterado.</value>
+  </data>
+  <data name="UpdateNoPermission" xml:space="preserve">
+    <value>Sem permissão para atualizar em "{0}". Mova o InstantPad para uma pasta sua, como Documentos, e tente de novo.</value>
+  </data>
+  <data name="Version" xml:space="preserve">
+    <value>Versão {0}</value>
+  </data>
+  <data name="VersionInstalled" xml:space="preserve">
+    <value>Versão {0} instalada. Ela abre na próxima vez.</value>
+  </data>
+  <data name="VirtualDriver" xml:space="preserve">
+    <value>Driver virtual</value>
+  </data>
+  <data name="Volume" xml:space="preserve">
+    <value>Volume</value>
+  </data>
+</root>

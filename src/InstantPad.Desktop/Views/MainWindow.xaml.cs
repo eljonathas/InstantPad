@@ -12,6 +12,7 @@ public partial class MainWindow : Window
 {
     private const string PadDragFormat = "InstantPad.PadSlot";
     private const int FrameIntervalMs = 33;
+    private const int AudioCloseTimeoutMs = 3000;
 
     private readonly ShellViewModel _shell;
     private readonly SoundRowActions _rowActions;
@@ -55,7 +56,9 @@ public partial class MainWindow : Window
         _frameTimer.Stop();
         _shell.SaveState();
         _hotkeyHost.Dispose();
-        _audio.Dispose();
+
+        // A stuck audio driver must not keep the app from closing.
+        Task.Run(_audio.Dispose).Wait(AudioCloseTimeoutMs);
     }
 
     private void ShowSoundSources()

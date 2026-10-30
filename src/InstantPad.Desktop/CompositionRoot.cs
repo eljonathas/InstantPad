@@ -3,6 +3,7 @@ using System.Reflection;
 using InstantPad.Application.Hotkeys;
 using InstantPad.Application.Sounds;
 using InstantPad.Application.Updates;
+using InstantPad.Desktop.Localization;
 using InstantPad.Desktop.Services;
 using InstantPad.Desktop.ViewModels;
 using InstantPad.Desktop.Views;
@@ -43,6 +44,7 @@ public static class CompositionRoot
         var hotkeys = new HotkeyService(hotkeyHost);
         var dialogs = new DialogService(hotkeys);
         var settings = settingsRepository.Load();
+        Localizer.Instance.Apply(settings.Language);
 
         var display = new DisplayViewModel();
         var mixer = new MixerViewModel(engine, settings);

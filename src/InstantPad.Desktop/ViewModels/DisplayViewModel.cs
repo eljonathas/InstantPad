@@ -1,9 +1,11 @@
+using InstantPad.Application.Localization;
+
 namespace InstantPad.Desktop.ViewModels;
 
 /// <summary>The LCD at the top of the device.</summary>
 public sealed class DisplayViewModel : ObservableObject
 {
-    private string _main = "Pronto";
+    private string _main = Strings.Ready;
     private string _status = "";
     private string _hint = "";
 
@@ -17,7 +19,7 @@ public sealed class DisplayViewModel : ObservableObject
 
     public void ShowError(string message)
     {
-        Main = "Erro";
+        Main = Strings.Error;
         Status = message;
     }
 

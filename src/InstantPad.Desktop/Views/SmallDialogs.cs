@@ -1,7 +1,8 @@
-using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows;
+using InstantPad.Application.Localization;
 using InstantPad.Domain.Hotkeys;
 
 namespace InstantPad.Desktop.Views;
@@ -52,10 +53,10 @@ public static class HotkeyDialog
 {
     public static Hotkey? Ask(Window owner)
     {
-        var dialog = DialogWindow.Create(owner, "Definir atalho");
+        var dialog = DialogWindow.Create(owner, Strings.HotkeyTitle);
         dialog.Content = new TextBlock
         {
-            Text = "Pressione a tecla ou combinação.\nEsc cancela.",
+            Text = Strings.HotkeyPrompt,
             Foreground = Brushes.White,
             FontSize = 15,
             TextAlignment = TextAlignment.Center,

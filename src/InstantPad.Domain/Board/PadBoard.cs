@@ -4,19 +4,18 @@ namespace InstantPad.Domain.Board;
 public sealed class PadBoard
 {
     private const int LegacyPadsPerBank = 24;
-    private const string DefaultInterfaceName = "Principal";
 
     private readonly List<PadInterface> _interfaces;
     private readonly List<Sound> _sounds;
 
-    public PadBoard(IEnumerable<PadInterface> interfaces, IEnumerable<Sound> sounds)
+    public PadBoard(IEnumerable<PadInterface> interfaces, IEnumerable<Sound> sounds, string defaultInterfaceName = "Main")
     {
         _interfaces = interfaces.ToList();
         _sounds = sounds.ToList();
 
         AdoptOrphanSounds();
         if (_interfaces.Count == 0)
-            _interfaces.Add(new PadInterface { Name = DefaultInterfaceName });
+            _interfaces.Add(new PadInterface { Name = defaultInterfaceName });
     }
 
     public IReadOnlyList<PadInterface> Interfaces => _interfaces;

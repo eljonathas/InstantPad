@@ -1,7 +1,8 @@
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Security.Cryptography;
 using InstantPad.Application.Audio;
+using InstantPad.Application.Localization;
 
 namespace InstantPad.Infrastructure.VirtualCable;
 
@@ -18,11 +19,11 @@ public static class VendorSignature
     public static void Verify(string path)
     {
         if (!HasTrustedSignature(path))
-            throw new DriverInstallException("O instalador baixado não tem assinatura digital válida. Instalação cancelada.");
+            throw new DriverInstallException(Strings.DriverSignatureInvalid);
 
         var signer = ReadSigner(path);
         if (!signer.Contains(VendorSubject, StringComparison.OrdinalIgnoreCase))
-            throw new DriverInstallException($"Instalador assinado por um emissor inesperado: {signer}");
+            throw new DriverInstallException(string.Format(Strings.DriverSignerUnexpected, signer));
     }
 
     private static string ReadSigner(string path)
@@ -36,7 +37,7 @@ public static class VendorSignature
         }
         catch (CryptographicException exception)
         {
-            throw new DriverInstallException("Não foi possível ler a assinatura do instalador.", exception);
+            throw new DriverInstallException(Strings.DriverSignatureUnreadable, exception);
         }
     }
 

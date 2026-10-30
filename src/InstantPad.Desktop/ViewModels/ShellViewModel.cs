@@ -1,7 +1,9 @@
 using InstantPad.Application.Audio;
 using InstantPad.Application.Hotkeys;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Persistence;
 using InstantPad.Application.Settings;
+using InstantPad.Desktop.Localization;
 
 namespace InstantPad.Desktop.ViewModels;
 
@@ -36,10 +38,11 @@ public sealed class ShellViewModel
         _settingsRepository = settingsRepository;
 
         hotkeys.RegistrationFailed += failed =>
-            display.ShowError($"Atalho em uso por outro programa: {string.Join(", ", failed)}");
+            display.ShowError(string.Format(Strings.HotkeyInUse, string.Join(", ", failed)));
 
         // Device failures arrive on an audio thread.
         var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+        Localizer.Instance.LanguageChanged += () => dispatcher.BeginInvoke(RefreshTexts);
         mix.DeviceFailed += message => dispatcher.BeginInvoke(() => display.ShowError(message));
     }
 
@@ -62,17 +65,27 @@ public sealed class ShellViewModel
     public async Task StartAsync()
     {
         Board.Start();
-        Setup.LoadDevices();
 
-        var trending = Browser.ShowTrendingAsync();
-        var update = Update.CheckAndInstallAsync();
-        await Task.WhenAll(trending, update);
+        await Task.WhenAll(
+            Setup.LoadDevicesAsync(),
+            Browser.ShowTrendingAsync(),
+            Update.CheckAndInstallAsync());
     }
 
     public void UpdateFrame()
     {
         Mixer.UpdateMeters();
         Board.UpdatePlayingState();
+    }
+
+    private void RefreshTexts()
+    {
+        Display.Show(Strings.Ready);
+        Mixer.RefreshTexts();
+        Browser.RefreshTexts();
+        Favorites.RefreshTexts();
+        Setup.RefreshTexts();
+        Update.RefreshTexts();
     }
 
     public void SaveState()

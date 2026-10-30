@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using InstantPad.Application.Audio;
 using InstantPad.Application.Hotkeys;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Persistence;
 using InstantPad.Application.Settings;
 using InstantPad.Application.Sounds;
@@ -149,7 +150,7 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
         if (padIndex < Pads.Count && Pads[padIndex].Sound is { } sound)
             PlaySound(sound);
         else
-            _display.Show($"Pad {PadViewModel.LabelFor(padIndex)} vazio");
+            _display.Show(string.Format(Strings.EmptyPad, PadViewModel.LabelFor(padIndex)));
     }
 
     public void NextInterface() => StepInterface(1);
@@ -159,14 +160,14 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
     public void StopAll()
     {
         _player.StopAll();
-        _display.Show("Parado");
+        _display.Show(Strings.Stopped);
     }
 
     // ---- Interfaces ----------------------------------------------------
 
     public void ConfigureInterface(PadInterface target)
     {
-        var layout = _dialogs.AskInterface("Configurar interface", target.ToLayout(), _board.SoundsOf(target).Count);
+        var layout = _dialogs.AskInterface(Strings.ConfigureInterfaceTitle, target.ToLayout(), _board.SoundsOf(target).Count);
         if (layout == null)
             return;
 
@@ -195,8 +196,8 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
     public void DeleteInterface(PadInterface target)
     {
         var sounds = _board.SoundsOf(target);
-        var question = $"Excluir \"{target.Name}\" e tirar os {sounds.Count} sons dos pads? Os favoritos continuam salvos.";
-        if (sounds.Count > 0 && !_dialogs.Confirm("Excluir interface", question))
+        var question = string.Format(Strings.DeleteInterfaceQuestion, target.Name, sounds.Count);
+        if (sounds.Count > 0 && !_dialogs.Confirm(Strings.DeleteInterfaceTitle, question))
             return;
 
         foreach (var sound in sounds)
@@ -213,8 +214,8 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
     private void AddInterface()
     {
         int count = _board.Interfaces.Count;
-        var initial = new InterfaceLayout($"Interface {count + 1}", 4, 6, PadPalette.AccentFor(count));
-        var layout = _dialogs.AskInterface("Nova interface", initial, soundCount: 0);
+        var initial = new InterfaceLayout(string.Format(Strings.DefaultNewInterfaceName, count + 1), 4, 6, PadPalette.AccentFor(count));
+        var layout = _dialogs.AskInterface(Strings.NewInterfaceTitle, initial, soundCount: 0);
         if (layout == null)
             return;
 
@@ -315,19 +316,19 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
     {
         if (!_board.SendTo(pad.Sound!, target))
         {
-            _display.ShowError($"A interface {target.Name} está cheia.");
+            _display.ShowError(string.Format(Strings.InterfaceFull, target.Name));
             return;
         }
 
         pad.Sound = null;
         Save();
         RefreshPadLabels();
-        _display.Show($"Enviado para {target.Name}");
+        _display.Show(string.Format(Strings.SentTo, target.Name));
     }
 
     public void Rename(PadViewModel pad)
     {
-        var name = _dialogs.AskText("Nome do pad", pad.Sound!.Name);
+        var name = _dialogs.AskText(Strings.PadNameTitle, pad.Sound!.Name);
         if (string.IsNullOrWhiteSpace(name))
             return;
 
@@ -388,7 +389,7 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
         _targetPad = pad;
         pad.IsTarget = true;
         PadTargeted?.Invoke();
-        _display.Show($"Pad {pad.Label} selecionado: escolha um som");
+        _display.Show(string.Format(Strings.PadSelected, pad.Label));
     }
 
     private async Task TriggerAsync(Sound sound)

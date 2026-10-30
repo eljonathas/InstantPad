@@ -1,10 +1,11 @@
 <Window x:Class="InstantPad.Desktop.Views.InterfaceDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:InstantPad.Desktop.Localization"
         Width="380" SizeToContent="Height" WindowStartupLocation="CenterOwner" FontFamily="{StaticResource Lexend}"
         ResizeMode="NoResize" ShowInTaskbar="False" Background="#17181C">
     <StackPanel Margin="16">
-        <TextBlock Text="Nome" Style="{StaticResource DialogLabel}"/>
+        <TextBlock Text="{l:T Name}" Style="{StaticResource DialogLabel}"/>
         <TextBox x:Name="NameBox" Margin="0,4,0,12" TextChanged="Field_Changed"/>
 
         <Grid Margin="0,0,0,6">
@@ -14,23 +15,23 @@
                 <ColumnDefinition/>
             </Grid.ColumnDefinitions>
             <StackPanel>
-                <TextBlock Text="Linhas" Style="{StaticResource DialogLabel}"/>
+                <TextBlock Text="{l:T Rows}" Style="{StaticResource DialogLabel}"/>
                 <ComboBox x:Name="RowsBox" Height="30" SelectionChanged="Field_Changed"/>
             </StackPanel>
             <StackPanel Grid.Column="2">
-                <TextBlock Text="Colunas" Style="{StaticResource DialogLabel}"/>
+                <TextBlock Text="{l:T Columns}" Style="{StaticResource DialogLabel}"/>
                 <ComboBox x:Name="ColumnsBox" Height="30" SelectionChanged="Field_Changed"/>
             </StackPanel>
         </Grid>
 
         <TextBlock x:Name="Summary" Foreground="White" Margin="0,0,0,12" TextWrapping="Wrap"/>
 
-        <TextBlock Text="Cor" Style="{StaticResource DialogLabel}"/>
+        <TextBlock Text="{l:T Color}" Style="{StaticResource DialogLabel}"/>
         <WrapPanel x:Name="Swatches" Margin="0,4,0,14"/>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Style="{StaticResource HwButton}" Content="Cancelar" Width="96" Height="32" IsCancel="True"/>
-            <Button x:Name="SaveButton" Style="{StaticResource HwButton}" Content="Salvar" Width="96" Height="32"
+            <Button Style="{StaticResource HwButton}" Content="{l:T Cancel}" Width="96" Height="32" IsCancel="True"/>
+            <Button x:Name="SaveButton" Style="{StaticResource HwButton}" Content="{l:T Save}" Width="96" Height="32"
                     Margin="8,0,0,0" Click="Save_Click"/>
         </StackPanel>
     </StackPanel>

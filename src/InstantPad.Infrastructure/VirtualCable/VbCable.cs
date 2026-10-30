@@ -1,10 +1,11 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.IO;
 using System.IO.Compression;
+using System.IO;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using InstantPad.Application.Audio;
+using InstantPad.Application.Localization;
 
 namespace InstantPad.Infrastructure.VirtualCable;
 
@@ -27,6 +28,10 @@ public sealed partial class VbCable(HttpClient http) : IVirtualCable
     private static readonly string[] RenderNames =
         ["CABLE Input", "CABLE In ", "VoiceMeeter Input", "VoiceMeeter AUX Input", "Hi-Fi Cable Input"];
 
+    // Capture side: what the game reads from.
+    private static readonly string[] CaptureNames =
+        ["CABLE Output", "VoiceMeeter Output", "VoiceMeeter AUX Output", "Hi-Fi Cable Output"];
+
     public AudioDevice? FindGameOutput(IEnumerable<AudioDevice> outputs)
     {
         var devices = outputs.ToList();
@@ -35,7 +40,8 @@ public sealed partial class VbCable(HttpClient http) : IVirtualCable
             .FirstOrDefault(device => device != null);
     }
 
-    public bool IsVirtual(AudioDevice device) => RenderNames.Any(name => HasName(device, name));
+    public bool IsVirtual(AudioDevice device) =>
+        RenderNames.Concat(CaptureNames).Any(name => HasName(device, name));
 
     public string GameMicrophoneName(AudioDevice? gameOutput)
     {
@@ -50,16 +56,16 @@ public sealed partial class VbCable(HttpClient http) : IVirtualCable
     {
         try
         {
-            progress.Report("Procurando a versão mais recente do VB-CABLE...");
+            progress.Report(Strings.DriverSearching);
             var driverPack = await FindDriverPackAsync(token);
 
-            progress.Report("Baixando o driver do site oficial...");
+            progress.Report(Strings.DriverDownloading);
             var setup = await DownloadSetupAsync(driverPack, token);
 
-            progress.Report("Conferindo a assinatura digital...");
+            progress.Report(Strings.DriverVerifying);
             VendorSignature.Verify(setup);
 
-            progress.Report("Abrindo o instalador. Clique em \"Install Driver\" e reinicie o PC ao terminar.");
+            progress.Report(Strings.DriverOpeningSetup);
             Process.Start(new ProcessStartInfo(setup) { UseShellExecute = true, Verb = "runas" });
         }
         catch (Win32Exception exception) when (exception.NativeErrorCode == ErrorCancelled)
@@ -68,7 +74,7 @@ public sealed partial class VbCable(HttpClient http) : IVirtualCable
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or IOException or InvalidDataException)
         {
-            throw new DriverInstallException($"Falhou: {exception.Message}", exception);
+            throw new DriverInstallException(string.Format(Strings.DriverFailed, exception.Message), exception);
         }
     }
 
@@ -106,7 +112,7 @@ public sealed partial class VbCable(HttpClient http) : IVirtualCable
         var setup = Path.Combine(extracted, SetupFile);
         return File.Exists(setup)
             ? setup
-            : throw new FileNotFoundException($"{SetupFile} não veio no pacote baixado.");
+            : throw new FileNotFoundException(string.Format(Strings.DriverSetupMissing, SetupFile));
     }
 
     [GeneratedRegex(@"https://download\.vb-audio\.com/Download_CABLE/VBCABLE_Driver_Pack(\d+)\.zip")]

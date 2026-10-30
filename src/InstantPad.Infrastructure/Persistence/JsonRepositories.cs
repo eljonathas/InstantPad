@@ -1,3 +1,4 @@
+using InstantPad.Application.Localization;
 using InstantPad.Application.Persistence;
 using InstantPad.Application.Settings;
 using InstantPad.Domain.Board;
@@ -13,7 +14,8 @@ public sealed class JsonBoardRepository(AppDataFolder folder) : IBoardRepository
 
     public PadBoard Load() => new(
         JsonFile.Load<List<PadInterface>>(InterfacesFile),
-        JsonFile.Load<List<Sound>>(SoundsFile));
+        JsonFile.Load<List<Sound>>(SoundsFile),
+        Strings.DefaultInterfaceName);
 
     public void Save(PadBoard board)
     {

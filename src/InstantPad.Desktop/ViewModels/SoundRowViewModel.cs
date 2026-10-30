@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using InstantPad.Application.Audio;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Sounds;
 using InstantPad.Desktop.Services;
 using InstantPad.Domain.Sounds;
@@ -70,13 +71,13 @@ public sealed class SoundRowActions(
 
         try
         {
-            display.Show($"Baixando {source.Name}");
+            display.Show(string.Format(Strings.Downloading, source.Name));
             await library.SaveToComputerAsync(source, destination);
-            display.Show($"Salvo: {System.IO.Path.GetFileName(destination)}");
+            display.Show(string.Format(Strings.Saved, System.IO.Path.GetFileName(destination)));
         }
         catch (Exception exception) when (exception is SoundUnavailableException or CatalogUnavailableException)
         {
-            display.ShowError($"Falhou {source.Name}: {exception.Message}");
+            display.ShowError(string.Format(Strings.FailedSound, source.Name, exception.Message));
         }
     }
 
@@ -84,14 +85,14 @@ public sealed class SoundRowActions(
         DownloadingAsync(row, async () =>
         {
             await player.PreviewAsync(row.Source.Path, FullVolume, row.Source);
-            display.Show($"Ouvindo {row.Name}");
+            display.Show(string.Format(Strings.Listening, row.Name));
         });
 
     public Task PlayAsync(SoundRowViewModel row) =>
         DownloadingAsync(row, async () =>
         {
             await player.PlayAsync(row.Source.Path, FullVolume, row.Source);
-            display.Show($"No jogo: {row.Name}");
+            display.Show(string.Format(Strings.InGameSound, row.Name));
         });
 
     public async Task AddToPadAsync(SoundRowViewModel row)
@@ -99,7 +100,7 @@ public sealed class SoundRowActions(
         if (board.PadForNewSound() is { } pad)
             await AddToPadAsync(row, pad);
         else
-            display.ShowError("Esta interface está cheia. Crie outra ou escolha um pad.");
+            display.ShowError(Strings.InterfaceFullHint);
     }
 
     public Task AddToPadAsync(SoundRowViewModel row, PadViewModel pad) =>
@@ -111,13 +112,13 @@ public sealed class SoundRowActions(
     {
         try
         {
-            display.Show($"Baixando {source.Name}");
+            display.Show(string.Format(Strings.Downloading, source.Name));
             bool isFavorite = await favorites.ToggleAsync(source);
             display.Show(isFavorite ? $"★ {source.Name}" : source.Name);
         }
         catch (Exception exception) when (exception is SoundUnavailableException or CatalogUnavailableException)
         {
-            display.ShowError($"Falhou {source.Name}: {exception.Message}");
+            display.ShowError(string.Format(Strings.FailedSound, source.Name, exception.Message));
         }
     }
 
@@ -125,13 +126,13 @@ public sealed class SoundRowActions(
     {
         try
         {
-            display.Show($"Baixando {row.Name}");
+            display.Show(string.Format(Strings.Downloading, row.Name));
             await library.EnsureDownloadedAsync(row.Source);
             await action();
         }
         catch (Exception exception) when (exception is SoundUnavailableException or CatalogUnavailableException)
         {
-            display.ShowError($"Falhou {row.Name}: {exception.Message}");
+            display.ShowError(string.Format(Strings.FailedSound, row.Name, exception.Message));
         }
     }
 }

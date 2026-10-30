@@ -33,6 +33,6 @@ public static class VirtualKeys
         OemPlus => "=",
         OemMinus => "-",
         OemPeriod => ".",
-        _ => $"Tecla {key}",
+        _ => $"Key {key}",
     };
 }

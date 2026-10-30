@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
 using InstantPad.Application.Audio;
+using InstantPad.Application.Localization;
 
 namespace InstantPad.Infrastructure.Audio;
 
@@ -46,7 +47,7 @@ public sealed class ClipPlayer(AudioEngine engine) : ISoundPlayer
         {
             // A failed load must be retried next time, not cached forever.
             Forget(path);
-            throw new SoundUnavailableException($"Não foi possível abrir o som: {exception.Message}", exception);
+            throw new SoundUnavailableException(string.Format(Strings.SoundOpenFailed, exception.Message), exception);
         }
     }
 }

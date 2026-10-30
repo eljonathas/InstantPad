@@ -1,4 +1,5 @@
 using InstantPad.Application.Audio;
+using InstantPad.Application.Localization;
 using InstantPad.Domain.Sounds;
 
 namespace InstantPad.Application.Sounds;
@@ -19,7 +20,7 @@ public sealed class SoundLibrary(ISoundCatalog catalog, ISoundFileStore files)
         if (files.Exists(source.Path))
             return;
         if (source.SoundUrl == null)
-            throw new SoundUnavailableException("O arquivo do som não existe mais.");
+            throw new SoundUnavailableException(Strings.SoundFileMissing);
 
         await catalog.DownloadAsync(source.SoundUrl, source.Path, token);
     }

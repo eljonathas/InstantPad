@@ -2,6 +2,7 @@ using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Updates;
 
 namespace InstantPad.Infrastructure.Updates;
@@ -37,19 +38,18 @@ public sealed partial class SelfReplacingInstaller : IUpdateInstaller
             var actualHash = await DownloadExecutableAsync(release.ExecutableUrl, progress, cancellationToken);
 
             if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
-                throw new UpdateFailedException("O arquivo baixado não confere com a versão publicada. Nada foi alterado.");
+                throw new UpdateFailedException(Strings.UpdateHashMismatch);
 
             SwapExecutable();
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            throw new UpdateFailedException("Não foi possível baixar a atualização. Verifique sua conexão.", exception);
+            throw new UpdateFailedException(Strings.UpdateDownloadFailed, exception);
         }
         catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
         {
             throw new UpdateFailedException(
-                $"Sem permissão para atualizar em \"{Path.GetDirectoryName(_executablePath)}\". " +
-                "Mova o InstantPad para uma pasta sua, como Documentos, e tente de novo.",
+                string.Format(Strings.UpdateNoPermission, Path.GetDirectoryName(_executablePath)),
                 exception);
         }
         finally
@@ -76,7 +76,7 @@ public sealed partial class SelfReplacingInstaller : IUpdateInstaller
         var match = Sha256Regex().Match(content);
         return match.Success
             ? match.Value
-            : throw new UpdateFailedException("A atualização publicada não tem um checksum válido. Nada foi alterado.");
+            : throw new UpdateFailedException(Strings.UpdateBadChecksum);
     }
 
     private async Task<string> DownloadExecutableAsync(Uri executableUrl, IProgress<int>? progress, CancellationToken cancellationToken)

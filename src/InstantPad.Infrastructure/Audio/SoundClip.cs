@@ -1,4 +1,5 @@
 using System.IO;
+using InstantPad.Application.Localization;
 using NAudio.Wave;
 
 namespace InstantPad.Infrastructure.Audio;
@@ -22,7 +23,7 @@ public sealed class SoundClip(float[] samples)
             samples.AddRange(new ArraySegment<float>(block, 0, read));
 
         if (samples.Count == 0)
-            throw new InvalidDataException("O arquivo não contém áudio.");
+            throw new InvalidDataException(Strings.SoundHasNoAudio);
 
         return new SoundClip(samples.ToArray());
     }

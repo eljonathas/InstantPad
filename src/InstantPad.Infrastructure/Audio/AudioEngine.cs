@@ -1,8 +1,9 @@
 using System.Runtime.InteropServices;
 using InstantPad.Application.Audio;
+using InstantPad.Application.Localization;
 using NAudio.CoreAudioApi;
-using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
+using NAudio.Wave;
 
 namespace InstantPad.Infrastructure.Audio;
 
@@ -52,6 +53,14 @@ public sealed class AudioEngine : IAudioRouter, IAudioMix, IDisposable
     public string? DefaultMicrophoneId() => DefaultDeviceId(DataFlow.Capture);
 
     public string? DefaultOutputId() => DefaultDeviceId(DataFlow.Render);
+
+    public string? SystemOutputId()
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        return enumerator.HasDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia)
+            ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).ID
+            : null;
+    }
 
     public void SetMicrophone(string? deviceId)
     {
@@ -125,7 +134,7 @@ public sealed class AudioEngine : IAudioRouter, IAudioMix, IDisposable
         }
         catch (Exception exception) when (exception is COMException or InvalidOperationException or ArgumentException)
         {
-            throw new AudioDeviceException($"Dispositivo indisponível: {exception.Message}", exception);
+            throw new AudioDeviceException(string.Format(Strings.DeviceUnavailable, exception.Message), exception);
         }
     }
 
@@ -147,7 +156,7 @@ public sealed class AudioEngine : IAudioRouter, IAudioMix, IDisposable
         capture.RecordingStopped += (_, stopped) =>
         {
             if (stopped.Exception != null)
-                DeviceFailed?.Invoke($"Microfone parou: {stopped.Exception.Message}");
+                DeviceFailed?.Invoke(string.Format(Strings.MicStopped, stopped.Exception.Message));
         };
         capture.StartRecording();
     }
@@ -210,7 +219,7 @@ public sealed class AudioEngine : IAudioRouter, IAudioMix, IDisposable
         output.PlaybackStopped += (_, stopped) =>
         {
             if (stopped.Exception != null)
-                DeviceFailed?.Invoke($"Saída de áudio parou: {stopped.Exception.Message}");
+                DeviceFailed?.Invoke(string.Format(Strings.OutputStopped, stopped.Exception.Message));
         };
         output.Init(source.ToWaveProvider());
         output.Play();

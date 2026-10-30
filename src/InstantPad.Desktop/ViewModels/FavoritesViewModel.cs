@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Sounds;
 
 namespace InstantPad.Desktop.ViewModels;
@@ -7,7 +8,6 @@ public sealed class FavoritesViewModel : ObservableObject
 {
     private readonly FavoritesService _favorites;
     private readonly SoundRowActions _actions;
-    private string _status = "";
 
     public FavoritesViewModel(FavoritesService favorites, SoundRowActions actions)
     {
@@ -19,7 +19,14 @@ public sealed class FavoritesViewModel : ObservableObject
 
     public ObservableCollection<SoundRowViewModel> Rows { get; } = [];
 
-    public string Status { get => _status; private set => Set(ref _status, value); }
+    public string Status => Rows.Count switch
+    {
+        0 => Strings.FavoritesEmpty,
+        1 => Strings.FavoritesOne,
+        _ => string.Format(Strings.FavoritesCount, Rows.Count),
+    };
+
+    public void RefreshTexts() => Raise(nameof(Status));
 
     private void Rebuild()
     {
@@ -27,8 +34,6 @@ public sealed class FavoritesViewModel : ObservableObject
         foreach (var favorite in _favorites.Favorites)
             Rows.Add(new SoundRowViewModel(favorite, isFavorite: true, _actions));
 
-        Status = Rows.Count == 0
-            ? "Nenhum favorito ainda. Use a estrela nos resultados ou o botão direito em um pad."
-            : Rows.Count == 1 ? "1 favorito" : $"{Rows.Count} favoritos";
+        Raise(nameof(Status));
     }
 }

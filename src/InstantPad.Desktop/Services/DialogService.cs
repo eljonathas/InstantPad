@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using InstantPad.Application.Hotkeys;
+using InstantPad.Application.Localization;
 using InstantPad.Desktop.Views;
 using InstantPad.Domain.Board;
 using InstantPad.Domain.Hotkeys;
@@ -21,12 +23,14 @@ public interface IDialogService
     string? PickAudioFile();
 
     string? PickSaveLocation(string suggestedFileName);
+
+    void OpenSoundSettings();
 }
 
 /// <summary>Opens the dialogs with global hotkeys off, since they would swallow what the user types.</summary>
 public sealed class DialogService(HotkeyService hotkeys) : IDialogService
 {
-    private const string AudioFileFilter = "Áudio|*.mp3;*.wav;*.m4a;*.aac;*.wma;*.flac|Todos os arquivos|*.*";
+    private const string SoundSettingsUri = "ms-settings:sound";
 
     private static Window Owner => System.Windows.Application.Current.MainWindow!;
 
@@ -49,7 +53,7 @@ public sealed class DialogService(HotkeyService hotkeys) : IDialogService
 
     public string? PickAudioFile()
     {
-        var dialog = new OpenFileDialog { Filter = AudioFileFilter };
+        var dialog = new OpenFileDialog { Filter = Strings.AudioFileFilter };
         return dialog.ShowDialog(Owner) == true ? dialog.FileName : null;
     }
 
@@ -59,11 +63,14 @@ public sealed class DialogService(HotkeyService hotkeys) : IDialogService
             var dialog = new SaveFileDialog
             {
                 FileName = suggestedFileName,
-                Filter = "Áudio|*" + Path.GetExtension(suggestedFileName),
+                Filter = $"{Strings.AudioFileType}|*{Path.GetExtension(suggestedFileName)}",
                 InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
             };
             return dialog.ShowDialog(Owner) == true ? dialog.FileName : null;
         });
+
+    public void OpenSoundSettings() =>
+        Process.Start(new ProcessStartInfo(SoundSettingsUri) { UseShellExecute = true });
 
     private T WithHotkeysPaused<T>(Func<T> showDialog)
     {

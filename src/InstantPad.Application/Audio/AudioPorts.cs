@@ -38,6 +38,9 @@ public interface IAudioRouter
 
     string? DefaultOutputId();
 
+    /// <summary>Where Windows sends the sound of every other app.</summary>
+    string? SystemOutputId();
+
     void SetMicrophone(string? deviceId);
 
     void SetGameOutput(string? deviceId);

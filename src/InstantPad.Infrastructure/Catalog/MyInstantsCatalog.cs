@@ -1,6 +1,7 @@
 using System.IO;
-using System.Net;
 using System.Net.Http;
+using System.Net;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Sounds;
 
 namespace InstantPad.Infrastructure.Catalog;
@@ -28,7 +29,7 @@ public sealed class MyInstantsCatalog(HttpClient http) : ISoundCatalog
         }
         catch (Exception exception) when (IsConnectionFailure(exception) || exception is IOException)
         {
-            throw new CatalogUnavailableException($"Não foi possível baixar o som: {exception.Message}", exception);
+            throw new CatalogUnavailableException(string.Format(Strings.SoundDownloadFailed, exception.Message), exception);
         }
     }
 
@@ -47,7 +48,7 @@ public sealed class MyInstantsCatalog(HttpClient http) : ISoundCatalog
         }
         catch (Exception exception) when (IsConnectionFailure(exception))
         {
-            throw new CatalogUnavailableException("Sem conexão com o MyInstants.", exception);
+            throw new CatalogUnavailableException(Strings.CatalogNoConnection, exception);
         }
     }
 

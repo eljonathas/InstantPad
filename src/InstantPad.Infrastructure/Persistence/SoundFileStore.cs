@@ -1,5 +1,6 @@
 using System.IO;
 using InstantPad.Application.Audio;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Sounds;
 
 namespace InstantPad.Infrastructure.Persistence;
@@ -20,7 +21,7 @@ public sealed class SoundFileStore(AppDataFolder folder) : ISoundFileStore
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            throw new SoundUnavailableException($"Não foi possível copiar o arquivo: {exception.Message}", exception);
+            throw new SoundUnavailableException(string.Format(Strings.SoundCopyFailed, exception.Message), exception);
         }
     }
 
@@ -32,7 +33,7 @@ public sealed class SoundFileStore(AppDataFolder folder) : ISoundFileStore
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            throw new SoundUnavailableException($"Não foi possível salvar o arquivo: {exception.Message}", exception);
+            throw new SoundUnavailableException(string.Format(Strings.SoundSaveFailed, exception.Message), exception);
         }
     }
 

@@ -1,6 +1,7 @@
-using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows;
+using InstantPad.Application.Localization;
 using InstantPad.Desktop.Converters;
 using InstantPad.Domain.Board;
 
@@ -79,8 +80,8 @@ public partial class InterfaceDialog : Window
         bool fits = capacity >= _soundCount;
 
         Summary.Text = fits
-            ? $"{capacity} pads"
-            : $"{capacity} pads não comportam os {_soundCount} sons desta interface.";
+            ? string.Format(Strings.PadCount, capacity)
+            : string.Format(Strings.PadCountTooSmall, capacity, _soundCount);
         Summary.Foreground = fits ? Brushes.White : Brushes.OrangeRed;
         SaveButton.IsEnabled = fits && NameBox.Text.Trim().Length > 0;
     }

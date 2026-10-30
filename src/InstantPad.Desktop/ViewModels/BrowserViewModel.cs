@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Sounds;
 
 namespace InstantPad.Desktop.ViewModels;
@@ -7,8 +8,6 @@ namespace InstantPad.Desktop.ViewModels;
 /// <summary>The MyInstants screen: search, trending sounds and paging.</summary>
 public sealed class BrowserViewModel : ObservableObject
 {
-    private const string TrendingTitle = "Em alta no Brasil";
-
     private readonly ISoundCatalog _catalog;
     private readonly SoundLibrary _library;
     private readonly FavoritesService _favorites;
@@ -17,7 +16,7 @@ public sealed class BrowserViewModel : ObservableObject
     private string _query = "";
     private string? _activeQuery;
     private int _page = 1;
-    private string _status = "";
+    private Func<string> _describeStatus = () => "";
     private bool _hasMore;
 
     public BrowserViewModel(
@@ -44,7 +43,7 @@ public sealed class BrowserViewModel : ObservableObject
 
     public string Query { get => _query; set => Set(ref _query, value); }
 
-    public string Status { get => _status; private set => Set(ref _status, value); }
+    public string Status => _describeStatus();
 
     public bool HasMore { get => _hasMore; private set => Set(ref _hasMore, value); }
 
@@ -54,6 +53,8 @@ public sealed class BrowserViewModel : ObservableObject
         _page = 1;
         return LoadPageAsync(reset: true);
     }
+
+    public void RefreshTexts() => Raise(nameof(Status));
 
     private Task SearchAsync()
     {
@@ -74,7 +75,7 @@ public sealed class BrowserViewModel : ObservableObject
 
     private async Task LoadPageAsync(bool reset)
     {
-        Status = "Carregando...";
+        SetStatus(() => Strings.Loading);
         HasMore = false;
         try
         {
@@ -87,14 +88,23 @@ public sealed class BrowserViewModel : ObservableObject
             foreach (var sound in page.Sounds)
                 Results.Add(ToRow(sound));
 
-            var title = _activeQuery ?? TrendingTitle;
-            Status = Results.Count == 0 ? "Nada encontrado" : $"{title} ({Results.Count})";
+            SetStatus(DescribeResults);
             HasMore = page.HasMore;
         }
         catch (CatalogUnavailableException)
         {
-            Status = "Sem conexão com o MyInstants";
+            SetStatus(() => Strings.NoCatalogConnection);
         }
+    }
+
+    private string DescribeResults() => Results.Count == 0
+        ? Strings.NothingFound
+        : $"{_activeQuery ?? Strings.TrendingTitle} ({Results.Count})";
+
+    private void SetStatus(Func<string> describe)
+    {
+        _describeStatus = describe;
+        Raise(nameof(Status));
     }
 
     private SoundRowViewModel ToRow(CatalogSound sound)

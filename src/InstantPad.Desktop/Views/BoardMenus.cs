@@ -1,7 +1,8 @@
-using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows;
+using InstantPad.Application.Localization;
 using InstantPad.Desktop.Converters;
 using InstantPad.Desktop.ViewModels;
 using InstantPad.Domain.Board;
@@ -21,7 +22,7 @@ public sealed class BoardMenus(BoardViewModel board, SoundRowActions rowActions)
         if (pad.Sound is { } sound)
             AddSoundItems(menu, pad, sound);
         else
-            menu.Items.Add(Item("Carregar arquivo de áudio...", () => _ = board.PickFileAsync(pad)));
+            menu.Items.Add(Item(Strings.MenuLoadFile, () => _ = board.PickFileAsync(pad)));
 
         return menu;
     }
@@ -30,26 +31,26 @@ public sealed class BoardMenus(BoardViewModel board, SoundRowActions rowActions)
     {
         var menu = new ContextMenu { PlacementTarget = placement };
 
-        menu.Items.Add(Item("Configurar...", () => board.ConfigureInterface(target)));
-        menu.Items.Add(Item("Mover para a esquerda", () => board.MoveInterface(target, -1), board.CanMoveInterface(target, -1)));
-        menu.Items.Add(Item("Mover para a direita", () => board.MoveInterface(target, 1), board.CanMoveInterface(target, 1)));
+        menu.Items.Add(Item(Strings.MenuConfigure, () => board.ConfigureInterface(target)));
+        menu.Items.Add(Item(Strings.MenuMoveLeft, () => board.MoveInterface(target, -1), board.CanMoveInterface(target, -1)));
+        menu.Items.Add(Item(Strings.MenuMoveRight, () => board.MoveInterface(target, 1), board.CanMoveInterface(target, 1)));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item("Excluir interface", () => board.DeleteInterface(target), board.CanDeleteInterface));
+        menu.Items.Add(Item(Strings.DeleteInterfaceTitle, () => board.DeleteInterface(target), board.CanDeleteInterface));
 
         return menu;
     }
 
     private void AddSoundItems(ContextMenu menu, PadViewModel pad, Sound sound)
     {
-        menu.Items.Add(Item(pad.IsFavorite ? "Remover dos favoritos" : "Favoritar", () => _ = rowActions.ToggleFavoriteAsync(ToSource(sound))));
-        menu.Items.Add(Item("Baixar no computador...", () => _ = rowActions.SaveToComputerAsync(ToSource(sound))));
+        menu.Items.Add(Item(pad.IsFavorite ? Strings.MenuUnfavorite : Strings.MenuFavorite, () => _ = rowActions.ToggleFavoriteAsync(ToSource(sound))));
+        menu.Items.Add(Item(Strings.MenuDownload, () => _ = rowActions.SaveToComputerAsync(ToSource(sound))));
         menu.Items.Add(new Separator());
 
-        menu.Items.Add(Item("Definir atalho...", () => board.SetHotkey(pad)));
+        menu.Items.Add(Item(Strings.MenuSetShortcut, () => board.SetHotkey(pad)));
         if (sound.Hotkey != null)
-            menu.Items.Add(Item("Remover atalho", () => board.ClearHotkey(pad)));
+            menu.Items.Add(Item(Strings.MenuRemoveShortcut, () => board.ClearHotkey(pad)));
 
-        menu.Items.Add(Item("Renomear...", () => board.Rename(pad)));
+        menu.Items.Add(Item(Strings.MenuRename, () => board.Rename(pad)));
         menu.Items.Add(VolumeMenu(pad, sound));
         menu.Items.Add(ColorMenu(pad));
 
@@ -57,7 +58,7 @@ public sealed class BoardMenus(BoardViewModel board, SoundRowActions rowActions)
             menu.Items.Add(SendToMenu(pad));
 
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item("Remover do pad", () => board.Remove(pad)));
+        menu.Items.Add(Item(Strings.MenuRemoveFromPad, () => board.Remove(pad)));
     }
 
     private static SoundSource ToSource(Sound sound) => new()
@@ -69,7 +70,7 @@ public sealed class BoardMenus(BoardViewModel board, SoundRowActions rowActions)
 
     private MenuItem VolumeMenu(PadViewModel pad, Sound sound)
     {
-        var menu = new MenuItem { Header = "Volume" };
+        var menu = new MenuItem { Header = Strings.Volume };
         foreach (var percent in VolumePercents)
         {
             double volume = percent / 100.0;
@@ -82,7 +83,7 @@ public sealed class BoardMenus(BoardViewModel board, SoundRowActions rowActions)
 
     private MenuItem ColorMenu(PadViewModel pad)
     {
-        var menu = new MenuItem { Header = "Cor" };
+        var menu = new MenuItem { Header = Strings.Color };
         foreach (var hex in PadPalette.Pads)
         {
             var swatch = new Rectangle
@@ -100,7 +101,7 @@ public sealed class BoardMenus(BoardViewModel board, SoundRowActions rowActions)
 
     private MenuItem SendToMenu(PadViewModel pad)
     {
-        var menu = new MenuItem { Header = "Enviar para interface" };
+        var menu = new MenuItem { Header = Strings.MenuSendToInterface };
         foreach (var target in board.OtherInterfaces)
             menu.Items.Add(Item(target.Name, () => board.SendToInterface(pad, target)));
         return menu;

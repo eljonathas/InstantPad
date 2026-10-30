@@ -1,4 +1,5 @@
 using InstantPad.Application.Audio;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Settings;
 
 namespace InstantPad.Desktop.ViewModels;
@@ -71,7 +72,9 @@ public sealed class MixerViewModel : ObservableObject
         }
     }
 
-    public string MicLabel => MicEnabled ? "Mic aberto" : "Mic mudo";
+    public string MicLabel => MicEnabled ? Strings.MicOpen : Strings.MicMuted;
+
+    public void RefreshTexts() => Raise(nameof(MicLabel));
 
     public double MicLevel { get => _micLevel; private set => Set(ref _micLevel, value); }
 

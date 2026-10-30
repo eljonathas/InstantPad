@@ -1,7 +1,9 @@
 using System.Windows.Input;
 using InstantPad.Application.Audio;
+using InstantPad.Application.Localization;
 using InstantPad.Application.Persistence;
 using InstantPad.Application.Settings;
+using InstantPad.Desktop.Localization;
 using InstantPad.Desktop.Services;
 using InstantPad.Domain.Hotkeys;
 
@@ -12,10 +14,15 @@ public sealed record NumericOption(NumericScheme Scheme, string Label)
     public override string ToString() => Label;
 }
 
-/// <summary>The setup screen: driver, audio routing and numeric keys.</summary>
+public sealed record LanguageOption(string? Tag, string Label)
+{
+    public override string ToString() => Label;
+}
+
+/// <summary>The settings screen: language, driver, audio routing and numeric keys.</summary>
 public sealed class SetupViewModel : ObservableObject
 {
-    private const string CableOutputName = "CABLE Output";
+    private static readonly TimeSpan DeviceOpenTimeout = TimeSpan.FromSeconds(8);
 
     private readonly IAudioRouter _router;
     private readonly IVirtualCable _cable;
@@ -24,17 +31,22 @@ public sealed class SetupViewModel : ObservableObject
     private readonly BoardViewModel _board;
     private readonly DisplayViewModel _display;
     private readonly IDialogService _dialogs;
+    private readonly AudioRouting _routing;
 
     private IReadOnlyList<AudioDevice> _microphones = [];
     private IReadOnlyList<AudioDevice> _gameOutputs = [];
     private IReadOnlyList<AudioDevice> _monitorOutputs = [];
+    private IReadOnlyList<NumericOption> _numericOptions = [];
+    private IReadOnlyList<LanguageOption> _languageOptions = [];
     private AudioDevice? _microphone;
     private AudioDevice? _gameOutput;
     private AudioDevice? _monitorOutput;
-    private NumericOption _numericOption;
+    private NumericOption? _numericOption;
+    private LanguageOption? _languageOption;
     private string _driverStatus = "";
     private string _gameInstruction = "";
     private bool _isDriverMissing;
+    private bool _isSystemOutputOnCable;
     private bool _isInstallingDriver;
     private bool _isLoadingDevices;
 
@@ -54,20 +66,15 @@ public sealed class SetupViewModel : ObservableObject
         _board = board;
         _display = display;
         _dialogs = dialogs;
-        _numericOption = NumericOptions.First(option => option.Scheme == settings.NumericScheme);
+        _routing = new AudioRouting(cable);
 
-        RefreshDevicesCommand = new RelayCommand(LoadDevices);
+        RefreshDevicesCommand = new AsyncCommand(LoadDevicesAsync);
         InstallDriverCommand = new AsyncCommand(InstallDriverAsync);
         SetStopHotkeyCommand = new RelayCommand(SetStopHotkey);
-    }
+        OpenSoundSettingsCommand = new RelayCommand(dialogs.OpenSoundSettings);
 
-    public IReadOnlyList<NumericOption> NumericOptions { get; } =
-    [
-        new(NumericScheme.Numpad, "Teclado numérico (padrão)"),
-        new(NumericScheme.CtrlNumpad, "Ctrl + teclado numérico"),
-        new(NumericScheme.AltDigits, "Alt + 1 a 0"),
-        new(NumericScheme.Off, "Desligado"),
-    ];
+        BuildOptions();
+    }
 
     public ICommand RefreshDevicesCommand { get; }
 
@@ -75,17 +82,25 @@ public sealed class SetupViewModel : ObservableObject
 
     public ICommand SetStopHotkeyCommand { get; }
 
+    public ICommand OpenSoundSettingsCommand { get; }
+
     public IReadOnlyList<AudioDevice> Microphones { get => _microphones; private set => Set(ref _microphones, value); }
 
     public IReadOnlyList<AudioDevice> GameOutputs { get => _gameOutputs; private set => Set(ref _gameOutputs, value); }
 
     public IReadOnlyList<AudioDevice> MonitorOutputs { get => _monitorOutputs; private set => Set(ref _monitorOutputs, value); }
 
+    public IReadOnlyList<NumericOption> NumericOptions { get => _numericOptions; private set => Set(ref _numericOptions, value); }
+
+    public IReadOnlyList<LanguageOption> LanguageOptions { get => _languageOptions; private set => Set(ref _languageOptions, value); }
+
     public string DriverStatus { get => _driverStatus; private set => Set(ref _driverStatus, value); }
 
     public string GameInstruction { get => _gameInstruction; private set => Set(ref _gameInstruction, value); }
 
     public bool IsDriverMissing { get => _isDriverMissing; private set => Set(ref _isDriverMissing, value); }
+
+    public bool IsSystemOutputOnCable { get => _isSystemOutputOnCable; private set => Set(ref _isSystemOutputOnCable, value); }
 
     public bool CanInstallDriver => !_isInstallingDriver;
 
@@ -119,48 +134,97 @@ public sealed class SetupViewModel : ObservableObject
         });
     }
 
-    public NumericOption NumericOption
+    public NumericOption? NumericOption
     {
         get => _numericOption;
         set
         {
-            if (!Set(ref _numericOption, value))
+            // The list clears its selection while the options are rebuilt.
+            if (value == null || value.Scheme == _settings.NumericScheme)
                 return;
 
+            _numericOption = value;
             _settings.NumericScheme = value.Scheme;
             _repository.Save(_settings);
             _board.ApplyHotkeys();
+            Raise(nameof(NumericOption));
             Raise(nameof(NumericHint));
             Raise(nameof(StopHotkeyText));
         }
     }
 
-    public string NumericHint => DescribeNumericKeys(_numericOption.Scheme);
+    public LanguageOption? LanguageOption
+    {
+        get => _languageOption;
+        set
+        {
+            if (value == null || value.Tag == _settings.Language)
+                return;
 
-    public string StopHotkeyText => _board.StopHotkey?.ToString() ?? "Definir atalho";
+            _languageOption = value;
+            _settings.Language = value.Tag;
+            _repository.Save(_settings);
+            Localizer.Instance.Apply(value.Tag);
+        }
+    }
 
-    public void LoadDevices()
+    public string NumericHint => DescribeNumericKeys(_settings.NumericScheme);
+
+    public string StopHotkeyText => _board.StopHotkey?.ToString() ?? Strings.SetShortcut;
+
+    public async Task LoadDevicesAsync()
     {
         LoadDeviceLists();
-
-        Applying(() => _router.SetMicrophone(Microphone?.Id));
-        Applying(() => _router.SetGameOutput(GameOutput?.Id));
-        Applying(() => _router.SetMonitorOutput(MonitorOutput?.Id));
         UpdateRoutingStatus();
+
+        // Separately, so one stuck device does not silence the others.
+        await Task.WhenAll(
+            OpenDeviceAsync(() => _router.SetMicrophone(Microphone?.Id)),
+            OpenDeviceAsync(() => _router.SetGameOutput(GameOutput?.Id)),
+            OpenDeviceAsync(() => _router.SetMonitorOutput(MonitorOutput?.Id)));
+    }
+
+    public void RefreshTexts()
+    {
+        BuildOptions();
+        UpdateRoutingStatus();
+        Raise(nameof(NumericHint));
+        Raise(nameof(StopHotkeyText));
     }
 
     private static string DescribeNumericKeys(NumericScheme scheme)
     {
         if (scheme == NumericScheme.Off)
-            return "Só valem os atalhos que você definir em cada pad.";
+            return Strings.NumericHintOff;
 
         var layout = NumericShortcuts.LayoutFor(scheme);
-        var note = scheme == NumericScheme.Numpad
-            ? " Deixe o NumLock ligado. Com o app aberto, essas teclas ficam reservadas para ele."
-            : "";
+        var keys = string.Format(
+            Strings.NumericHint,
+            layout.Pads[0], layout.Pads[^1], layout.NextInterface, layout.PreviousInterface, layout.StopAll);
 
-        return $"{layout.Pads[0]} a {layout.Pads[^1]} tocam os 10 primeiros pads da interface ativa. " +
-               $"{layout.NextInterface} e {layout.PreviousInterface} trocam de interface. {layout.StopAll} para tudo.{note}";
+        return scheme == NumericScheme.Numpad ? keys + Strings.NumericHintNumpad : keys;
+    }
+
+    private void BuildOptions()
+    {
+        NumericOptions =
+        [
+            new(NumericScheme.Numpad, Strings.NumericNumpad),
+            new(NumericScheme.CtrlNumpad, Strings.NumericCtrlNumpad),
+            new(NumericScheme.AltDigits, Strings.NumericAltDigits),
+            new(NumericScheme.Off, Strings.NumericOff),
+        ];
+        _numericOption = NumericOptions.First(option => option.Scheme == _settings.NumericScheme);
+        Raise(nameof(NumericOption));
+
+        LanguageOptions =
+        [
+            new(null, Strings.LanguageSystem),
+            new("pt", "Português"),
+            new("en", "English"),
+        ];
+        _languageOption = LanguageOptions.First(option => option.Tag == _settings.Language);
+        Raise(nameof(LanguageOption));
     }
 
     private void LoadDeviceLists()
@@ -170,23 +234,24 @@ public sealed class SetupViewModel : ObservableObject
         {
             var microphones = _router.ListMicrophones();
             var outputs = _router.ListOutputs();
-            var defaultMicrophone = _router.DefaultMicrophoneId();
-            var defaultOutput = _router.DefaultOutputId();
 
-            Microphones = microphones.Where(device => !device.Name.Contains(CableOutputName, StringComparison.OrdinalIgnoreCase)).ToList();
-            GameOutputs = outputs;
-            MonitorOutputs = outputs.Where(device => !_cable.IsVirtual(device)).ToList();
+            Microphones = _routing.MicrophonesFrom(microphones);
+            GameOutputs = _routing.GameOutputsFrom(outputs);
+            MonitorOutputs = _routing.MonitorOutputsFrom(outputs);
 
-            Microphone =
-                microphones.FirstOrDefault(device => device.Id == _settings.MicrophoneId) ??
-                microphones.FirstOrDefault(device => device.Id == defaultMicrophone);
-            GameOutput =
-                outputs.FirstOrDefault(device => device.Id == _settings.VirtualOutputId) ??
-                _cable.FindGameOutput(outputs);
-            MonitorOutput =
-                outputs.FirstOrDefault(device => device.Id == _settings.MonitorOutputId) ??
-                MonitorOutputs.FirstOrDefault(device => device.Id == defaultOutput) ??
-                MonitorOutputs.FirstOrDefault();
+            var choice = _routing.Choose(
+                microphones,
+                outputs,
+                new SavedRouting(_settings.MicrophoneId, _settings.VirtualOutputId, _settings.MonitorOutputId),
+                new DefaultDevices(_router.DefaultMicrophoneId(), _router.DefaultOutputId()));
+
+            Microphone = choice.Microphone;
+            GameOutput = choice.GameOutput;
+            MonitorOutput = choice.MonitorOutput;
+
+            _settings.MicrophoneId = choice.Microphone?.Id;
+            _settings.VirtualOutputId = choice.GameOutput?.Id;
+            _settings.MonitorOutputId = choice.MonitorOutput?.Id;
         }
         finally
         {
@@ -194,25 +259,34 @@ public sealed class SetupViewModel : ObservableObject
         }
     }
 
-    private void ChooseDevice(ref AudioDevice? field, AudioDevice? value, Action<string?> apply, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+    private void ChooseDevice(
+        ref AudioDevice? field,
+        AudioDevice? value,
+        Action<string?> apply,
+        [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
     {
         if (!Set(ref field, value, propertyName) || _isLoadingDevices)
             return;
 
-        Applying(() => apply(value?.Id));
+        _ = OpenDeviceAsync(() => apply(value?.Id));
         UpdateRoutingStatus();
         _repository.Save(_settings);
     }
 
-    private void Applying(Action apply)
+    /// <summary>A driver in a bad state can block forever, so this never runs on the UI thread.</summary>
+    private async Task OpenDeviceAsync(Action open)
     {
         try
         {
-            apply();
+            await Task.Run(open).WaitAsync(DeviceOpenTimeout);
         }
         catch (AudioDeviceException exception)
         {
             _display.ShowError(exception.Message);
+        }
+        catch (TimeoutException)
+        {
+            _display.ShowError(Strings.AudioDeviceNotResponding);
         }
     }
 
@@ -221,18 +295,35 @@ public sealed class SetupViewModel : ObservableObject
         bool hasCable = _cable.FindGameOutput(_router.ListOutputs()) != null;
         var gameMicrophone = _cable.GameMicrophoneName(GameOutput);
 
+        var outputs = _router.ListOutputs();
+        var systemOutput = outputs.FirstOrDefault(device => device.Id == _router.SystemOutputId());
+
+        IsSystemOutputOnCable = systemOutput != null && _cable.IsVirtual(systemOutput);
         IsDriverMissing = !hasCable;
-        DriverStatus = hasCable
-            ? "Driver encontrado."
-            : "Nenhum cabo virtual encontrado. Sem ele os sons não chegam ao jogo.";
-        GameInstruction = $"Abra as configurações de voz do jogo (ou Discord) e selecione \"{gameMicrophone}\" como microfone.";
+        DriverStatus = hasCable ? Strings.DriverFound : Strings.DriverMissing;
+        GameInstruction = string.Format(Strings.GameInstruction, gameMicrophone);
+
+        const string absent = "--";
+        var status = string.Format(
+            Strings.RoutingStatus,
+            Microphone != null ? Strings.Ok : absent,
+            GameOutput != null ? Strings.Ok : absent,
+            hasCable ? Strings.Ok : Strings.Missing);
 
         _display.ShowRouting(
-            $"Mic {Mark(Microphone != null, "ok", "--")}   Saída {Mark(GameOutput != null, "ok", "--")}   Driver {Mark(hasCable, "ok", "ausente")}",
-            hasCable ? $"No jogo, escolha o microfone: {gameMicrophone}" : "Sem driver virtual: abra Ajustes e instale");
+            status,
+            DescribeRouting(hasCable, gameMicrophone));
     }
 
-    private static string Mark(bool ok, string yes, string no) => ok ? yes : no;
+    private string DescribeRouting(bool hasCable, string gameMicrophone)
+    {
+        if (!hasCable)
+            return Strings.NoDriverHint;
+
+        return IsSystemOutputOnCable
+            ? Strings.SystemOutputOnCableHint
+            : string.Format(Strings.GameMicrophoneHint, gameMicrophone);
+    }
 
     private async Task InstallDriverAsync()
     {
@@ -243,7 +334,7 @@ public sealed class SetupViewModel : ObservableObject
         }
         catch (DriverInstallCanceledException)
         {
-            DriverStatus = "Instalação cancelada.";
+            DriverStatus = Strings.DriverInstallCanceled;
         }
         catch (DriverInstallException exception)
         {

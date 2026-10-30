@@ -18,31 +18,7 @@ env:
 
 jobs:
   verify:
-    name: Build and test
-    runs-on: windows-latest
-    steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Restore
-        run: dotnet restore InstantPad.sln
-
-      - name: Build
-        run: dotnet build InstantPad.sln --configuration Release --no-restore
-
-      - name: Test
-        run: dotnet test InstantPad.sln --configuration Release --no-build
-
-      - name: Test the version script
-        shell: bash
-        run: bash build/next-version.test.sh
+    uses: ./.github/workflows/ci.yml
 
   release:
     name: Publish release
@@ -93,6 +69,17 @@ jobs:
         working-directory: publish
         run: sha256sum InstantPad.exe > InstantPad.exe.sha256
 
+      - name: Build the installer
+        if: steps.version.outputs.version != ''
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $compiler)) { choco install innosetup --no-progress --yes }
+          & $compiler "/DAppVersion=$env:VERSION" build\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Create the tag and the release
         if: steps.version.outputs.version != ''
         shell: bash
@@ -101,6 +88,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           gh release create "v$VERSION" \
+            publish/InstantPadSetup.exe \
             publish/InstantPad.exe \
             publish/InstantPad.exe.sha256 \
             --target "$GITHUB_SHA" \

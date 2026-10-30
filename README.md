@@ -4,95 +4,88 @@
 
 # InstantPad
 
-Soundboard nativo para Windows, com cara de sampler físico e o MyInstants embutido.
-Seu microfone e os sons saem misturados por um dispositivo virtual, que o jogo usa como microfone.
+InstantPad is a soundboard for Windows that looks like a hardware sampler and has MyInstants built in. It mixes your microphone with the sounds you trigger and sends the result to a virtual device, which your game or Discord uses as its microphone.
 
 ```
-microfone ─┐
-           ├─► InstantPad ─► CABLE Input ═ driver ═ CABLE Output ─► jogo / Discord
-sons ──────┤
-           └─► seus fones (só os sons)
+microphone ─┐
+            ├─► InstantPad ─► CABLE Input ═ driver ═ CABLE Output ─► game / Discord
+sounds ─────┤
+            └─► your headphones (sounds only)
 ```
 
-## Instalar
+## Install
 
-1. Baixe o `InstantPad.exe` da [última versão](https://github.com/eljonathas/InstantPad/releases/latest).
-   Ele não precisa de instalação nem do .NET.
-2. Na primeira abertura, o Windows pode avisar sobre um app desconhecido, porque o exe não tem
-   certificado de assinatura. Use **Mais informações > Executar assim mesmo**.
-3. Em **Ajustes**, clique em **Instalar VB-CABLE** e depois em **Install Driver**.
-4. Reinicie o PC.
-5. Confira em **Ajustes**:
-   - **Seu microfone**: o microfone real
-   - **Saída para o jogo**: `CABLE Input` (já vem selecionado)
-   - **Onde você ouve**: seus fones
+1. Download `InstantPadSetup.exe` from the [latest release](https://github.com/eljonathas/InstantPad/releases/latest) and run it. It installs for your user, without an admin prompt, and adds a desktop shortcut and a Start menu entry. The file is not code signed yet, so Windows may warn you the first time. Choose **More info**, then **Run anyway**.
+2. Open InstantPad, go to **Settings** and click **Install VB-CABLE**. Then click **Install Driver** in the window that opens.
+3. Restart your PC. The driver does not work properly until you do.
+4. VB-CABLE sets itself as the Windows output device when it installs. Open the Windows sound settings and pick your headphones as the output again. InstantPad warns you in **Settings** while this is wrong.
 
-Deixe o exe em uma pasta sua, como Documentos, para que a atualização automática consiga trocá-lo.
+If you prefer not to install anything, `InstantPad.exe` from the same release runs on its own.
 
-## No jogo
+## Set up your game
 
-Nas opções de voz do jogo ou do Discord, escolha **`CABLE Output`** como microfone.
+In the voice settings of your game or Discord, choose `CABLE Output` as the microphone.
 
-Se o jogo usa aperte-para-falar, segure a tecla enquanto o som toca, ou use voz aberta.
+If the game uses push-to-talk, hold the key while a sound plays, or switch to open mic.
 
-## Usando
+In Discord, also turn off noise suppression, echo cancellation and automatic gain control. They treat sounds as noise and make them choppy.
 
-| Ação | Como |
+## If the sound is robotic or distorted
+
+Check these in order:
+
+1. Did you restart the PC after installing VB-CABLE? Windows shows the driver as working before the restart, but it is not.
+2. The Windows output device must be your headphones, not `CABLE Input`. Otherwise every app on your PC goes into your microphone.
+3. Bluetooth headsets drop to call quality whenever an app uses their microphone. Use a wired or USB microphone, and make sure Discord and your game are not reading the headset's mic.
+4. Right-click `CABLE Input` and `CABLE Output` in the Windows sound panel and check that both use the same sample rate. VB-CABLE distorts when they differ. 48000 Hz works well.
+5. Lower the **Mic** and **Game** knobs until the meter stays out of the red.
+
+## Using it
+
+| To | Do this |
 | --- | --- |
-| Tocar um som | Clique no pad ou use o atalho dele |
-| Encher um pad | Clique no pad vazio e depois em **+ Pad** num resultado, ou arraste o resultado até o pad |
-| Ouvir um áudio online só nos fones | **▶** no resultado |
-| Tocar um áudio online no jogo sem salvar em pad | **Mic** no resultado |
-| Baixar um áudio no computador | **↓** no resultado ou nos favoritos, ou botão direito no pad |
-| Favoritar | **☆** no resultado, ou botão direito no pad |
-| Usar arquivo próprio | Arraste do Explorer até o pad, ou botão direito > Carregar arquivo |
-| Atalho, volume, cor, nome | Botão direito no pad |
-| Reorganizar pads | Ctrl + arrastar |
-| Ajustar um knob | Arraste para cima/baixo ou use a roda do mouse. Duplo clique volta ao padrão |
+| Play a sound | Click its pad or press its shortcut |
+| Fill a pad | Click an empty pad, then **+ Pad** on a result, or drag a result onto the pad |
+| Try an online sound on your headphones | **▶** on the result |
+| Play an online sound in the game without saving it | **Mic** on the result |
+| Save a sound to your computer | **↓** on a result or favorite, or right-click a pad |
+| Mark a favorite | **☆** on a result, or right-click a pad |
+| Use your own file | Drag it from Explorer onto a pad, or right-click the pad |
+| Change a pad's shortcut, volume, color or name | Right-click the pad |
+| Rearrange pads | Hold Ctrl and drag |
+| Turn a knob | Drag up or down, or use the mouse wheel. Double-click resets it |
 
-Os knobs são **Mic** (sua voz no jogo), **Jogo** (sons no jogo) e **Fones** (sons para você).
+The knobs set your voice in the game (**Mic**), the sounds in the game (**Game**) and the sounds you hear (**Headphones**).
+
+Only one copy of the app runs at a time. Opening it again brings the existing window to the front.
 
 ### Interfaces
 
-Crie quantas quiser com o **+**. Cada uma tem nome, grade própria (até 8 linhas por 10 colunas)
-e cor. O **⚙** configura a interface atual, e o botão direito na aba move ou exclui.
+Create as many interfaces as you want with **+**. Each has its own name, color and grid, up to 8 rows by 10 columns. The gear button configures the current one, and right-clicking a tab moves or deletes it.
 
-### Atalhos numéricos
+### Numeric shortcuts
 
-Vêm ligados, e funcionam com o jogo em primeiro plano:
+These are on by default and work while a game has focus:
 
-| Tecla | Ação |
+| Key | Action |
 | --- | --- |
-| `Num1` a `Num9`, `Num0` | Os 10 primeiros pads da interface ativa |
-| `Num+` / `Num-` | Próxima / interface anterior |
-| `Num,` | Para tudo |
+| `Num1` to `Num9`, `Num0` | The first 10 pads of the active interface |
+| `Num+` / `Num-` | Next / previous interface |
+| `Num,` | Stop everything |
 
-Em **Ajustes** dá para trocar por `Ctrl` + teclado numérico, `Alt` + `1` a `0`, ou desligar.
-Deixe o NumLock ligado. Um atalho definido à mão em um pad tem prioridade sobre os numéricos.
+**Settings** can switch them to `Ctrl` plus the numeric keypad, or `Alt` plus `1` to `0`, or turn them off. Keep NumLock on. A shortcut you set on a pad takes priority over these.
 
-## Atualização automática
+### Language
 
-Ao abrir, o app procura uma versão nova e a baixa em segundo plano, conferindo o SHA-256. Ela passa
-a valer na próxima abertura, ou na hora pelo botão **Reiniciar agora** em **Ajustes**. O app nunca
-reinicia sozinho, para não interromper uma partida.
+The app follows your system language and comes in English and Portuguese. You can change it in **Settings**.
 
-## Arquitetura
+## Automatic updates
 
-Clean Architecture, com as dependências sempre apontando para dentro:
+InstantPad looks for a new version when it opens and downloads it in the background, checking its SHA-256. The new version starts the next time you open the app, or right away with **Restart now** in **Settings**. It never restarts by itself, so an update cannot interrupt a match.
 
-```
-InstantPad.Desktop         WPF, ViewModels e composição das dependências
-   └─► InstantPad.Infrastructure   NAudio, MyInstants, GitHub, arquivos JSON, driver
-          └─► InstantPad.Application   casos de uso e portas (interfaces)
-                 └─► InstantPad.Domain     regras do quadro de pads e atalhos
-```
+## Development
 
-`Domain` e `Application` não conhecem WPF, NAudio ou rede. Toda a montagem acontece em
-[`CompositionRoot.cs`](src/InstantPad.Desktop/CompositionRoot.cs).
-
-## Desenvolvimento
-
-Requer o .NET 8 SDK.
+You need the .NET 8 SDK.
 
 ```bash
 dotnet test InstantPad.sln
@@ -102,29 +95,25 @@ dotnet test InstantPad.sln
 dotnet run --project src/InstantPad.Desktop
 ```
 
-Builds locais têm versão `0.0.0` e não se atualizam sozinhos.
+The code follows Clean Architecture, with dependencies pointing inwards:
 
-## Releases
+```
+InstantPad.Desktop                 WPF, view models, composition root
+   └─► InstantPad.Infrastructure   NAudio, MyInstants, GitHub, JSON files, driver
+          └─► InstantPad.Application   use cases, ports, translated text
+                 └─► InstantPad.Domain     pad board and hotkey rules
+```
 
-Cada push na `main` roda os testes, calcula a versão pelos commits e publica o exe em um
-[Release](https://github.com/eljonathas/InstantPad/releases), seguindo Conventional Commits:
+Every push to `main` runs the tests and publishes a release. The version comes from the [Conventional Commits](https://www.conventionalcommits.org/) since the last tag. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
-| Commit | Versão |
-| --- | --- |
-| `fix:`, `docs:`, `chore:` e outros | patch (1.0.**1**) |
-| `feat:` | minor (1.**1**.0) |
-| `feat!:` ou `BREAKING CHANGE` | major (**2**.0.0) |
+## Limitations
 
-## Limitações
+The virtual device is VB-CABLE, from VB-Audio. Windows only loads audio drivers signed by Microsoft, so the app cannot create its own. It downloads the setup from the official site and runs it only if the digital signature belongs to VB-Audio. VB-CABLE is free, with an optional donation.
 
-- O driver virtual é o VB-CABLE, da VB-Audio. O Windows só carrega driver de áudio assinado pela
-  Microsoft, então o app não consegue criar o próprio. Ele baixa o instalador do site oficial e só
-  executa se a assinatura digital for da VB-Audio. O VB-CABLE é gratuito, com doação opcional.
-- O MyInstants não tem API pública, e o app lê o HTML do site. Se o site mudar, ajuste
-  [`MyInstantsPageParser.cs`](src/InstantPad.Infrastructure/Catalog/MyInstantsPageParser.cs).
-- Jogos executados como administrador podem bloquear os atalhos globais. Nesse caso, abra o
-  InstantPad como administrador também.
+MyInstants has no public API, so the app reads the site's HTML. If the site changes, [`MyInstantsPageParser.cs`](src/InstantPad.Infrastructure/Catalog/MyInstantsPageParser.cs) is the file to fix.
 
-## Créditos
+A game running as administrator can block global shortcuts. If that happens, run InstantPad as administrator too.
 
-Fonte [Lexend](https://www.lexend.com/), sob a [SIL Open Font License](src/InstantPad.Desktop/Assets/Fonts/OFL.txt).
+## License
+
+[MIT](LICENSE). The app uses the [Lexend](https://www.lexend.com/) font under the [SIL Open Font License](src/InstantPad.Desktop/Assets/Fonts/OFL.txt).

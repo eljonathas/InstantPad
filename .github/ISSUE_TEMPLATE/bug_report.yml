@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in InstantPad does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. You can write in English or Portuguese.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings
+        2. Choose...
+        3. See the error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown in Settings.
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Audio or microphone
+        - Virtual cable driver
+        - Pads and interfaces
+        - Hotkeys
+        - MyInstants and downloads
+        - Favorites
+        - Automatic updates
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: audio-setup
+    attributes:
+      label: Audio setup
+      description: For audio problems, say which microphone, output and game or app you use.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots or the exact error shown on the display.

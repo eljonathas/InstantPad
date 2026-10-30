@@ -1,0 +1,4 @@
+* text=auto
+
+# Bash on the Windows runners cannot read scripts checked out with CRLF.
+*.sh text eol=lf

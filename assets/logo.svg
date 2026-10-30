@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="InstantPad">
+  <title>InstantPad</title>
+  <defs>
+    <linearGradient id="chassis" x1="0.1" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#3A3C44"/>
+      <stop offset="0.5" stop-color="#26272D"/>
+      <stop offset="1" stop-color="#17181C"/>
+    </linearGradient>
+    <linearGradient id="pad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A4D56"/>
+      <stop offset="1" stop-color="#2A2B31"/>
+    </linearGradient>
+    <linearGradient id="lit" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD98A"/>
+      <stop offset="0.55" stop-color="#FFB03A"/>
+      <stop offset="1" stop-color="#F08A12"/>
+    </linearGradient>
+    <filter id="glow" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+    <clipPath id="body">
+      <rect x="12" y="12" width="488" height="488" rx="100"/>
+    </clipPath>
+  </defs>
+
+  <rect x="12" y="12" width="488" height="488" rx="100" fill="url(#chassis)" stroke="#5A5E68" stroke-width="6"/>
+
+  <g fill="url(#pad)" stroke="#0A0A0C" stroke-width="6">
+    <rect x="52" y="52" width="120" height="120" rx="26"/>
+    <rect x="196" y="52" width="120" height="120" rx="26"/>
+    <rect x="52" y="196" width="120" height="120" rx="26"/>
+    <rect x="340" y="196" width="120" height="120" rx="26"/>
+    <rect x="52" y="340" width="120" height="120" rx="26"/>
+    <rect x="196" y="340" width="120" height="120" rx="26"/>
+    <rect x="340" y="340" width="120" height="120" rx="26"/>
+  </g>
+
+  <g clip-path="url(#body)">
+    <rect x="196" y="196" width="120" height="120" rx="26" fill="#FFB03A" filter="url(#glow)"/>
+    <rect x="340" y="52" width="120" height="120" rx="26" fill="#FFB03A" opacity="0.8" filter="url(#glow)"/>
+  </g>
+
+  <g fill="url(#lit)" stroke="#FFE9BE" stroke-width="6">
+    <rect x="196" y="196" width="120" height="120" rx="26"/>
+    <rect x="340" y="52" width="120" height="120" rx="26"/>
+  </g>
+</svg>

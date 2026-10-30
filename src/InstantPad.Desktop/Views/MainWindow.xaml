@@ -1,0 +1,330 @@
+<Window x:Class="InstantPad.Desktop.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="clr-namespace:InstantPad.Desktop.Controls"
+        Title="InstantPad" Icon="/Assets/InstantPad.ico"
+        Width="1320" Height="800" MinWidth="880" MinHeight="533"
+        WindowStartupLocation="CenterScreen" WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent" ResizeMode="CanResizeWithGrip" UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <Window.Resources>
+        <Style x:Key="SoundRowContainer" TargetType="ListBoxItem">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Row" Padding="2,3" BorderBrush="{StaticResource ScreenLine}" BorderThickness="0,0,0,1" Background="Transparent">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Row" Property="Background" Value="#14261B"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="SoundRowTemplate">
+            <Grid PreviewMouseMove="SoundRow_MouseMove" Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Ellipse Width="8" Height="8" Fill="{Binding Color, Converter={StaticResource HexToBrush}}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding Name}" Style="{StaticResource ScreenText}"
+                           Margin="6,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Style="{StaticResource HwButton}" Content="▶" Width="28" Padding="0,3" ToolTip="Ouvir só nos fones" Command="{Binding PreviewCommand}"/>
+                    <Button Style="{StaticResource HwButton}" Content="MIC" Width="36" Padding="0,3" Margin="3,0,0,0" ToolTip="Tocar no jogo agora" Command="{Binding PlayCommand}"/>
+                    <Button Style="{StaticResource HwButton}" Content="+ PAD" Width="48" Padding="0,3" Margin="3,0,0,0" Foreground="{DynamicResource Accent}" ToolTip="Salvar em um pad" Command="{Binding AddToPadCommand}"/>
+                    <Button Style="{StaticResource HwButton}" Content="{Binding Star}" Width="28" Padding="0,3" Margin="3,0,0,0" Foreground="#FFD21F" ToolTip="Favoritar" Command="{Binding FavoriteCommand}"/>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <Style x:Key="SoundList" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ScrollViewer.CanContentScroll" Value="False"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource SoundRowContainer}"/>
+            <Setter Property="ItemTemplate" Value="{StaticResource SoundRowTemplate}"/>
+        </Style>
+    </Window.Resources>
+
+    <Viewbox Stretch="Uniform">
+        <Grid x:Name="Device" Width="1320" Height="800" Margin="10">
+
+            <!-- Chassis -->
+            <Border CornerRadius="20" Background="{StaticResource Chassis}" BorderBrush="#4A4D55" BorderThickness="1"
+                    MouseLeftButtonDown="Chassis_MouseDown">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="10" ShadowDepth="3" Opacity="0.7"/>
+                </Border.Effect>
+            </Border>
+
+            <!-- Screws -->
+            <Ellipse Width="12" Height="12" Fill="#0E0F12" Stroke="#55585F" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="11"/>
+            <Ellipse Width="12" Height="12" Fill="#0E0F12" Stroke="#55585F" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="11"/>
+            <Ellipse Width="12" Height="12" Fill="#0E0F12" Stroke="#55585F" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="11"/>
+
+            <!-- Power keys -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,14,0">
+                <Button Style="{StaticResource HwButton}" Content="–" Width="30" Height="20" Padding="0" Click="Minimize_Click" ToolTip="Minimizar"/>
+                <Button Style="{StaticResource HwButton}" Content="✕" Width="30" Height="20" Padding="0" Margin="5,0,0,0" Click="Close_Click" ToolTip="Fechar" Foreground="#FF6B6B"/>
+            </StackPanel>
+
+            <Grid Margin="26,32,26,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="148"/>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="372"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left strip: logo, knobs, meters -->
+                <DockPanel Grid.Column="0" Margin="0,0,16,0" DataContext="{Binding Mixer}">
+                    <StackPanel DockPanel.Dock="Top" MouseLeftButtonDown="Chassis_MouseDown" Background="Transparent">
+                        <TextBlock Text="INSTANT" Foreground="White" FontFamily="Segoe UI Black" FontSize="24" HorizontalAlignment="Center"/>
+                        <TextBlock Text="PAD" Foreground="{DynamicResource Accent}" FontFamily="Segoe UI Black" FontSize="24" Margin="0,-10,0,0" HorizontalAlignment="Center"/>
+                        <TextBlock Text="SOUND SAMPLER" Style="{StaticResource Silk}" FontSize="9" Margin="0,0,0,10"/>
+                    </StackPanel>
+
+                    <c:Knob x:Name="MicKnob" DockPanel.Dock="Top" Width="92" Height="92" Maximum="2" DefaultValue="1"
+                            Value="{Binding MicVolume}" Accent="{DynamicResource Accent}"/>
+                    <TextBlock DockPanel.Dock="Top" Text="MIC" Style="{StaticResource Silk}" Margin="0,0,0,8"/>
+
+                    <c:Knob x:Name="GameKnob" DockPanel.Dock="Top" Width="92" Height="92" DefaultValue="0.8"
+                            Value="{Binding GameVolume}" Accent="{DynamicResource Accent}"/>
+                    <TextBlock DockPanel.Dock="Top" Text="JOGO" Style="{StaticResource Silk}" Margin="0,0,0,8"/>
+
+                    <c:Knob x:Name="MonitorKnob" DockPanel.Dock="Top" Width="92" Height="92" DefaultValue="0.6"
+                            Value="{Binding MonitorVolume}" Accent="{DynamicResource Accent}"/>
+                    <TextBlock DockPanel.Dock="Top" Text="FONES" Style="{StaticResource Silk}" Margin="0,0,0,10"/>
+
+                    <ToggleButton x:Name="MicToggle" DockPanel.Dock="Bottom" Style="{StaticResource HwToggle}" Height="38"
+                                  Content="{Binding MicLabel}" IsChecked="{Binding MicEnabled}"/>
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <c:LedMeter Width="24" Level="{Binding MicLevel}"/>
+                        <c:LedMeter Grid.Column="1" Width="24" Level="{Binding OutputLevel}"/>
+                        <TextBlock Grid.Row="1" Text="MIC" Style="{StaticResource Silk}" FontSize="10" Margin="0,3,0,0"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="SAÍDA" Style="{StaticResource Silk}" FontSize="10" Margin="0,3,0,0"/>
+                    </Grid>
+                </DockPanel>
+
+                <!-- Centre: LCD, interfaces, pads -->
+                <Grid Grid.Column="1" Margin="0,0,16,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="92"/>
+                        <RowDefinition Height="52"/>
+                        <RowDefinition/>
+                    </Grid.RowDefinitions>
+
+                    <Border CornerRadius="6" BorderBrush="#050506" BorderThickness="3" MouseLeftButtonDown="Chassis_MouseDown"
+                            DataContext="{Binding Display}">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#0C1A11" Offset="0"/>
+                                <GradientStop Color="#102418" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Grid Margin="14,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <TextBlock x:Name="LcdMain" Text="{Binding Main}" Style="{StaticResource ScreenText}" FontSize="24" FontWeight="Bold"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="LcdStatus" Grid.Row="1" Text="{Binding Status}" Style="{StaticResource ScreenText}"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="LcdHint" Grid.Row="2" Text="{Binding Hint}" Style="{StaticResource ScreenText}" Foreground="{StaticResource LcdDim}"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1" Margin="5,10,5,4" DataContext="{Binding Board}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Style="{StaticResource HwButton}" Content="◀" Width="28" Padding="0" Margin="0,0,6,0" ToolTip="Interface anterior" Command="{Binding PreviousInterfaceCommand}"/>
+                        <ListBox x:Name="InterfaceTabs" Grid.Column="1" Background="Transparent" BorderThickness="0"
+                                 ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                 ScrollViewer.CanContentScroll="False"
+                                 SelectionChanged="InterfaceTabs_SelectionChanged">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <EventSetter Event="MouseRightButtonUp" Handler="InterfaceTab_RightClick"/>
+                                    <Setter Property="Focusable" Value="False"/>
+                                    <Setter Property="Cursor" Value="Hand"/>
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <Border x:Name="Body" CornerRadius="5" BorderBrush="#0A0A0C" BorderThickness="1"
+                                                        Background="{StaticResource Rubber}" Margin="0,0,6,0" MinWidth="58" MaxWidth="160">
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="5"/>
+                                                            <RowDefinition/>
+                                                        </Grid.RowDefinitions>
+                                                        <Border x:Name="Led" Height="3" Margin="10,3,10,0" CornerRadius="1.5" Background="#2B2D32"/>
+                                                        <TextBlock Grid.Row="1" Text="{Binding Name}" Foreground="#D8DAE0" FontFamily="Segoe UI Semibold" FontSize="12"
+                                                                   Margin="10,0" HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                    </Grid>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="Led" Property="Background" Value="{DynamicResource Accent}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Style="{StaticResource HwButton}" Content="▶" Width="28" Padding="0" ToolTip="Próxima interface" Command="{Binding NextInterfaceCommand}"/>
+                            <Button Style="{StaticResource HwButton}" Content="+" Width="30" Padding="0" Margin="6,0,0,0" Foreground="{DynamicResource Accent}" FontSize="16" ToolTip="Nova interface" Command="{Binding AddInterfaceCommand}"/>
+                            <Button Style="{StaticResource HwButton}" Content="⚙" Width="30" Padding="0" Margin="6,0,0,0" ToolTip="Configurar esta interface" Command="{Binding ConfigureInterfaceCommand}"/>
+                            <Button Style="{StaticResource HwButton}" Content="■  PARAR" Width="86" Padding="0" Margin="6,0,0,0"
+                                    Background="#7A1F1F" Foreground="White" Command="{Binding StopAllCommand}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <ItemsControl x:Name="PadGrid" Grid.Row="2" DataContext="{Binding Board}" ItemsSource="{Binding Pads}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="{Binding PadColumns}" Rows="{Binding PadRows}"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Style="{StaticResource Pad}" Command="{Binding PressCommand}"
+                                        PreviewMouseLeftButtonDown="Pad_PreviewMouseDown"
+                                        MouseRightButtonUp="Pad_RightClick"
+                                        Drop="Pad_Drop"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+
+                <!-- Right: built-in screen -->
+                <DockPanel Grid.Column="2">
+                    <Grid DockPanel.Dock="Top" Height="34" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition/>
+                        </Grid.ColumnDefinitions>
+                        <RadioButton x:Name="BrowseTab" Style="{StaticResource HwToggle}" Content="MYINSTANTS" IsChecked="True" Checked="PanelTab_Checked"/>
+                        <RadioButton x:Name="FavoritesTab" Grid.Column="2" Style="{StaticResource HwToggle}" Content="★ FAVORITOS" Checked="PanelTab_Checked"/>
+                        <RadioButton x:Name="SetupTab" Grid.Column="4" Style="{StaticResource HwToggle}" Content="SETUP" Checked="PanelTab_Checked"/>
+                    </Grid>
+
+                    <Border CornerRadius="6" Background="{StaticResource ScreenBack}" BorderBrush="#050506" BorderThickness="3">
+                        <Grid>
+
+                            <!-- MyInstants browser -->
+                            <DockPanel x:Name="BrowsePanel" Margin="10" DataContext="{Binding Browser}">
+                                <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SearchBox" Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
+                                             KeyDown="SearchBox_KeyDown"
+                                             GotKeyboardFocus="SearchBox_GotKeyboardFocus" LostKeyboardFocus="SearchBox_LostKeyboardFocus"/>
+                                    <Button Grid.Column="1" Style="{StaticResource HwButton}" Content="BUSCAR" Margin="6,0,0,0"
+                                            Command="{Binding SearchCommand}" Click="Search_Click"/>
+                                </Grid>
+                                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource HwButton}" Content="EM ALTA BR" Command="{Binding TrendingCommand}"/>
+                                    <TextBlock x:Name="BrowseStatus" Text="{Binding Status}" Style="{StaticResource ScreenText}" FontSize="12"
+                                               Foreground="{StaticResource LcdDim}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                                <Button DockPanel.Dock="Bottom" Style="{StaticResource HwButton}" Content="CARREGAR MAIS" Margin="0,8,0,0"
+                                        Command="{Binding LoadMoreCommand}"
+                                        Visibility="{Binding HasMore, Converter={StaticResource BoolToVisibility}}"/>
+                                <ListBox x:Name="Results" Style="{StaticResource SoundList}" ItemsSource="{Binding Results}"
+                                         PreviewMouseLeftButtonDown="SoundList_PreviewMouseDown"/>
+                            </DockPanel>
+
+                            <!-- Favorites -->
+                            <DockPanel x:Name="FavoritesPanel" Margin="10" Visibility="Collapsed" DataContext="{Binding Favorites}">
+                                <TextBlock x:Name="FavoritesStatus" DockPanel.Dock="Top" Text="{Binding Status}" Style="{StaticResource ScreenText}" FontSize="12"
+                                           Foreground="{StaticResource LcdDim}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                <ListBox x:Name="FavoritesList" Style="{StaticResource SoundList}" ItemsSource="{Binding Rows}"
+                                         PreviewMouseLeftButtonDown="SoundList_PreviewMouseDown"/>
+                            </DockPanel>
+
+                            <!-- Routing setup -->
+                            <ScrollViewer x:Name="SetupPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Margin="12,10">
+                                <StackPanel DataContext="{Binding Setup}">
+                                    <TextBlock Text="DRIVER VIRTUAL" Style="{StaticResource ScreenText}" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding DriverStatus}" Style="{StaticResource ScreenText}" TextWrapping="Wrap" Margin="0,4,0,6"/>
+                                    <Button Style="{StaticResource HwButton}" Content="INSTALAR VB-CABLE" Foreground="{StaticResource Amber}" Margin="0,0,0,12"
+                                            Command="{Binding InstallDriverCommand}" IsEnabled="{Binding CanInstallDriver}"
+                                            Visibility="{Binding IsDriverMissing, Converter={StaticResource BoolToVisibility}}"/>
+
+                                    <TextBlock Text="1. SEU MICROFONE" Style="{StaticResource ScreenText}" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="MicCombo" ItemsSource="{Binding Microphones}" SelectedItem="{Binding Microphone}" Height="30" Margin="0,0,0,10"/>
+
+                                    <TextBlock Text="2. SAÍDA PARA O JOGO" Style="{StaticResource ScreenText}" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="VirtualCombo" ItemsSource="{Binding GameOutputs}" SelectedItem="{Binding GameOutput}" Height="30" Margin="0,0,0,10"/>
+
+                                    <TextBlock Text="3. ONDE VOCÊ OUVE" Style="{StaticResource ScreenText}" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="MonitorCombo" ItemsSource="{Binding MonitorOutputs}" SelectedItem="{Binding MonitorOutput}" Height="30" Margin="0,0,0,10"/>
+
+                                    <Button Style="{StaticResource HwButton}" Content="ATUALIZAR DISPOSITIVOS" Command="{Binding RefreshDevicesCommand}" Margin="0,0,0,14"/>
+
+                                    <TextBlock Text="NO JOGO" Style="{StaticResource ScreenText}" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding GameInstruction}" Style="{StaticResource ScreenText}" TextWrapping="Wrap" Margin="0,4,0,14" Foreground="{StaticResource Amber}"/>
+
+                                    <TextBlock Text="ATALHOS NUMÉRICOS" Style="{StaticResource ScreenText}" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="NumericCombo" ItemsSource="{Binding NumericOptions}" SelectedItem="{Binding NumericOption}" Height="30" Margin="0,0,0,6"/>
+                                    <TextBlock Text="{Binding NumericHint}" Style="{StaticResource ScreenText}" Foreground="{StaticResource LcdDim}" TextWrapping="Wrap" Margin="0,0,0,14"/>
+
+                                    <TextBlock Text="ATALHO PARAR TUDO" Style="{StaticResource ScreenText}" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <Button Style="{StaticResource HwButton}" Content="{Binding StopHotkeyText}" Command="{Binding SetStopHotkeyCommand}" Margin="0,0,0,14"/>
+
+                                    <StackPanel DataContext="{Binding DataContext.Update, RelativeSource={RelativeSource AncestorType=Window}}">
+                                        <TextBlock Text="ATUALIZAÇÃO" Style="{StaticResource ScreenText}" FontWeight="Bold" Margin="0,0,0,4"/>
+                                        <TextBlock x:Name="UpdateStatus" Text="{Binding Status}" Style="{StaticResource ScreenText}" Foreground="{StaticResource LcdDim}" TextWrapping="Wrap"/>
+                                        <Button Style="{StaticResource HwButton}" Content="REINICIAR AGORA" Foreground="{StaticResource Amber}" Margin="0,6,0,0"
+                                                Command="{Binding RestartCommand}"
+                                                Visibility="{Binding IsReadyToRestart, Converter={StaticResource BoolToVisibility}}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </DockPanel>
+            </Grid>
+        </Grid>
+    </Viewbox>
+</Window>

@@ -22,6 +22,9 @@ public interface ISoundFileStore
     /// <summary>Copies an outside file into the store and returns its new path.</summary>
     string Import(string sourcePath);
 
+    /// <summary>Copies a stored sound to a place the user chose.</summary>
+    void Export(string storedPath, string destination);
+
     bool Exists(string path);
 }
 

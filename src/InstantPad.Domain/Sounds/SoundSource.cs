@@ -14,5 +14,15 @@ public sealed class SoundSource
     /// <summary>Null for files the user imported.</summary>
     public string? SoundUrl { get; set; }
 
+    /// <summary>A readable file name for saving the sound outside the app.</summary>
+    public string SuggestedFileName
+    {
+        get
+        {
+            var name = string.Concat(Name.Select(letter => System.IO.Path.GetInvalidFileNameChars().Contains(letter) ? '_' : letter));
+            return name.Trim() + System.IO.Path.GetExtension(Path);
+        }
+    }
+
     public bool IsSameSoundAs(string path) => string.Equals(Path, path, StringComparison.OrdinalIgnoreCase);
 }

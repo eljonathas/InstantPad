@@ -28,7 +28,7 @@ public sealed class FavoritesViewModel : ObservableObject
             Rows.Add(new SoundRowViewModel(favorite, isFavorite: true, _actions));
 
         Status = Rows.Count == 0
-            ? "NENHUM FAVORITO AINDA. USE A ESTRELA NOS RESULTADOS OU O BOTÃO DIREITO NUM PAD."
-            : $"{Rows.Count} FAVORITO(S)";
+            ? "Nenhum favorito ainda. Use a estrela nos resultados ou o botão direito em um pad."
+            : Rows.Count == 1 ? "1 favorito" : $"{Rows.Count} favoritos";
     }
 }

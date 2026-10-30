@@ -137,7 +137,7 @@ public sealed class SetupViewModel : ObservableObject
 
     public string NumericHint => DescribeNumericKeys(_numericOption.Scheme);
 
-    public string StopHotkeyText => _board.StopHotkey?.ToString() ?? "DEFINIR ATALHO";
+    public string StopHotkeyText => _board.StopHotkey?.ToString() ?? "Definir atalho";
 
     public void LoadDevices()
     {
@@ -228,8 +228,8 @@ public sealed class SetupViewModel : ObservableObject
         GameInstruction = $"Abra as configurações de voz do jogo (ou Discord) e selecione \"{gameMicrophone}\" como microfone.";
 
         _display.ShowRouting(
-            $"MIC {Mark(Microphone != null, "OK", "--")}   SAÍDA {Mark(GameOutput != null, "OK", "--")}   DRIVER {Mark(hasCable, "OK", "AUSENTE")}",
-            hasCable ? $"NO JOGO, ESCOLHA O MICROFONE: {gameMicrophone}" : "SEM DRIVER VIRTUAL: ABRA SETUP E INSTALE");
+            $"Mic {Mark(Microphone != null, "ok", "--")}   Saída {Mark(GameOutput != null, "ok", "--")}   Driver {Mark(hasCable, "ok", "ausente")}",
+            hasCable ? $"No jogo, escolha o microfone: {gameMicrophone}" : "Sem driver virtual: abra Ajustes e instale");
     }
 
     private static string Mark(bool ok, string yes, string no) => ok ? yes : no;

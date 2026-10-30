@@ -42,6 +42,7 @@ public sealed class BoardMenus(BoardViewModel board, SoundRowActions rowActions)
     private void AddSoundItems(ContextMenu menu, PadViewModel pad, Sound sound)
     {
         menu.Items.Add(Item(pad.IsFavorite ? "Remover dos favoritos" : "Favoritar", () => _ = rowActions.ToggleFavoriteAsync(ToSource(sound))));
+        menu.Items.Add(Item("Baixar no computador...", () => _ = rowActions.SaveToComputerAsync(ToSource(sound))));
         menu.Items.Add(new Separator());
 
         menu.Items.Add(Item("Definir atalho...", () => board.SetHotkey(pad)));

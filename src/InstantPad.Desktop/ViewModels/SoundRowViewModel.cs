@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using InstantPad.Application.Audio;
 using InstantPad.Application.Sounds;
+using InstantPad.Desktop.Services;
 using InstantPad.Domain.Sounds;
 
 namespace InstantPad.Desktop.ViewModels;
@@ -19,6 +20,7 @@ public sealed class SoundRowViewModel : ObservableObject
         PlayCommand = new AsyncCommand(() => actions.PlayAsync(this));
         AddToPadCommand = new AsyncCommand(() => actions.AddToPadAsync(this));
         FavoriteCommand = new AsyncCommand(() => actions.ToggleFavoriteAsync(this));
+        SaveToComputerCommand = new AsyncCommand(() => actions.SaveToComputerAsync(Source));
     }
 
     public SoundSource Source { get; }
@@ -30,6 +32,8 @@ public sealed class SoundRowViewModel : ObservableObject
     public ICommand AddToPadCommand { get; }
 
     public ICommand FavoriteCommand { get; }
+
+    public ICommand SaveToComputerCommand { get; }
 
     public string Name => Source.Name;
 
@@ -54,22 +58,40 @@ public sealed class SoundRowActions(
     SoundLibrary library,
     FavoritesService favorites,
     ISoundPlayer player,
-    DisplayViewModel display)
+    DisplayViewModel display,
+    IDialogService dialogs)
 {
     private const float FullVolume = 1f;
+
+    public async Task SaveToComputerAsync(SoundSource source)
+    {
+        if (dialogs.PickSaveLocation(source.SuggestedFileName) is not { } destination)
+            return;
+
+        try
+        {
+            display.Show($"Baixando {source.Name}");
+            await library.SaveToComputerAsync(source, destination);
+            display.Show($"Salvo: {System.IO.Path.GetFileName(destination)}");
+        }
+        catch (Exception exception) when (exception is SoundUnavailableException or CatalogUnavailableException)
+        {
+            display.ShowError($"Falhou {source.Name}: {exception.Message}");
+        }
+    }
 
     public Task PreviewAsync(SoundRowViewModel row) =>
         DownloadingAsync(row, async () =>
         {
             await player.PreviewAsync(row.Source.Path, FullVolume, row.Source);
-            display.Show($"OUVINDO {row.Name}");
+            display.Show($"Ouvindo {row.Name}");
         });
 
     public Task PlayAsync(SoundRowViewModel row) =>
         DownloadingAsync(row, async () =>
         {
             await player.PlayAsync(row.Source.Path, FullVolume, row.Source);
-            display.Show($"NO JOGO {row.Name}");
+            display.Show($"No jogo: {row.Name}");
         });
 
     public async Task AddToPadAsync(SoundRowViewModel row)
@@ -89,7 +111,7 @@ public sealed class SoundRowActions(
     {
         try
         {
-            display.Show($"BAIXANDO {source.Name}");
+            display.Show($"Baixando {source.Name}");
             bool isFavorite = await favorites.ToggleAsync(source);
             display.Show(isFavorite ? $"★ {source.Name}" : source.Name);
         }
@@ -103,7 +125,7 @@ public sealed class SoundRowActions(
     {
         try
         {
-            display.Show($"BAIXANDO {row.Name}");
+            display.Show($"Baixando {row.Name}");
             await library.EnsureDownloadedAsync(row.Source);
             await action();
         }

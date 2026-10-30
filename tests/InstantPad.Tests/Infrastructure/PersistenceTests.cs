@@ -1,4 +1,5 @@
 using System.IO;
+using InstantPad.Application.Audio;
 using InstantPad.Domain.Hotkeys;
 using InstantPad.Domain.Sounds;
 using InstantPad.Infrastructure.Persistence;
@@ -65,6 +66,30 @@ public sealed class PersistenceTests : IDisposable
 
         Assert.Equal(1, settings.MicVolume);
         Assert.True(File.Exists(path + ".bak"));
+    }
+
+    [Fact]
+    public void ExportingCopiesTheSoundToTheChosenPlace()
+    {
+        var store = new SoundFileStore(_folder);
+        var stored = Path.Combine(_folder.Sounds, "a.mp3");
+        var destination = _folder.File("baixado.mp3");
+        File.WriteAllText(stored, "audio");
+
+        store.Export(stored, destination);
+
+        Assert.Equal("audio", File.ReadAllText(destination));
+        Assert.True(File.Exists(stored));
+    }
+
+    [Fact]
+    public void ExportingToAnInvalidPlaceReportsTheFailure()
+    {
+        var store = new SoundFileStore(_folder);
+        var stored = Path.Combine(_folder.Sounds, "a.mp3");
+        File.WriteAllText(stored, "audio");
+
+        Assert.Throws<SoundUnavailableException>(() => store.Export(stored, _folder.File("pasta-que-nao-existe\\a.mp3")));
     }
 
     [Fact]

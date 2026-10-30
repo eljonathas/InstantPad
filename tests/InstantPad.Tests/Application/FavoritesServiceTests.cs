@@ -11,7 +11,9 @@ public sealed class FavoritesServiceTests
     private readonly FakeRepository _repository = new();
     private readonly FakeCatalog _catalog = new();
 
-    private FavoritesService CreateService() => new(_repository, new SoundLibrary(_catalog, new FakeFiles()));
+    private readonly FakeFiles _files = new();
+
+    private FavoritesService CreateService() => new(_repository, new SoundLibrary(_catalog, _files));
 
     private static SoundSource OnlineSound() =>
         new() { Name = "a", Path = "a.mp3", SoundUrl = "https://example.test/a.mp3" };
@@ -49,6 +51,25 @@ public sealed class FavoritesServiceTests
         await Assert.ThrowsAsync<SoundUnavailableException>(() => service.ToggleAsync(missing));
 
         Assert.Empty(service.Favorites);
+    }
+
+    [Fact]
+    public async Task SavingToTheComputerDownloadsFirst()
+    {
+        var library = new SoundLibrary(_catalog, _files);
+
+        await library.SaveToComputerAsync(OnlineSound(), @"C:\Musicas\a.mp3");
+
+        Assert.Equal("a.mp3", _catalog.Downloaded);
+        Assert.Equal(("a.mp3", @"C:\Musicas\a.mp3"), _files.Exported);
+    }
+
+    [Theory]
+    [InlineData("BRUH", "/sons/movie_1.mp3", "BRUH.mp3")]
+    [InlineData("o que? sim/não", "/sons/x.wav", "o que_ sim_não.wav")]
+    public void SuggestedNamesComeFromTheSoundName(string name, string path, string expected)
+    {
+        Assert.Equal(expected, new SoundSource { Name = name, Path = path }.SuggestedFileName);
     }
 
     [Fact]
@@ -95,6 +116,10 @@ public sealed class FavoritesServiceTests
 
         public string Import(string sourcePath) => sourcePath;
 
+        public void Export(string storedPath, string destination) => Exported = (storedPath, destination);
+
         public bool Exists(string path) => false;
+
+        public (string Stored, string Destination)? Exported { get; private set; }
     }
 }

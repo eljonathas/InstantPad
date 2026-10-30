@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using InstantPad.Application.Hotkeys;
 using InstantPad.Desktop.Views;
@@ -18,6 +19,8 @@ public interface IDialogService
     bool Confirm(string title, string message);
 
     string? PickAudioFile();
+
+    string? PickSaveLocation(string suggestedFileName);
 }
 
 /// <summary>Opens the dialogs with global hotkeys off, since they would swallow what the user types.</summary>
@@ -49,6 +52,18 @@ public sealed class DialogService(HotkeyService hotkeys) : IDialogService
         var dialog = new OpenFileDialog { Filter = AudioFileFilter };
         return dialog.ShowDialog(Owner) == true ? dialog.FileName : null;
     }
+
+    public string? PickSaveLocation(string suggestedFileName) =>
+        WithHotkeysPaused(() =>
+        {
+            var dialog = new SaveFileDialog
+            {
+                FileName = suggestedFileName,
+                Filter = "Áudio|*" + Path.GetExtension(suggestedFileName),
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
+            };
+            return dialog.ShowDialog(Owner) == true ? dialog.FileName : null;
+        });
 
     private T WithHotkeysPaused<T>(Func<T> showDialog)
     {

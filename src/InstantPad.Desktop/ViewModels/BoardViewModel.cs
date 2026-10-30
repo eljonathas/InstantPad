@@ -149,7 +149,7 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
         if (padIndex < Pads.Count && Pads[padIndex].Sound is { } sound)
             PlaySound(sound);
         else
-            _display.Show($"PAD {PadViewModel.LabelFor(padIndex)} VAZIO");
+            _display.Show($"Pad {PadViewModel.LabelFor(padIndex)} vazio");
     }
 
     public void NextInterface() => StepInterface(1);
@@ -159,7 +159,7 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
     public void StopAll()
     {
         _player.StopAll();
-        _display.Show("PARADO");
+        _display.Show("Parado");
     }
 
     // ---- Interfaces ----------------------------------------------------
@@ -322,7 +322,7 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
         pad.Sound = null;
         Save();
         RefreshPadLabels();
-        _display.Show($"ENVIADO PARA {target.Name}");
+        _display.Show($"Enviado para {target.Name}");
     }
 
     public void Rename(PadViewModel pad)
@@ -388,7 +388,7 @@ public sealed class BoardViewModel : ObservableObject, IHotkeyActions
         _targetPad = pad;
         pad.IsTarget = true;
         PadTargeted?.Invoke();
-        _display.Show($"PAD {pad.Label} SELECIONADO: ESCOLHA UM SOM");
+        _display.Show($"Pad {pad.Label} selecionado: escolha um som");
     }
 
     private async Task TriggerAsync(Sound sound)

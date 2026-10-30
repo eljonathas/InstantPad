@@ -24,6 +24,18 @@ public sealed class SoundFileStore(AppDataFolder folder) : ISoundFileStore
         }
     }
 
+    public void Export(string storedPath, string destination)
+    {
+        try
+        {
+            File.Copy(storedPath, destination, overwrite: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new SoundUnavailableException($"Não foi possível salvar o arquivo: {exception.Message}", exception);
+        }
+    }
+
     public bool Exists(string path) => File.Exists(path);
 
     private string InsideStore(string fileName)

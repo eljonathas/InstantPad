@@ -17,6 +17,7 @@ internal static class DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner,
         ResizeMode = ResizeMode.NoResize,
         ShowInTaskbar = false,
+        FontFamily = (FontFamily)owner.FindResource("Lexend"),
         Background = new SolidColorBrush(Color.FromRgb(0x17, 0x18, 0x1c)),
     };
 }

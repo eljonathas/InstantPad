@@ -23,4 +23,11 @@ public sealed class SoundLibrary(ISoundCatalog catalog, ISoundFileStore files)
 
         await catalog.DownloadAsync(source.SoundUrl, source.Path, token);
     }
+
+    /// <summary>Saves the audio file on the user's computer, outside the app.</summary>
+    public async Task SaveToComputerAsync(SoundSource source, string destination, CancellationToken token = default)
+    {
+        await EnsureDownloadedAsync(source, token);
+        files.Export(source.Path, destination);
+    }
 }

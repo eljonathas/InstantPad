@@ -71,7 +71,7 @@ public sealed class MixerViewModel : ObservableObject
         }
     }
 
-    public string MicLabel => MicEnabled ? "MIC ABERTO" : "MIC MUDO";
+    public string MicLabel => MicEnabled ? "Mic aberto" : "Mic mudo";
 
     public double MicLevel { get => _micLevel; private set => Set(ref _micLevel, value); }
 

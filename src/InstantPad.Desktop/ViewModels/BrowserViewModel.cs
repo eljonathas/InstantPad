@@ -7,7 +7,7 @@ namespace InstantPad.Desktop.ViewModels;
 /// <summary>The MyInstants screen: search, trending sounds and paging.</summary>
 public sealed class BrowserViewModel : ObservableObject
 {
-    private const string TrendingTitle = "EM ALTA NO BRASIL";
+    private const string TrendingTitle = "Em alta no Brasil";
 
     private readonly ISoundCatalog _catalog;
     private readonly SoundLibrary _library;
@@ -74,7 +74,7 @@ public sealed class BrowserViewModel : ObservableObject
 
     private async Task LoadPageAsync(bool reset)
     {
-        Status = "CARREGANDO...";
+        Status = "Carregando...";
         HasMore = false;
         try
         {
@@ -87,13 +87,13 @@ public sealed class BrowserViewModel : ObservableObject
             foreach (var sound in page.Sounds)
                 Results.Add(ToRow(sound));
 
-            var title = _activeQuery?.ToUpperInvariant() ?? TrendingTitle;
-            Status = Results.Count == 0 ? "NADA ENCONTRADO" : $"{title} ({Results.Count})";
+            var title = _activeQuery ?? TrendingTitle;
+            Status = Results.Count == 0 ? "Nada encontrado" : $"{title} ({Results.Count})";
             HasMore = page.HasMore;
         }
         catch (CatalogUnavailableException)
         {
-            Status = "SEM CONEXÃO COM O MYINSTANTS";
+            Status = "Sem conexão com o MyInstants";
         }
     }
 

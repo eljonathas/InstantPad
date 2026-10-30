@@ -49,7 +49,7 @@ public static class CompositionRoot
         var board = new BoardViewModel(
             boardRepository.Load(), boardRepository, player, soundFiles, favorites,
             hotkeys, settings, display, dialogs, new AccentTheme());
-        var rowActions = new SoundRowActions(board, soundLibrary, favorites, player, display);
+        var rowActions = new SoundRowActions(board, soundLibrary, favorites, player, display, dialogs);
         var browser = new BrowserViewModel(catalog, soundLibrary, favorites, rowActions);
         var favoritesPanel = new FavoritesViewModel(favorites, rowActions);
         var setup = new SetupViewModel(

@@ -14,7 +14,7 @@
         <SolidColorBrush x:Key="SilkScreen" Color="#A6A9B0"/>
         <SolidColorBrush x:Key="ScreenBack" Color="#0B0D11"/>
         <SolidColorBrush x:Key="ScreenLine" Color="#2A2E36"/>
-        <FontFamily x:Key="Mono">Consolas</FontFamily>
+        <FontFamily x:Key="Lexend">pack://application:,,,/Assets/Fonts/#Lexend</FontFamily>
 
         <LinearGradientBrush x:Key="Chassis" StartPoint="0,0" EndPoint="0.4,1">
             <GradientStop Color="#34363D" Offset="0"/>
@@ -34,7 +34,8 @@
 
         <Style x:Key="Silk" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource SilkScreen}"/>
-            <Setter Property="FontFamily" Value="Segoe UI Semibold"/>
+            <Setter Property="FontFamily" Value="{StaticResource Lexend}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </Style>
@@ -47,7 +48,7 @@
 
         <Style x:Key="ScreenText" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource Lcd}"/>
-            <Setter Property="FontFamily" Value="{StaticResource Mono}"/>
+            <Setter Property="FontFamily" Value="{StaticResource Lexend}"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
 
@@ -81,16 +82,16 @@
                                             Background="{Binding Color, Converter={StaticResource HexToBrush}}"/>
                                     <Border CornerRadius="8" Margin="2" Background="{StaticResource Sheen}"/>
                                     <TextBlock x:Name="SlotLabel" Text="{Binding Label}" Margin="8,5,0,0"
-                                               FontFamily="{StaticResource Mono}" FontSize="11" Foreground="#6C7078"
+                                               FontFamily="{StaticResource Lexend}" FontSize="11" Foreground="#6C7078"
                                                HorizontalAlignment="Left" VerticalAlignment="Top"/>
                                     <TextBlock x:Name="ShortcutLabel" Text="{Binding Shortcut}" Margin="0,5,8,0"
-                                               FontFamily="{StaticResource Mono}" FontSize="10" Foreground="#6C7078"
+                                               FontFamily="{StaticResource Lexend}" FontSize="10" Foreground="#6C7078"
                                                HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                     <TextBlock x:Name="FavoriteMark" Text="★" Margin="0,0,7,3" Visibility="Collapsed"
                                                FontSize="14" Foreground="#FFD21F"
                                                HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
                                     <TextBlock x:Name="NameText" Text="{Binding Name}" Margin="8,20,8,8"
-                                               Foreground="White" FontFamily="Segoe UI Semibold" FontSize="13"
+                                               Foreground="White" FontFamily="{StaticResource Lexend}" FontWeight="SemiBold" FontSize="13"
                                                TextAlignment="Center" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                                HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <TextBlock.Effect>
@@ -142,7 +143,8 @@
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Foreground" Value="#D8DAE0"/>
-            <Setter Property="FontFamily" Value="Segoe UI Semibold"/>
+            <Setter Property="FontFamily" Value="{StaticResource Lexend}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -176,7 +178,8 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Foreground" Value="#D8DAE0"/>
             <Setter Property="Background" Value="{StaticResource Rubber}"/>
-            <Setter Property="FontFamily" Value="Segoe UI Semibold"/>
+            <Setter Property="FontFamily" Value="{StaticResource Lexend}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Padding" Value="10,4"/>
             <Setter Property="Template">
@@ -202,19 +205,31 @@
             </Setter>
         </Style>
 
+        <Style TargetType="ToolTip">
+            <Setter Property="FontFamily" Value="{StaticResource Lexend}"/>
+        </Style>
+
+        <Style TargetType="ContextMenu">
+            <Setter Property="FontFamily" Value="{StaticResource Lexend}"/>
+        </Style>
+
+        <Style TargetType="MenuItem">
+            <Setter Property="FontFamily" Value="{StaticResource Lexend}"/>
+        </Style>
+
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="#050608"/>
             <Setter Property="Foreground" Value="{StaticResource Lcd}"/>
             <Setter Property="CaretBrush" Value="{StaticResource Lcd}"/>
             <Setter Property="BorderBrush" Value="{StaticResource ScreenLine}"/>
-            <Setter Property="FontFamily" Value="{StaticResource Mono}"/>
+            <Setter Property="FontFamily" Value="{StaticResource Lexend}"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Padding" Value="6,4"/>
         </Style>
 
         <Style TargetType="ComboBox">
             <Setter Property="Foreground" Value="{StaticResource Lcd}"/>
-            <Setter Property="FontFamily" Value="{StaticResource Mono}"/>
+            <Setter Property="FontFamily" Value="{StaticResource Lexend}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Template">
                 <Setter.Value>

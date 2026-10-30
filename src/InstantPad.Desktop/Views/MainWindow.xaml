@@ -95,7 +95,7 @@
                         <TextBlock Text="Sound sampler" Style="{StaticResource Silk}" FontSize="9" Margin="0,0,0,10"/>
                     </StackPanel>
 
-                    <c:Knob x:Name="MicKnob" DockPanel.Dock="Top" Width="92" Height="92" Maximum="2" DefaultValue="1"
+                    <c:Knob x:Name="MicKnob" DockPanel.Dock="Top" Width="92" Height="92" Maximum="1" DefaultValue="1"
                             Value="{Binding MicVolume}" Accent="{DynamicResource Accent}"/>
                     <TextBlock DockPanel.Dock="Top" Text="{l:T Mic}" Style="{StaticResource Silk}" Margin="0,0,0,8"/>
 
@@ -312,7 +312,8 @@
                                     <Button Style="{StaticResource HwButton}" Content="{l:T RefreshDevices}" Command="{Binding RefreshDevicesCommand}" Margin="0,0,0,14"/>
 
                                     <TextBlock Text="{l:T InGame}" Style="{StaticResource ScreenText}" FontWeight="Bold"/>
-                                    <TextBlock Text="{Binding GameInstruction}" Style="{StaticResource ScreenText}" TextWrapping="Wrap" Margin="0,4,0,14" Foreground="{StaticResource Amber}"/>
+                                    <TextBlock Text="{Binding GameInstruction}" Style="{StaticResource ScreenText}" TextWrapping="Wrap" Margin="0,4,0,6" Foreground="{StaticResource Amber}"/>
+                                    <TextBlock Text="{l:T DiscordInstruction}" Style="{StaticResource ScreenText}" TextWrapping="Wrap" Margin="0,0,0,14" Foreground="{StaticResource Amber}"/>
 
                                     <TextBlock Text="{l:T NumericShortcuts}" Style="{StaticResource ScreenText}" FontWeight="Bold" Margin="0,0,0,4"/>
                                     <ComboBox x:Name="NumericCombo" ItemsSource="{Binding NumericOptions}" SelectedItem="{Binding NumericOption}" Height="30" Margin="0,0,0,6"/>

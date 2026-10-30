@@ -424,4 +424,7 @@ Esc cancela.</value>
   <data name="Volume" xml:space="preserve">
     <value>Volume</value>
   </data>
+  <data name="DiscordInstruction" xml:space="preserve">
+    <value>No Discord, use o Input Profile Studio. O Voice Isolation remove tudo que não é voz, inclusive seus sons.</value>
+  </data>
 </root>

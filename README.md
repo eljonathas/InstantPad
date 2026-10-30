@@ -28,17 +28,20 @@ In the voice settings of your game or Discord, choose `CABLE Output` as the micr
 
 If the game uses push-to-talk, hold the key while a sound plays, or switch to open mic.
 
-In Discord, also turn off noise suppression, echo cancellation and automatic gain control. They treat sounds as noise and make them choppy.
+In Discord, set **Input Profile** to **Studio**. Voice Isolation removes everything that is not a voice, including your sounds. If you use a custom profile, turn off noise suppression, echo cancellation and automatic gain control.
 
-## If the sound is robotic or distorted
+## If the sound is robotic, distorted or missing
+
+To see whether the sound reaches the cable, open the Windows sound panel, go to **Recording** and watch the level bar of `CABLE Output` while a pad plays. If the bar moves, the problem is in the game or Discord settings. If it stays still, the problem is on the PC.
 
 Check these in order:
 
 1. Did you restart the PC after installing VB-CABLE? Windows shows the driver as working before the restart, but it is not.
-2. The Windows output device must be your headphones, not `CABLE Input`. Otherwise every app on your PC goes into your microphone.
-3. Bluetooth headsets drop to call quality whenever an app uses their microphone. Use a wired or USB microphone, and make sure Discord and your game are not reading the headset's mic.
-4. Right-click `CABLE Input` and `CABLE Output` in the Windows sound panel and check that both use the same sample rate. VB-CABLE distorts when they differ. 48000 Hz works well.
-5. Lower the **Mic** and **Game** knobs until the meter stays out of the red.
+2. In Device Manager, look for a `VB-Audio Virtual Cable` entry with an error. If there is one, or if the Windows audio service keeps stopping, reinstall the driver: run `VBCABLE_Setup_x64.exe` as administrator, click **Remove Driver**, restart, run it again, click **Install Driver**, and restart.
+3. The Windows output device must be your headphones, not `CABLE Input`. Otherwise every app on your PC goes into your microphone.
+4. Bluetooth headsets drop to call quality whenever an app uses their microphone. Use a wired or USB microphone, and make sure Discord and your game are not reading the headset's mic.
+5. Right-click `CABLE Input` and `CABLE Output` in the Windows sound panel and check that both use the same sample rate. VB-CABLE distorts when they differ. 48000 Hz works well.
+6. Lower the **Mic** and **Game** knobs until the meter stays out of the red.
 
 ## Using it
 

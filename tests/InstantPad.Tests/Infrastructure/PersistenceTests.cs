@@ -57,6 +57,16 @@ public sealed class PersistenceTests : IDisposable
     }
 
     [Fact]
+    public void AMicBoostSavedByAnOlderVersionIsLimited()
+    {
+        File.WriteAllText(_folder.File("settings.json"), """{ "MicVolume": 1.5 }""");
+
+        var settings = new JsonSettingsRepository(_folder).Load();
+
+        Assert.Equal(1, settings.MicVolume);
+    }
+
+    [Fact]
     public void ADamagedFileIsKeptAsBackup()
     {
         var path = _folder.File("settings.json");

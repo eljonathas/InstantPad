@@ -37,7 +37,7 @@ public sealed class Mixer(MicRingBuffer? mic = null) : ISampleProvider
     /// <summary>Gain applied to sounds, 0 to 1.</summary>
     public float SoundVolume { get; set; } = 1f;
 
-    /// <summary>Gain applied to the live input, 0 to 2.</summary>
+    /// <summary>Gain applied to the live input, 0 to 1.</summary>
     public float MicVolume { get; set; } = 1f;
 
     public bool MicEnabled { get; set; } = true;

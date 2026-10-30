@@ -4,10 +4,21 @@ namespace InstantPad.Application.Settings;
 
 public sealed class AppSettings
 {
+    private const double MaxMicVolume = 1;
+
+    private double _micVolume = MaxMicVolume;
+
     public string? MicrophoneId { get; set; }
     public string? VirtualOutputId { get; set; }
     public string? MonitorOutputId { get; set; }
-    public double MicVolume { get; set; } = 1;
+
+    /// <summary>USB mics already peak near full scale, so any boost distorts the voice.</summary>
+    public double MicVolume
+    {
+        get => _micVolume;
+        set => _micVolume = Math.Clamp(value, 0, MaxMicVolume);
+    }
+
     public double GameVolume { get; set; } = 0.8;
     public double MonitorVolume { get; set; } = 0.6;
     public bool MicEnabled { get; set; } = true;

@@ -5,7 +5,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	/**  Called once the interface knows its language. Devices load in the background. */
+	/**  Called once the interface knows its language. The rest loads in the background. */
 	start: (defaultInterfaceName: string) => __TAURI_INVOKE<StartView>("start", { defaultInterfaceName }),
 	pressPad: (slot: number) => typedError<null, null>(__TAURI_INVOKE("press_pad", { slot })),
 	selectInterface: (id: string) => __TAURI_INVOKE<void>("select_interface", { id }),

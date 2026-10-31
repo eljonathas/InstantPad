@@ -1,24 +1,28 @@
 //! The one place that knows which implementation goes behind each port.
 
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use instantpad_application::board::BoardSession;
+use instantpad_application::events::MeterFrame;
 use instantpad_application::favorites::Favorites;
 use instantpad_application::hotkeys::HotkeyService;
 use instantpad_application::library::SoundLibrary;
 use instantpad_application::mixer::MixerSession;
-use instantpad_application::ports::EventSink;
+use instantpad_application::ports::{EventSink, HotkeyHost};
 use instantpad_application::rows::SoundRows;
 use instantpad_application::settings::Settings;
 use instantpad_application::setup::SetupSession;
 use instantpad_application::updates::UpdateSession;
-use instantpad_test_support::fakes::{
-    FakeCable, FakeCatalog, FakeFileStore, FakeHotkeyHost, FakeMix, FakePlayer, FakeRouter,
-    FakeSystemAudio, FakeUpdater, InMemoryBoard, InMemoryFavorites, InMemorySettings,
+use instantpad_audio::AudioEngine;
+use instantpad_catalog::MyInstantsCatalog;
+use instantpad_storage::{
+    AppDataFolder, FolderSoundStore, JsonBoardRepository, JsonFavoritesRepository,
+    JsonSettingsRepository,
 };
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::events::TauriEvents;
+use crate::updater::LocalBuild;
 
 pub struct Core {
     pub board: Arc<BoardSession>,
@@ -29,30 +33,50 @@ pub struct Core {
     pub rows: SoundRows,
     pub setup: SetupSession,
     pub updates: UpdateSession,
+    pub settings: Arc<Settings>,
+    /// The interface can start more than once, as it does after a reload.
+    pub background_work: Once,
 }
 
-// Phase 2 replaces every fake here with its real adapter.
-pub fn build(app: AppHandle) -> Core {
-    let events: Arc<dyn EventSink> = Arc::new(TauriEvents(app));
-    let player = Arc::new(FakePlayer::default());
-    let files = Arc::new(FakeFileStore::default());
+impl Core {
+    pub fn meter_frame(&self) -> MeterFrame {
+        let (mic_level, output_level) = self.mixer.levels();
+        MeterFrame {
+            mic_level,
+            output_level,
+            playing_slots: self.board.playing_slots(),
+        }
+    }
 
-    let settings = Arc::new(Settings::load(Arc::new(InMemorySettings::default())));
+    pub fn save(&self) {
+        self.board.save();
+        // The app is closing, so there is no one left to tell.
+        let _ = self.settings.save();
+    }
+}
+
+pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result<Core> {
+    let events: Arc<dyn EventSink> = Arc::new(TauriEvents(app.clone()));
+
+    let folder = AppDataFolder::resolve(app.path().app_data_dir()?)?;
+    let files = Arc::new(FolderSoundStore::new(&folder));
+    let engine = Arc::new(AudioEngine::new(events.clone()));
+
+    let settings = Arc::new(Settings::load(Arc::new(JsonSettingsRepository::new(
+        &folder,
+    ))));
     let library = Arc::new(SoundLibrary::new(
-        Arc::new(FakeCatalog::default()),
+        Arc::new(MyInstantsCatalog::new()),
         files.clone(),
     ));
     let favorites = Arc::new(Favorites::new(
-        Arc::new(InMemoryFavorites::default()),
+        Arc::new(JsonFavoritesRepository::new(&folder)),
         library.clone(),
     ));
-    let hotkeys = Arc::new(HotkeyService::new(
-        Arc::new(FakeHotkeyHost::default()),
-        events.clone(),
-    ));
+    let hotkeys = Arc::new(HotkeyService::new(hotkey_host, events.clone()));
     let board = Arc::new(BoardSession::new(
-        Arc::new(InMemoryBoard::default()),
-        player.clone(),
+        Arc::new(JsonBoardRepository::new(&folder)),
+        engine.clone(),
         files,
         favorites.clone(),
         hotkeys.clone(),
@@ -60,27 +84,29 @@ pub fn build(app: AppHandle) -> Core {
         events.clone(),
     ));
 
-    Core {
-        mixer: MixerSession::new(Arc::new(FakeMix::default()), settings.clone()),
+    Ok(Core {
+        mixer: MixerSession::new(engine.clone(), settings.clone()),
         rows: SoundRows::new(
             board.clone(),
             library.clone(),
             favorites.clone(),
-            player,
+            engine.clone(),
             events.clone(),
         ),
         setup: SetupSession::new(
-            Arc::new(FakeRouter::default()),
-            Arc::new(FakeSystemAudio::default()),
-            Arc::new(FakeCable),
-            settings,
+            engine,
+            instantpad_platform::system_audio(),
+            instantpad_platform::virtual_cable(),
+            settings.clone(),
             board.clone(),
             events.clone(),
         ),
-        updates: UpdateSession::new(Arc::new(FakeUpdater::default()), events),
+        updates: UpdateSession::new(Arc::new(LocalBuild), events),
         board,
         favorites,
         hotkeys,
         library,
-    }
+        settings,
+        background_work: Once::new(),
+    })
 }

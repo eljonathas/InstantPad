@@ -20,13 +20,18 @@ specta-typescript.workspace = true
 tauri-build.workspace = true
 
 [dependencies]
+async-trait.workspace = true
 instantpad-application.workspace = true
+instantpad-audio.workspace = true
+instantpad-catalog.workspace = true
 instantpad-domain.workspace = true
-# Stands in for the real adapters until Phase 2 wires them in composition.rs.
-instantpad-test-support.workspace = true
+instantpad-platform.workspace = true
+instantpad-storage.workspace = true
 serde.workspace = true
 specta.workspace = true
 tauri = { workspace = true, features = ["macos-private-api", "specta"] }
 tauri-plugin-dialog.workspace = true
+tauri-plugin-global-shortcut.workspace = true
+tauri-plugin-single-instance.workspace = true
 tauri-specta.workspace = true
 tokio = { workspace = true, features = ["macros"] }

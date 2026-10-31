@@ -3,11 +3,21 @@
 mod commands;
 mod composition;
 mod events;
+mod hotkeys;
+mod updater;
 
-use tauri::{Manager, Wry};
-use tauri_specta::{Builder, collect_commands, collect_events};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
+use tauri::{AppHandle, Manager, RunEvent, Wry};
+use tauri_specta::{Builder, Event, collect_commands, collect_events};
+
+use crate::composition::Core;
 use crate::events::{BackendEvent, MeterEvent};
+use crate::hotkeys::GlobalHotkeys;
+
+const METER_INTERVAL: Duration = Duration::from_millis(33);
 
 fn specta_builder() -> Builder<Wry> {
     Builder::<Wry>::new()
@@ -59,19 +69,56 @@ fn specta_builder() -> Builder<Wry> {
         .disable_serde_phases()
 }
 
+/// Levels and lit pads reach the interface on their own thread, far from the audio callbacks.
+fn start_meters(app: AppHandle) {
+    thread::spawn(move || {
+        loop {
+            let frame = app.state::<Core>().meter_frame();
+            // Only fails while the window is closing, when nobody is listening.
+            let _ = MeterEvent(frame).emit(&app);
+            thread::sleep(METER_INTERVAL);
+        }
+    });
+}
+
+/// Opening the app again brings the running window to the front.
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 pub fn run() {
     let builder = specta_builder();
 
     tauri::Builder::default()
+        // First, so a second copy leaves before it touches the devices or the hotkeys.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            show_main_window(app);
+        }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(hotkeys::plugin())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
-            app.manage(composition::build(app.handle().clone()));
+
+            let hotkeys = Arc::new(GlobalHotkeys::new(app.handle().clone()));
+            app.manage(hotkeys.clone());
+            app.manage(composition::build(app.handle(), hotkeys)?);
+            start_meters(app.handle().clone());
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("run the app");
+        .build(tauri::generate_context!())
+        .expect("build the app")
+        .run(|app, event| {
+            if let RunEvent::Exit = event {
+                let core = app.state::<Core>();
+                core.save();
+                core.updates.apply_on_exit();
+            }
+        });
 }
 
 // Not on Windows: a test binary that links Tauri needs an app manifest to load there, and the

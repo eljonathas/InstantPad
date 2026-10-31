@@ -48,10 +48,12 @@ impl Core {
         }
     }
 
-    pub fn save(&self) {
+    /// What must happen before the app closes.
+    pub fn shut_down(&self) {
         self.board.save();
         // The app is closing, so there is no one left to tell.
         let _ = self.settings.save();
+        self.library.clear_previews();
     }
 }
 
@@ -69,6 +71,8 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
         Arc::new(MyInstantsCatalog::new()),
         files.clone(),
     ));
+    // A crash leaves them behind, so they also go when the app opens.
+    library.clear_previews();
     let favorites = Arc::new(Favorites::new(
         Arc::new(JsonFavoritesRepository::new(&folder)),
         library.clone(),

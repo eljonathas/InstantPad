@@ -9,12 +9,14 @@ use crate::data_folder::AppDataFolder;
 
 pub struct FolderSoundStore {
     folder: PathBuf,
+    previews: PathBuf,
 }
 
 impl FolderSoundStore {
     pub fn new(folder: &AppDataFolder) -> Self {
         Self {
             folder: folder.sounds().to_path_buf(),
+            previews: folder.previews().to_path_buf(),
         }
     }
 
@@ -23,11 +25,39 @@ impl FolderSoundStore {
     }
 }
 
+/// The last segment of the URL, as a name that is safe on disk.
+fn file_name_of(sound_url: &str) -> String {
+    let last = sound_url.rsplit('/').next().unwrap_or_default();
+    safe_file_name(&percent_decode_str(last).decode_utf8_lossy())
+}
+
 impl SoundFileStore for FolderSoundStore {
     fn path_for_download(&self, sound_url: &str) -> String {
-        let last = sound_url.rsplit('/').next().unwrap_or_default();
-        let name = percent_decode_str(last).decode_utf8_lossy();
-        self.stored_path(&name).to_string_lossy().into_owned()
+        self.stored_path(&file_name_of(sound_url))
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn path_for_preview(&self, sound_url: &str) -> String {
+        self.previews
+            .join(file_name_of(sound_url))
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn keep_preview(&self, preview_path: &str, stored_path: &str) -> Result<(), Failure> {
+        std::fs::rename(preview_path, stored_path)
+            .map_err(|error| Failure::because(TextKey::SoundCopyFailed, error))
+    }
+
+    /// Whatever cannot be deleted now goes on the next clean-up.
+    fn clear_previews(&self) {
+        let Ok(entries) = std::fs::read_dir(&self.previews) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let _ = std::fs::remove_file(entry.path());
+        }
     }
 
     fn import(&self, source_path: &str) -> Result<String, Failure> {

@@ -39,20 +39,24 @@ impl SoundRows {
 
     pub async fn preview(&self, source: SoundSource) {
         let result = async {
-            self.downloading(&source).await?;
+            let file = self.file_to_hear(&source).await?;
             self.board.stop_others();
             let tag = PlaybackTag::of(&source.path);
-            self.player.preview(&source.path, FULL_VOLUME, tag).await
+            self.player.preview(&file, FULL_VOLUME, tag).await?;
+            self.let_go_of(&file, &source);
+            Ok(())
         };
         self.report(&source, result.await, TextKey::Listening);
     }
 
     pub async fn play_in_game(&self, source: SoundSource) {
         let result = async {
-            self.downloading(&source).await?;
+            let file = self.file_to_hear(&source).await?;
             self.board.stop_others();
             let tag = PlaybackTag::of(&source.path);
-            self.player.play(&source.path, FULL_VOLUME, tag).await
+            self.player.play(&file, FULL_VOLUME, tag).await?;
+            self.let_go_of(&file, &source);
+            Ok(())
         };
         self.report(&source, result.await, TextKey::InGameSound);
     }
@@ -104,6 +108,19 @@ impl SoundRows {
                 self.show(Message::with(TextKey::Saved, [Message::plain(file)]));
             }
             Err(failure) => self.show_failure(&source, failure),
+        }
+    }
+
+    async fn file_to_hear(&self, source: &SoundSource) -> Result<String, Failure> {
+        self.show_downloading(source);
+        self.library.file_to_hear(source).await
+    }
+
+    /// A sound only being tried out does not stay decoded in memory. What is playing keeps
+    /// going, because the voice holds its own reference.
+    fn let_go_of(&self, file: &str, source: &SoundSource) {
+        if file != source.path {
+            self.player.forget(file);
         }
     }
 

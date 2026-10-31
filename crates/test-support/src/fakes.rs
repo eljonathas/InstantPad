@@ -307,6 +307,23 @@ impl SoundFileStore for FakeFileStore {
         format!("store/{name}")
     }
 
+    fn path_for_preview(&self, sound_url: &str) -> String {
+        let name = sound_url.rsplit('/').next().unwrap_or(sound_url);
+        format!("previews/{name}")
+    }
+
+    fn keep_preview(&self, preview_path: &str, stored_path: &str) -> Result<(), Failure> {
+        let mut files = self.files.lock().unwrap();
+        files.remove(preview_path);
+        files.insert(stored_path.to_owned());
+        Ok(())
+    }
+
+    fn clear_previews(&self) {
+        let mut files = self.files.lock().unwrap();
+        files.retain(|path| !path.starts_with("previews/"));
+    }
+
     fn import(&self, source_path: &str) -> Result<String, Failure> {
         let name = source_path.rsplit('/').next().unwrap_or(source_path);
         let path = format!("store/{name}");

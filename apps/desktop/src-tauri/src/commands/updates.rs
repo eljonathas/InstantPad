@@ -6,6 +6,6 @@ use crate::composition::Core;
 #[specta::specta]
 pub fn restart_now(core: State<'_, Core>) {
     // On Windows the installer ends the process before the app gets to save on exit.
-    core.save();
+    core.shut_down();
     core.updates.restart_now();
 }

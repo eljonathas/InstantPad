@@ -5,7 +5,7 @@ use std::sync::Arc;
 use instantpad_application::events::{AppEvent, UpdateView};
 use instantpad_application::message::{Message, TextKey};
 use instantpad_application::mixer::MixerSession;
-use instantpad_application::ports::{CatalogPage, CatalogSound};
+use instantpad_application::ports::{CatalogPage, CatalogSound, SoundFileStore};
 use instantpad_application::rows::SoundRows;
 use instantpad_application::settings::Settings;
 use instantpad_application::setup::SetupSession;
@@ -22,7 +22,7 @@ fn online() -> SoundSource {
     SoundSource {
         name: "a".to_owned(),
         color: "#ffffff".to_owned(),
-        path: "store/a.mp3".to_owned(),
+        path: "previews/a.mp3".to_owned(),
         sound_url: Some("https://site/a.mp3".to_owned()),
     }
 }
@@ -43,9 +43,62 @@ async fn a_preview_stays_on_the_headphones() {
 
     rows(&world).preview(online()).await;
 
-    assert_eq!(*world.player.previewed.lock().unwrap(), ["store/a.mp3"]);
+    assert_eq!(*world.player.previewed.lock().unwrap(), ["previews/a.mp3"]);
     assert!(world.player.played.lock().unwrap().is_empty());
     assert_eq!(world.catalog.downloaded.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_sound_only_heard_never_reaches_the_store() {
+    let world = World::new();
+
+    rows(&world).preview(online()).await;
+    rows(&world).play_in_game(online()).await;
+
+    assert!(!world.files.exists("store/a.mp3"));
+}
+
+#[tokio::test]
+async fn a_sound_only_heard_does_not_stay_decoded_in_memory() {
+    let world = World::new();
+
+    rows(&world).preview(online()).await;
+
+    assert_eq!(*world.player.forgotten.lock().unwrap(), ["previews/a.mp3"]);
+}
+
+#[tokio::test]
+async fn hearing_a_sound_already_kept_uses_its_file_and_downloads_nothing() {
+    let world = World::new();
+    world
+        .files
+        .files
+        .lock()
+        .unwrap()
+        .insert("store/a.mp3".to_owned());
+
+    rows(&world).preview(online()).await;
+
+    assert_eq!(*world.player.previewed.lock().unwrap(), ["store/a.mp3"]);
+    assert!(world.catalog.downloaded.lock().unwrap().is_empty());
+    assert!(world.player.forgotten.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_sound_heard_first_is_not_downloaded_again_when_it_goes_to_a_pad() {
+    let world = World::new();
+    world
+        .files
+        .files
+        .lock()
+        .unwrap()
+        .insert("previews/a.mp3".to_owned());
+
+    rows(&world).add_to_pad(online(), Some(0)).await;
+
+    assert!(world.catalog.downloaded.lock().unwrap().is_empty());
+    assert!(world.files.exists("store/a.mp3"));
+    assert!(!world.files.exists("previews/a.mp3"));
 }
 
 #[tokio::test]
@@ -54,7 +107,7 @@ async fn a_sound_played_in_the_game_does_not_take_a_pad() {
 
     rows(&world).play_in_game(online()).await;
 
-    assert_eq!(*world.player.played.lock().unwrap(), ["store/a.mp3"]);
+    assert_eq!(*world.player.played.lock().unwrap(), ["previews/a.mp3"]);
     assert!(
         world
             .board

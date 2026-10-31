@@ -117,7 +117,7 @@ pub fn run() {
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 let core = app.state::<Core>();
-                core.save();
+                core.shut_down();
                 core.updates.apply_on_exit();
             }
         });

@@ -117,4 +117,9 @@ pub fn sound_file_store(store: &dyn SoundFileStore, outside: &str, destination: 
     let target = store.path_for_download("https://site/media/sounds/som.mp3");
     assert!(target.ends_with("som.mp3"));
     assert!(!store.exists("this file does not exist.mp3"));
+
+    let preview = store.path_for_preview("https://site/media/sounds/som.mp3");
+    assert_ne!(preview, target, "a sound being tried out lives apart");
+    store.clear_previews();
+    assert!(!store.exists(&preview));
 }

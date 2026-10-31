@@ -6,13 +6,20 @@ use std::path::{Path, PathBuf};
 pub struct AppDataFolder {
     root: PathBuf,
     sounds: PathBuf,
+    previews: PathBuf,
 }
 
 impl AppDataFolder {
     pub fn new(root: PathBuf) -> io::Result<Self> {
         let sounds = root.join("sounds");
+        let previews = root.join("previews");
         std::fs::create_dir_all(&sounds)?;
-        Ok(Self { root, sounds })
+        std::fs::create_dir_all(&previews)?;
+        Ok(Self {
+            root,
+            sounds,
+            previews,
+        })
     }
 
     /// `INSTANTPAD_DATA` keeps development runs away from the real data.
@@ -29,5 +36,9 @@ impl AppDataFolder {
 
     pub(crate) fn sounds(&self) -> &Path {
         &self.sounds
+    }
+
+    pub(crate) fn previews(&self) -> &Path {
+        &self.previews
     }
 }

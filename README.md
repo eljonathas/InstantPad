@@ -65,7 +65,7 @@ Check these in order:
 | Fill a pad | Click an empty pad, then **+ Pad** on a result, or drag a result onto the pad. The sound is downloaded and kept locally |
 | Try an online sound on your headphones | **▶** on the result |
 | Play an online sound in the game without saving it | **Mic** on the result |
-| Save a copy of a sound elsewhere | Right-click its pad. Sounds on pads and favorites are already kept locally |
+| Save a copy of a sound elsewhere | Right-click its pad. Sounds on pads and favorites are already kept locally, and sounds you only listened to are deleted when the app closes |
 | Mark a favorite | **☆** on a result, or right-click a pad |
 | Use your own file | Drag it from Explorer onto a pad, or right-click the pad |
 | Change a pad's shortcut, volume, color or name | Right-click the pad |

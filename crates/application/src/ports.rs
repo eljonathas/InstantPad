@@ -159,9 +159,18 @@ pub trait SoundCatalog: Send + Sync {
     async fn download(&self, sound_url: &str, destination: &str) -> Result<(), Failure>;
 }
 
-/// The folder where the app keeps its audio files.
+/// The folder where the app keeps its audio files, and the one for sounds only heard so far.
 pub trait SoundFileStore: Send + Sync {
     fn path_for_download(&self, sound_url: &str) -> String;
+
+    /// Where a sound that is only being tried out lives until the next clean-up.
+    fn path_for_preview(&self, sound_url: &str) -> String;
+
+    /// Moves a sound being tried out to where it stays.
+    fn keep_preview(&self, preview_path: &str, stored_path: &str) -> Result<(), Failure>;
+
+    /// Deletes the sounds that were only tried out.
+    fn clear_previews(&self);
 
     /// Copies an outside file into the store and returns its new path.
     fn import(&self, source_path: &str) -> Result<String, Failure>;

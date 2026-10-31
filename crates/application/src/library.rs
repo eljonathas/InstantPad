@@ -33,6 +33,7 @@ impl SoundLibrary {
         Ok(self.to_page(self.catalog.trending(page).await?))
     }
 
+    /// Gives the sound a permanent file, reusing the one it may have from being tried out.
     pub async fn ensure_downloaded(&self, source: &SoundSource) -> Result<(), Failure> {
         if self.files.exists(&source.path) {
             return Ok(());
@@ -41,7 +42,34 @@ impl SoundLibrary {
             .sound_url
             .as_deref()
             .ok_or(Failure::text(TextKey::SoundFileMissing))?;
+
+        let preview = self.files.path_for_preview(url);
+        if self.files.exists(&preview) {
+            return self.files.keep_preview(&preview, &source.path);
+        }
         self.catalog.download(url, &source.path).await
+    }
+
+    /// A file to listen to without keeping it: the permanent one if the sound has it, or else
+    /// a temporary one. Only `ensure_downloaded` makes a sound stay on disk.
+    pub async fn file_to_hear(&self, source: &SoundSource) -> Result<String, Failure> {
+        if self.files.exists(&source.path) {
+            return Ok(source.path.clone());
+        }
+        let url = source
+            .sound_url
+            .as_deref()
+            .ok_or(Failure::text(TextKey::SoundFileMissing))?;
+
+        let preview = self.files.path_for_preview(url);
+        if !self.files.exists(&preview) {
+            self.catalog.download(url, &preview).await?;
+        }
+        Ok(preview)
+    }
+
+    pub fn clear_previews(&self) {
+        self.files.clear_previews();
     }
 
     /// Saves the audio file on the user's computer, outside the app.

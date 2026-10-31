@@ -180,6 +180,48 @@ fn a_download_lands_inside_the_store_with_a_safe_name() {
 }
 
 #[test]
+fn a_sound_tried_out_stays_apart_from_the_store() {
+    let (dir, folder) = folder();
+    let store = FolderSoundStore::new(&folder);
+
+    let path = store.path_for_preview("https://site/media/sounds/som%3Fa.mp3");
+
+    assert_eq!(
+        Path::new(&path),
+        dir.path().join("previews").join("som_a.mp3")
+    );
+}
+
+#[test]
+fn clearing_previews_leaves_the_stored_sounds_alone() {
+    let (dir, folder) = folder();
+    let store = FolderSoundStore::new(&folder);
+    let stored = dir.path().join("sounds").join("kept.mp3");
+    let preview = store.path_for_preview("https://site/heard.mp3");
+    fs::write(&stored, b"audio").unwrap();
+    fs::write(&preview, b"audio").unwrap();
+
+    store.clear_previews();
+
+    assert!(stored.is_file());
+    assert!(!Path::new(&preview).exists());
+}
+
+#[test]
+fn keeping_a_preview_moves_it_to_the_store() {
+    let (dir, folder) = folder();
+    let store = FolderSoundStore::new(&folder);
+    let preview = store.path_for_preview("https://site/a.mp3");
+    let stored = store.path_for_download("https://site/a.mp3");
+    fs::write(&preview, b"audio").unwrap();
+
+    store.keep_preview(&preview, &stored).unwrap();
+
+    assert_eq!(fs::read(dir.path().join("sounds/a.mp3")).unwrap(), b"audio");
+    assert!(!Path::new(&preview).exists());
+}
+
+#[test]
 fn importing_copies_the_file_into_the_store() {
     let (dir, folder) = folder();
     let store = FolderSoundStore::new(&folder);

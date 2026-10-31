@@ -21,7 +21,8 @@
     var(--cap-cast);
   transition:
     transform var(--cap-release-time) ease-out,
-    box-shadow var(--cap-release-time) ease-out;
+    box-shadow var(--cap-release-time) ease-out,
+    filter var(--cap-release-time) ease-out;
 }
 
 .key,
@@ -191,24 +192,50 @@ select.field option {
   background: var(--color-lcd-dim);
 }
 
-/* A row or pad being dragged */
+/* A row or pad being dragged: a small key lifted off the board */
 .drag-ghost {
   position: fixed;
   top: 0;
   left: 0;
   z-index: var(--z-ghost);
-  max-width: var(--dialog-width);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: var(--ghost-max-width);
   padding: var(--key-padding);
-  overflow: hidden;
   border: var(--border-width) solid var(--gray-1);
+  border-top-color: var(--color-key-text);
   border-radius: var(--radius-key);
   background: var(--color-key-face);
+  box-shadow: var(--shadow-ghost);
   color: var(--color-key-text);
   font-size: var(--font-key);
   font-weight: var(--weight-semibold);
-  text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
+  rotate: var(--ghost-tilt);
+  animation: ghost-lift var(--drop-time) var(--ease-spring);
+}
+
+.drag-ghost::before {
+  content: "";
+  flex: none;
+  width: var(--ghost-dot-size);
+  height: var(--ghost-dot-size);
+  border-radius: 50%;
+  background: var(--ghost-color);
+}
+
+.drag-ghost span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes ghost-lift {
+  from {
+    opacity: 0;
+    scale: 0.8;
+  }
 }
 
 body[data-dragging] {

@@ -11,6 +11,10 @@
   background: var(--color-row-hover);
 }
 
+.sound-row[data-drag-source] {
+  opacity: var(--drag-source-opacity);
+}
+
 .sound-dot {
   flex: none;
   width: var(--sound-dot-size);

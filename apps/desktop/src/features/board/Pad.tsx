@@ -41,9 +41,8 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
         if (event.button !== 0) return;
         // Ctrl+drag rearranges pads; a plain press always fires the sound at once.
         if (event.ctrlKey && sound) {
-          beginDrag({ x: event.clientX, y: event.clientY }, sound.name, (to) => {
-            if (to !== pad.slot) void commands.swapPads(pad.slot, to);
-          });
+          const item = { label: sound.name, color: sound.color, kind: "swap", source: event.currentTarget } as const;
+          beginDrag({ x: event.clientX, y: event.clientY }, item, (to) => void commands.swapPads(pad.slot, to));
           return;
         }
         if (!sound) requestSources();
@@ -57,6 +56,7 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
         <span className="pad-shortcut">{pad.shortcut}</span>
         {pad.isFavorite && <span className="pad-star">★</span>}
         <span className="pad-name">{sound?.name}</span>
+        <i className="pad-drop-mark" />
       </span>
     </button>
   );

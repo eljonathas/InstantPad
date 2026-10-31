@@ -1,12 +1,12 @@
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { audioDir, join } from "@tauri-apps/api/path";
+import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import type { MouseEvent } from "react";
-import { commands, type InterfaceLayout, type InterfaceTab, type PadView } from "../../shared/ipc";
+import { commands, type InterfaceLayout, type InterfaceTab, type PadView, type SoundSource } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { useAskHotkey } from "../../shared/ui/HotkeyDialog";
 import { whileHeld } from "../../shared/ui/hotkeyPause";
 import { useOverlay } from "../../shared/ui/overlay";
-import { saveToComputer } from "../../shared/ui/SoundRow";
 import { InterfaceDialog } from "./InterfaceDialog";
 import { interfaceMenu, padMenu } from "./menus";
 import { TextDialog } from "./TextDialog";
@@ -62,6 +62,15 @@ export function useBoardActions() {
     if (path) await commands.importFile(path, slot);
   }
 
+  /** Saves a copy of the sound where the user chooses. The backend reports how it went. */
+  async function saveToComputer(source: SoundSource) {
+    const name = await commands.suggestedFileName(source);
+    const defaultPath = await join(await audioDir(), name);
+    const filters = [{ name: t("AudioFileType"), extensions: [name.split(".").pop() ?? ""] }];
+    const destination = await whileHeld(() => save({ defaultPath, filters }));
+    if (destination) await commands.saveToComputer(source, destination);
+  }
+
   async function setShortcut(slot: number) {
     const hotkey = await askHotkey();
     if (hotkey) await commands.setPadHotkey(slot, hotkey);
@@ -95,7 +104,7 @@ export function useBoardActions() {
       const run = {
         loadFile: () => void loadFile(slot),
         toggleFavorite: () => void commands.toggleFavorite(source!),
-        download: () => void saveToComputer(source!, t("AudioFileType")),
+        download: () => void saveToComputer(source!),
         setShortcut: () => void setShortcut(slot),
         removeShortcut: () => void commands.clearPadHotkey(slot),
         rename: () => void rename(slot, sound!.name),

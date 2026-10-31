@@ -107,8 +107,96 @@
   text-shadow: none;
 }
 
-/* Where a pad or row being dragged would land */
-body[data-dragging] .pad:hover .pad-body,
+/* While something is dragged the board steps back, so the pad it would land on stands out. */
+body[data-dragging] .pad:not([data-drop]) .pad-body {
+  filter: brightness(var(--drag-dim-brightness));
+}
+
+.pad[data-drag-source] .pad-body {
+  opacity: var(--drag-source-opacity);
+}
+
 .pad[data-drop] .pad-body {
   border-color: var(--color-accent);
+  box-shadow:
+    0 var(--cap-height) 0 var(--cap-edge),
+    0 0 0 var(--drop-ring) var(--color-accent),
+    var(--drop-glow);
+  transform: translateY(var(--drop-lift));
+  transition-duration: var(--drop-time);
+}
+
+.pad-drop-mark {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+}
+
+.pad[data-drop] .pad-drop-mark {
+  display: grid;
+}
+
+/* What the drop will do: fill the pad, replace its sound or swap the two. */
+.pad-drop-mark::before {
+  content: "+";
+  display: grid;
+  place-items: center;
+  width: var(--drop-mark-size);
+  height: var(--drop-mark-size);
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: var(--shadow-cap-cast);
+  color: var(--gray-4);
+  font-size: var(--font-drop-mark);
+  font-weight: var(--weight-bold);
+  animation: drop-mark-in var(--drop-time) var(--ease-spring);
+}
+
+.pad[data-loaded] .pad-drop-mark::before {
+  content: "↻";
+}
+
+body[data-dragging="swap"] .pad-drop-mark::before {
+  content: "⇄";
+}
+
+@keyframes drop-mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+/* The thud of something landing: the cap takes the hit, flashes and settles. */
+.pad[data-landed] .pad-body {
+  animation: pad-land var(--land-time) ease-out;
+}
+
+.pad[data-landed]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: var(--drop-ring) solid var(--color-accent);
+  border-radius: var(--radius-pad-inner);
+  animation: pad-ring var(--land-time) ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes pad-land {
+  from {
+    filter: brightness(var(--land-flash-brightness));
+    transform: translateY(var(--cap-height));
+  }
+
+  50% {
+    transform: translateY(var(--drop-lift));
+  }
+}
+
+@keyframes pad-ring {
+  to {
+    opacity: 0;
+    transform: scale(var(--land-ring-scale));
+  }
 }

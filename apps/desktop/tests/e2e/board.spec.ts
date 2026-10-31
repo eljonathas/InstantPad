@@ -117,6 +117,30 @@ test("a row dragged onto a pad puts its sound there", async ({ page }) => {
   await expect(page.locator(".drag-ghost")).toHaveCount(0);
 });
 
+test("the pad under a dragged row is marked until the row lands on it", async ({ page }) => {
+  const start = (await row(page, "Airhorn").locator(".sound-name").boundingBox())!;
+  const target = (await emptyPad(page, "06").boundingBox())!;
+  await page.mouse.move(start.x + 4, start.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
+
+  await expect(emptyPad(page, "06")).toHaveAttribute("data-drop", "");
+  await expect(page.locator(".sound-row[data-drag-source]")).toHaveCount(1);
+
+  await page.mouse.up();
+
+  await expect(page.locator("[data-drop]")).toHaveCount(0);
+  await expect(page.locator("[data-drag-source]")).toHaveCount(0);
+  await expect(page.locator("[data-landed]")).toHaveCount(0);
+});
+
+test("the right-click menu of a pad saves a copy to the computer", async ({ page }) => {
+  await pad(page, "01 Vine boom").click({ button: "right" });
+  await page.getByText("Download to computer...").click();
+
+  await expect(lcd(page)).toHaveText("Saved: sound.mp3");
+});
+
 test("a small movement on a row drags nothing", async ({ page }) => {
   const name = row(page, "Airhorn").locator(".sound-name");
   const box = (await name.boundingBox())!;

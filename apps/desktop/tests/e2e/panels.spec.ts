@@ -31,16 +31,17 @@ test("Load more appends the next page", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Load more" })).toHaveCount(0);
 });
 
-test("the star follows the favorites and ↓ saves after a dialog", async ({ page }) => {
+test("the star follows the favorites", async ({ page }) => {
   const star = row(page, "Vine boom").getByRole("button", { name: "☆" });
   await star.click();
   await expect(row(page, "Vine boom").getByRole("button", { name: "★" })).toBeVisible();
 
   await page.getByRole("tab", { name: /Favorites/ }).click();
   await expect(page.getByRole("status").filter({ hasText: "2 favorites" })).toBeVisible();
+});
 
-  await row(page, "Vine boom").getByTitle("Download to computer").click();
-  await expect(page.locator(".lcd-main")).toHaveText("Saved: sound.mp3");
+test("a sound row has no button to save it to the computer", async ({ page }) => {
+  await expect(row(page, "Vine boom").getByRole("button", { name: "↓" })).toHaveCount(0);
 });
 
 test("settings show the routing and follow the numeric scheme", async ({ page }) => {

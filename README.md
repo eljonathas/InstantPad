@@ -62,10 +62,10 @@ Check these in order:
 | To | Do this |
 | --- | --- |
 | Play a sound | Click its pad or press its shortcut |
-| Fill a pad | Click an empty pad, then **+ Pad** on a result, or drag a result onto the pad |
+| Fill a pad | Click an empty pad, then **+ Pad** on a result, or drag a result onto the pad. The sound is downloaded and kept locally |
 | Try an online sound on your headphones | **▶** on the result |
 | Play an online sound in the game without saving it | **Mic** on the result |
-| Save a sound to your computer | **↓** on a result or favorite, or right-click a pad |
+| Save a copy of a sound elsewhere | Right-click its pad. Sounds on pads and favorites are already kept locally |
 | Mark a favorite | **☆** on a result, or right-click a pad |
 | Use your own file | Drag it from Explorer onto a pad, or right-click the pad |
 | Change a pad's shortcut, volume, color or name | Right-click the pad |

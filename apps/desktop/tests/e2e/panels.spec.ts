@@ -23,6 +23,17 @@ test("search on Enter and on the button, then trending again", async ({ page }) 
   await expect(page.locator(".sound-row:visible")).toHaveCount(8);
 });
 
+test("a search shows skeletons in place of the old list until it answers", async ({ page }) => {
+  await page.getByRole("textbox", { name: "Search" }).fill("vine");
+  await page.getByRole("button", { name: "Search" }).click();
+
+  await expect(page.locator(".sound-skeleton").first()).toBeVisible();
+  await expect(page.locator(".sound-row:visible")).toHaveCount(0);
+
+  await expect(page.locator(".sound-row:visible")).toHaveCount(1);
+  await expect(page.locator(".sound-skeleton")).toHaveCount(0);
+});
+
 test("Load more appends the next page", async ({ page }) => {
   await page.getByRole("button", { name: "Load more" }).click();
   await expect(page.locator(".sound-row:visible")).toHaveCount(16);

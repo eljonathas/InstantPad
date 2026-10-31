@@ -17,6 +17,7 @@ import type {
 } from "./bindings";
 
 const DOWNLOAD_MS = 400;
+const SEARCH_MS = 300;
 const PAD_COLORS = ["#ff3b5c", "#ff8a1f", "#ffd21f", "#35f27a", "#1fd6ff", "#4f7dff", "#b45cff", "#ff5cc8"];
 const ACCENT_COLORS = ["#ffb03a", "#35f27a", "#1fd6ff", "#4f7dff", "#b45cff", "#ff5cc8", "#ff3b5c", "#e8e8ea"];
 
@@ -421,9 +422,11 @@ export function installMock() {
       show({ kind: "text", key: "Stopped", args: [] });
     },
     search: ({ query, page }) =>
-      pageOf(
-        catalog.filter((item) => item.name.toLowerCase().includes((query as string).toLowerCase())),
-        page as number,
+      new Promise((done) =>
+        setTimeout(() => {
+          const found = catalog.filter((item) => item.name.toLowerCase().includes((query as string).toLowerCase()));
+          done(pageOf(found, page as number));
+        }, SEARCH_MS),
       ),
     trending: ({ page }) => pageOf(catalog, page as number),
     preview_sound: ({ source }) =>

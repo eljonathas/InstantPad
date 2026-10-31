@@ -4,6 +4,7 @@ import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { holdHotkeys } from "../../shared/ui/hotkeyPause";
 import { SoundRow } from "../../shared/ui/SoundRow";
+import { SoundSkeletons } from "./SoundSkeletons";
 import "./Browser.css";
 
 type Status = { kind: "loading" } | { kind: "shown" } | { kind: "failed"; reason: Failure };
@@ -17,6 +18,9 @@ interface Results {
   status: Status;
 }
 
+const SKELETONS_OF_A_LIST = 12;
+const SKELETONS_OF_MORE = 3;
+
 const NOTHING: Results = { search: null, sounds: [], page: 1, hasMore: false, status: { kind: "loading" } };
 
 /** The MyInstants screen: search, trending sounds and paging. */
@@ -26,6 +30,7 @@ export function Browser() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(NOTHING);
   const input = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLUListElement>(null);
   const holding = useRef<(() => void) | null>(null);
   const latest = useRef(0);
 
@@ -55,6 +60,7 @@ export function Browser() {
 
   function show(search: string | null, page: number) {
     setResults((before) => ({ ...before, search, page, hasMore: false, status: { kind: "loading" } }));
+    if (page === 1) list.current?.scrollTo({ top: 0 });
     void load(search, page);
   }
 
@@ -67,8 +73,10 @@ export function Browser() {
   }
 
   const { status, sounds, search: shown } = results;
+  const isLoading = status.kind === "loading";
+  const isNewList = isLoading && results.page === 1;
   const line =
-    status.kind === "loading"
+    isLoading
       ? t("Loading")
       : status.kind === "failed"
         ? render(status.reason)
@@ -104,10 +112,9 @@ export function Browser() {
           {t("Trending")}
         </button>
       </div>
-      <ul className="sound-list">
-        {sounds.map((sound) => (
-          <SoundRow key={sound.path} source={sound} />
-        ))}
+      <ul ref={list} className="sound-list" aria-busy={isLoading}>
+        {!isNewList && sounds.map((sound) => <SoundRow key={sound.path} source={sound} />)}
+        {isLoading && <SoundSkeletons count={isNewList ? SKELETONS_OF_A_LIST : SKELETONS_OF_MORE} />}
       </ul>
       {results.hasMore && (
         <button className="key browser-more" onClick={() => show(shown, results.page + 1)}>

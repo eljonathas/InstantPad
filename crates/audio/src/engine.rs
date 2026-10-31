@@ -5,11 +5,13 @@
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use async_trait::async_trait;
 use instantpad_application::message::{Failure, TextKey};
 use instantpad_application::ports::{
-    AudioDevice, AudioMix, AudioRouter, EventSink, PlaybackTag, SoundPlayer, VoiceChanger,
+    AudioDevice, AudioMix, AudioRouter, EventSink, NowPlaying, PlaybackTag, SoundPlayer,
+    VoiceChanger,
 };
 use instantpad_domain::voice::VoiceShift;
 use tokio::sync::OnceCell;
@@ -23,6 +25,13 @@ use crate::role::Role;
 use crate::voice::VoiceControls;
 
 type Clips = HashMap<String, Arc<OnceCell<Arc<SoundClip>>>>;
+
+/// A sound that started, for the display. The newest comes last.
+struct Started {
+    tag: PlaybackTag,
+    clip: Arc<SoundClip>,
+    at: Instant,
+}
 
 /// One of the two outputs and the mixer that feeds it.
 struct Output {
@@ -94,6 +103,7 @@ struct Microphone {
 pub struct AudioEngine {
     events: Arc<dyn EventSink>,
     clips: Mutex<Clips>,
+    started: Mutex<Vec<Started>>,
     microphone: Microphone,
     game: Output,
     monitor: Output,
@@ -108,6 +118,7 @@ impl AudioEngine {
         Self {
             events,
             clips: Mutex::default(),
+            started: Mutex::default(),
             microphone: Microphone {
                 role: Role::spawn("microphone"),
                 reader: reader.clone(),
@@ -142,6 +153,16 @@ impl AudioEngine {
         Ok(clip.clone())
     }
 
+    fn remember(&self, clip: Arc<SoundClip>, tag: PlaybackTag) {
+        let mut started = self.started.lock().unwrap();
+        started.retain(|item| item.tag != tag);
+        started.push(Started {
+            tag,
+            clip,
+            at: Instant::now(),
+        });
+    }
+
     fn play_on(&self, output: &Output, clip: &Arc<SoundClip>, volume: f32, tag: PlaybackTag) {
         output.with_voices(|voices| voices.add(clip.clone(), volume, tag));
     }
@@ -158,6 +179,7 @@ impl SoundPlayer for AudioEngine {
         self.stop(tag);
         self.play_on(&self.game, &clip, volume, tag);
         self.play_on(&self.monitor, &clip, volume, tag);
+        self.remember(clip, tag);
         Ok(())
     }
 
@@ -165,6 +187,7 @@ impl SoundPlayer for AudioEngine {
         let clip = self.load(path).await?;
         self.stop(tag);
         self.play_on(&self.monitor, &clip, volume, tag);
+        self.remember(clip, tag);
         Ok(())
     }
 
@@ -188,6 +211,19 @@ impl SoundPlayer for AudioEngine {
         [&self.game, &self.monitor]
             .into_iter()
             .any(|output| output.with_voices(|voices| voices.is_playing(tag)) == Some(true))
+    }
+
+    fn now_playing(&self) -> Option<NowPlaying> {
+        let mut started = self.started.lock().unwrap();
+        started.retain(|item| self.is_playing(item.tag));
+        let newest = started.last()?;
+
+        let duration = newest.clip.seconds();
+        Some(NowPlaying {
+            position: newest.at.elapsed().as_secs_f32().min(duration),
+            duration,
+            peaks: newest.clip.peaks().to_vec(),
+        })
     }
 }
 
@@ -321,6 +357,41 @@ mod tests {
         let file = wav(48_000, &[8192, 8192], 4800);
 
         contract::sound_player(&engine, file.path()).await;
+    }
+
+    #[tokio::test]
+    async fn the_display_follows_a_sound_until_it_stops() {
+        let engine = engine();
+        engine.attach_mixers();
+        let file = wav(48_000, &[8192, 8192], 4800);
+        let tag = PlaybackTag::of("a");
+        assert_eq!(engine.now_playing(), None);
+
+        engine.play(file.path(), 1.0, tag).await.unwrap();
+
+        let playing = engine.now_playing().unwrap();
+        assert_eq!(playing.duration, 0.1);
+        assert!(!playing.peaks.is_empty());
+
+        engine.stop(tag);
+        assert_eq!(engine.now_playing(), None);
+    }
+
+    #[tokio::test]
+    async fn the_display_shows_the_newest_sound_and_goes_back_when_it_ends() {
+        let engine = engine();
+        engine.attach_mixers();
+        let short = wav(48_000, &[8192, 8192], 4800);
+        let long = wav(48_000, &[8192, 8192], 9600);
+        let (first, second) = (PlaybackTag::of("a"), PlaybackTag::of("b"));
+        engine.play(long.path(), 1.0, first).await.unwrap();
+        engine.play(short.path(), 1.0, second).await.unwrap();
+
+        assert_eq!(engine.now_playing().unwrap().duration, 0.1);
+
+        engine.stop(second);
+
+        assert_eq!(engine.now_playing().unwrap().duration, 0.2);
     }
 
     #[tokio::test]

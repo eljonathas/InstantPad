@@ -141,10 +141,10 @@ impl SoundRows {
 
     fn report(&self, source: &SoundSource, result: Result<(), Failure>, success: TextKey) {
         match result {
-            Ok(()) => self.show(Message::with(
-                success,
-                [Message::plain(source.name.clone())],
-            )),
+            Ok(()) => {
+                let message = Message::with(success, [Message::plain(source.name.clone())]);
+                self.events.emit(AppEvent::sound(message));
+            }
             Err(failure) => self.show_failure(source, failure),
         }
     }

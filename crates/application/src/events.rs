@@ -6,7 +6,7 @@ use serde::Serialize;
 use specta::Type;
 
 use crate::message::{Message, TextKey};
-use crate::ports::AudioDevice;
+use crate::ports::{AudioDevice, NowPlaying};
 use crate::settings::AppSettings;
 
 // `#[specta(type = u32)]` exports a float as a plain `number`. Specta adds `| null` for NaN,
@@ -150,9 +150,22 @@ pub struct UpdateView {
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum DisplayEvent {
-    Show { message: Message },
-    Error { message: Message },
-    Routing { status: Message, hint: Message },
+    Show {
+        message: Message,
+    },
+    /// What is playing, which stays only until the sound ends.
+    Sound {
+        message: Message,
+    },
+    /// Nothing is playing anymore.
+    Silent,
+    Error {
+        message: Message,
+    },
+    Routing {
+        status: Message,
+        hint: Message,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
@@ -172,6 +185,10 @@ impl AppEvent {
         Self::Display(DisplayEvent::Show { message })
     }
 
+    pub fn sound(message: Message) -> Self {
+        Self::Display(DisplayEvent::Sound { message })
+    }
+
     pub fn error(message: Message) -> Self {
         Self::Display(DisplayEvent::Error { message })
     }
@@ -186,6 +203,7 @@ pub struct MeterFrame {
     #[specta(type = u32)]
     pub output_level: f32,
     pub playing_slots: Vec<u32>,
+    pub now_playing: Option<NowPlaying>,
 }
 
 /// What the rules allow, so the interface offers only that.

@@ -55,6 +55,7 @@ impl Core {
             mic_level,
             output_level,
             playing_slots: self.board.playing_slots(),
+            now_playing: self.board.now_playing(),
         }
     }
 

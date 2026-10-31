@@ -34,6 +34,22 @@ test("a search shows skeletons in place of the old list until it answers", async
   await expect(page.locator(".sound-skeleton")).toHaveCount(0);
 });
 
+test("a list longer than the panel scrolls inside it", async ({ page }) => {
+  const more = page.getByRole("button", { name: "Load more" });
+  await more.click();
+  await expect(page.locator(".sound-row:visible")).toHaveCount(16);
+  await more.click();
+  await expect(page.locator(".sound-row:visible")).toHaveCount(24);
+
+  const list = page.locator(".sound-list:visible");
+  const box = (await list.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 5000);
+  await expect(row(page, "Surprise")).toBeInViewport();
+});
+
 test("Load more appends the next page", async ({ page }) => {
   await page.getByRole("button", { name: "Load more" }).click();
   await expect(page.locator(".sound-row:visible")).toHaveCount(16);

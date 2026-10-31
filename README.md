@@ -1,10 +1,20 @@
+English | [Português](README.pt-BR.md)
+
 <p align="center">
   <img src="assets/social-preview.png" alt="InstantPad" width="640">
 </p>
 
 # InstantPad
 
-InstantPad is a soundboard that looks like a hardware sampler and has MyInstants built in. It runs on Windows, macOS and Linux. It mixes your microphone with the sounds you trigger and sends the result to a virtual device, which your game or Discord uses as its microphone.
+InstantPad is a free, open source soundboard for Windows, macOS and Linux. It looks like a hardware sampler and has the MyInstants library built in. It mixes your microphone with the sounds you trigger and sends the result to a virtual audio cable, which your game or Discord uses as its microphone. Your friends hear your voice and the sound together.
+
+![InstantPad showing MyInstants results next to the pad grid](apps/desktop/tests/e2e/screenshots/myinstants.png)
+
+## Install
+
+### Why you need a virtual audio cable
+
+Games and Discord only listen to microphones. A virtual audio cable works as a fake microphone: whatever an app plays into one end comes out of the other end as microphone input. InstantPad plays your voice and your sounds into the cable, and you pick the cable as the microphone in your game. On Windows and macOS the cable is a small driver that you install once. On Linux InstantPad creates it for you.
 
 ```
 microphone ─┐
@@ -13,72 +23,74 @@ sounds ─────┤
             └─► your headphones (sounds only)
 ```
 
-## Install
-
 Download the file for your system from the [latest release](https://github.com/eljonathas/InstantPad/releases/latest).
 
 ### Windows
 
-1. Run the `.exe` setup. It installs for your user, without an admin prompt. It is not code signed yet, so Windows may warn you the first time. Choose **More info**, then **Run anyway**.
-2. Open InstantPad, go to **Settings** and click **Install VB-CABLE**. Then click **Install Driver** in the window that opens.
-3. Restart your PC. The driver does not work properly until you do.
-4. VB-CABLE sets itself as the Windows output device when it installs. Open the Windows sound settings and pick your headphones as the output again. InstantPad warns you in **Settings** while this is wrong.
+1. Download the `.exe` setup and run it. It installs for your user and does not ask for an administrator password. The app is not code signed yet, so Windows may show a warning the first time. Click **More info**, then **Run anyway**.
+2. Open InstantPad, go to **Settings** and click **Install VB-CABLE**. InstantPad downloads the driver from the official VB-Audio site and opens its installer. Click **Install Driver** in that window.
+3. Restart your PC. Windows reports the driver as working before the restart, but it does not work properly until you restart.
+4. VB-CABLE sets itself as the Windows output device when it installs. Open the Windows sound settings and choose your headphones as the output again. **Settings** shows a warning, with an **Open sound settings** button, while the output is still on the cable.
 
-If you prefer not to install anything, `InstantPad-portable.exe` runs on its own. It does not update itself.
+If you prefer not to install the app, download `InstantPad-portable.exe` instead. It runs on its own and does not update itself. You still need VB-CABLE, so follow steps 2 to 4.
 
 ### macOS
 
-1. Open the `.dmg` and drag InstantPad to Applications. The app is not notarized yet, so macOS blocks it the first time. Open **System Settings**, go to **Privacy & Security** and choose **Open Anyway**.
-2. Allow the microphone when asked.
-3. Install [BlackHole 2ch](https://existential.audio/blackhole/), the virtual cable. **Install** in **Settings** takes you there.
+1. Download the `.dmg` that matches your Mac: the Apple silicon one for M1 and newer chips, the Intel one for older Macs. Open it and drag InstantPad to Applications.
+2. The app is not notarized yet, so macOS blocks it the first time. Try to open it once, then open **System Settings**, go to **Privacy & Security** and click **Open Anyway**.
+3. Allow the microphone when macOS asks.
+4. Install [BlackHole 2ch](https://existential.audio/blackhole/), the virtual cable. The **Install VB-CABLE** button in **Settings** opens its download page on macOS, even though the label mentions VB-CABLE.
 
 ### Linux
 
-Run the `.AppImage`. InstantPad creates its own virtual cable through PulseAudio or PipeWire, so you need `pactl` on your system.
+1. Download the `.AppImage`, make it executable (`chmod +x` on the file, or the permissions option in your file manager) and run it.
+2. InstantPad creates its own virtual cable, called `InstantPad_Mic`, through PulseAudio or PipeWire. It uses the `pactl` command, so `pactl` must be installed.
 
-## Set up your game
+### Updates
 
-In the voice settings of your game or Discord, choose the device **Settings** tells you as the microphone: `CABLE Output` on Windows, `BlackHole 2ch` on macOS and `InstantPad_Mic` on Linux.
+InstantPad checks for a new version when it opens and downloads it in the background, verifying its signature. The new version is applied when you close the app, or right away with **Restart now** in **Settings**. It never restarts by itself, so an update cannot interrupt a match.
+
+## Set up your game or Discord
+
+1. Open InstantPad and go to **Settings**. The **In the game** section shows the microphone to use: `CABLE Output` on Windows, `BlackHole 2ch` on macOS and `InstantPad_Mic` on Linux.
+2. Under **1. Your microphone**, choose your real microphone. Under **3. Where you listen**, choose your headphones. **2. Output to the game** should already point to the cable.
+3. In the voice settings of your game or Discord, select the cable as the microphone.
+4. Play a pad and ask a friend if they hear it, or watch the input level in the voice settings.
 
 If the game uses push-to-talk, hold the key while a sound plays, or switch to open mic.
 
 In Discord, set **Input Profile** to **Studio**. Voice Isolation removes everything that is not a voice, including your sounds. If you use a custom profile, turn off noise suppression, echo cancellation and automatic gain control.
-
-## If the sound is robotic, distorted or missing
-
-To see whether the sound reaches the cable on Windows, open the Windows sound panel, go to **Recording** and watch the level bar of `CABLE Output` while a pad plays. If the bar moves, the problem is in the game or Discord settings. If it stays still, the problem is on the PC.
-
-Check these in order:
-
-1. Did you restart the PC after installing VB-CABLE? Windows shows the driver as working before the restart, but it is not.
-2. In Device Manager, look for a `VB-Audio Virtual Cable` entry with an error. If there is one, or if the Windows audio service keeps stopping, reinstall the driver: run `VBCABLE_Setup_x64.exe` as administrator, click **Remove Driver**, restart, run it again, click **Install Driver**, and restart.
-3. The system output device must be your headphones, not the cable. Otherwise every app on your PC goes into your microphone.
-4. Bluetooth headsets drop to call quality whenever an app uses their microphone. Use a wired or USB microphone, and make sure Discord and your game are not reading the headset's mic.
-5. Right-click `CABLE Input` and `CABLE Output` in the Windows sound panel and check that both use the same sample rate. VB-CABLE distorts when they differ. 48000 Hz works well.
-6. Lower the **Mic** and **Game** knobs until the meter stays out of the red.
 
 ## Using it
 
 | To | Do this |
 | --- | --- |
 | Play a sound | Click its pad or press its shortcut |
+| Find sounds | Search MyInstants, or open **Trending** |
 | Fill a pad | Click an empty pad, then **+ Pad** on a result, or drag a result onto the pad. The sound is downloaded and kept locally |
-| Try an online sound on your headphones | **▶** on the result |
-| Play an online sound in the game without saving it | **Mic** on the result |
-| Save a copy of a sound elsewhere | Right-click its pad. Sounds on pads and favorites are already kept locally, and sounds you only listened to are deleted when the app closes |
-| Mark a favorite | **☆** on a result, or right-click a pad |
-| Use your own file | Drag it from Explorer onto a pad, or right-click the pad |
+| Try an online sound on your headphones | The play button on the result (**Listen on your headphones only**) |
+| Play an online sound in the game without saving it | **Mic** on the result (**Play in the game now**) |
+| Mark a favorite | The star on a result, or right-click a pad and choose **Add to favorites** |
+| Use your own file | Drag it from your file manager onto a pad, or right-click the pad and choose **Load audio file...** |
+| Save a copy of a sound elsewhere | Right-click its pad and choose **Download to computer...** |
 | Change a pad's shortcut, volume, color or name | Right-click the pad |
 | Rearrange pads | Hold Ctrl and drag |
+| Stop everything | **Stop** |
 | Turn a knob | Drag up or down, or use the mouse wheel. Double-click resets it |
 
 The knobs set your voice in the game (**Mic**), the sounds in the game (**Game**) and the sounds you hear (**Headphones**).
+
+Sounds on pads and favorites are kept on your computer. Sounds you only listened to go to a temporary folder, which InstantPad clears when it opens and when it closes. Your own files can be `.mp3`, `.wav`, `.m4a`, `.aac` or `.flac`. `.wma` is not supported.
 
 Only one copy of the app runs at a time. Opening it again brings the existing window to the front.
 
 ### Interfaces
 
-Create as many interfaces as you want with **+**. Each has its own name, color and grid, up to 8 rows by 10 columns. The gear button configures the current one, and right-clicking a tab moves or deletes it.
+Create as many interfaces as you want with **+**. Each has its own name, color and grid, up to 8 rows by 10 columns. The gear button (**Configure this interface**) configures the current one, and right-clicking a tab moves or deletes it.
+
+### One sound at a time
+
+**Settings** has a **One sound at a time** option. When it is on, a new sound stops the one that was playing.
 
 ### Numeric shortcuts
 
@@ -94,11 +106,26 @@ These are on by default and work while a game has focus:
 
 ### Language
 
-The app follows your system language and comes in English and Portuguese. You can change it in **Settings**.
+The app follows your system language and comes in English and Portuguese. You can change it in **Settings**, under **Language**.
 
-## Automatic updates
+## Troubleshooting
 
-InstantPad looks for a new version when it opens and downloads it in the background, checking its signature. The new version installs when you close the app, or right away with **Restart now** in **Settings**. It never restarts by itself, so an update cannot interrupt a match.
+If the sound is robotic, distorted or missing on Windows, first check whether it reaches the cable. Open the Windows sound panel, go to **Recording** and watch the level bar of `CABLE Output` while a pad plays. If the bar moves, the problem is in the game or Discord settings. If it stays still, the problem is on the PC.
+
+Check these in order:
+
+1. Did you restart the PC after installing VB-CABLE? Windows shows the driver as working before the restart, but it is not.
+2. In Device Manager, look for a `VB-Audio Virtual Cable` entry with an error. If there is one, or if the Windows audio service keeps stopping, reinstall the driver: run `VBCABLE_Setup_x64.exe` as administrator, click **Remove Driver**, restart, run it again, click **Install Driver**, and restart.
+3. The system output device must be your headphones, not the cable. Otherwise every app on your PC goes into your microphone.
+4. Bluetooth headsets drop to call quality whenever an app uses their microphone. Use a wired or USB microphone, and make sure Discord and your game are not reading the headset's mic.
+5. Right-click `CABLE Input` and `CABLE Output` in the Windows sound panel and check that both use the same sample rate. VB-CABLE distorts when they differ. 48000 Hz works well.
+6. Lower the **Mic** and **Game** knobs until the meter stays out of the red.
+
+Other cases:
+
+- **Settings** says no virtual cable was found: on Windows and macOS, install it as described above. On Linux, check that `pactl` is installed.
+- A device you just plugged in is missing from the lists: click **Refresh devices** in **Settings**.
+- A shortcut does nothing while a game runs as administrator: run InstantPad as administrator too.
 
 ## Development
 
@@ -109,25 +136,13 @@ pnpm install
 pnpm dev
 ```
 
-```bash
-cargo test --workspace
-pnpm check && pnpm lint && pnpm test
-```
-
-All state and rules live in Rust, and the React interface draws what the backend sends:
-
-```
-apps/desktop/src-tauri        Tauri shell, commands, composition root
-   └─► crates/audio, catalog, storage, platform     adapters
-          └─► crates/application     use cases and ports
-                 └─► crates/domain   pad board and hotkey rules
-```
-
-See [docs/architecture](docs/architecture/README.md) and [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the project layout, tests and commit conventions. [docs/architecture](docs/architecture/README.md) explains how the code is organized.
 
 ## Limitations
 
 On Windows the virtual device is VB-CABLE, from VB-Audio. Windows only loads audio drivers signed by Microsoft, so the app cannot create its own. It downloads the setup from the official site and runs it only if the digital signature belongs to VB-Audio. VB-CABLE is free, with an optional donation.
+
+On macOS the app is not notarized, and you install the virtual cable (BlackHole) yourself.
 
 MyInstants has no public API, so the app reads the site's HTML. If the site changes, [`parser.rs`](crates/catalog/src/parser.rs) is the file to fix.
 

@@ -2,9 +2,8 @@ name: Rust
 
 on:
   push:
-    branches: [refactor/tauri]
+    branches: [main]
   pull_request:
-    branches: [refactor/tauri]
 
 permissions:
   contents: read

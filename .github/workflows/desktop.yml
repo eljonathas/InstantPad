@@ -2,9 +2,8 @@ name: Desktop
 
 on:
   push:
-    branches: [refactor/tauri]
+    branches: [main]
   pull_request:
-    branches: [refactor/tauri]
 
 permissions:
   contents: read
@@ -39,3 +38,19 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  title:
+    name: Conventional title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      # The title becomes the squashed commit on main.
+      - name: Check the pull request title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .+'
+          if [[ ! "$TITLE" =~ $pattern ]]; then
+            echo "::error::'$TITLE' does not follow Conventional Commits. See CONTRIBUTING.md."
+            exit 1
+          fi

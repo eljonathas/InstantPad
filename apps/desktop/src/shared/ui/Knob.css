@@ -18,16 +18,17 @@
   filter: drop-shadow(0 0 var(--knob-glow-size) var(--color-accent));
 }
 
-/* The exact value while the knob is held, like a small display on the panel. */
+/* The exact value while the knob is held, floating over the label under it. */
 .knob-readout {
   position: absolute;
-  top: calc(-1 * var(--space-2));
+  top: 100%;
   left: 50%;
   z-index: var(--z-ghost);
   padding: var(--space-1) var(--space-3);
   border: var(--border-width) solid var(--color-accent);
   border-radius: var(--radius-key);
   background: var(--color-screen-back);
+  box-shadow: var(--shadow-cap-cast);
   color: var(--color-lcd);
   font-size: var(--font-status);
   font-weight: var(--weight-bold);

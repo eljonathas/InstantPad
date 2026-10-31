@@ -15,6 +15,7 @@ pub enum TextKey {
     DriverDownloading,
     DriverFailed,
     DriverInstallCanceled,
+    DriverOpeningPage,
     DriverOpeningSetup,
     DriverSearching,
     DriverSetupMissing,

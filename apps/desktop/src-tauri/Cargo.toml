@@ -1,0 +1,30 @@
+[package]
+name = "instantpad-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "instantpad_desktop"
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[lints]
+workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+instantpad-application.workspace = true
+instantpad-domain.workspace = true
+# Stands in for the real adapters until Phase 2 wires them in composition.rs.
+instantpad-test-support.workspace = true
+serde.workspace = true
+specta.workspace = true
+specta-typescript.workspace = true
+tauri = { workspace = true, features = ["macos-private-api", "specta"] }
+tauri-plugin-dialog.workspace = true
+tauri-specta.workspace = true
+tokio = { workspace = true, features = ["macros"] }

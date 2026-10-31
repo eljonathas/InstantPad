@@ -128,11 +128,11 @@
   --rolling-time: 340ms;
   --ease-push: cubic-bezier(0.3, 0.9, 0.3, 1);
   --voice-knob-gap: 28px;
-  --effect-size: 116px;
-  --effect-well-gap: 10px;
-  --effect-icon-size: 46px;
-  --effect-gap: 22px;
-  --cap-travel-effect: 4px;
+  --effect-size: 78px;
+  --effect-well-gap: 8px;
+  --effect-icon-size: 30px;
+  --effect-gap: 16px 6px;
+  --cap-travel-effect: 3px;
   --gradient-skeleton: linear-gradient(90deg, var(--gray-3) 30%, var(--gray-1) 50%, var(--gray-3) 70%);
   --skeleton-time: 1500ms;
   --skeleton-text-height: 12px;

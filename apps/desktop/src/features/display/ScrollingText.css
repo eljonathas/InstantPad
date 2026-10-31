@@ -1,5 +1,5 @@
 .scrolling {
-  overflow: hidden;
+  overflow-x: clip;
   white-space: nowrap;
 }
 

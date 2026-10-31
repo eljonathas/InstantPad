@@ -17,6 +17,7 @@
 
 .lcd-top {
   display: flex;
+  overflow: visible;
   align-items: center;
   gap: var(--now-playing-gap);
 }

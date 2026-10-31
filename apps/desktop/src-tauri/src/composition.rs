@@ -22,7 +22,7 @@ use instantpad_storage::{
 use tauri::{AppHandle, Manager};
 
 use crate::events::TauriEvents;
-use crate::updater::LocalBuild;
+use crate::updater::TauriUpdater;
 
 pub struct Core {
     pub board: Arc<BoardSession>,
@@ -101,7 +101,7 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
             board.clone(),
             events.clone(),
         ),
-        updates: UpdateSession::new(Arc::new(LocalBuild), events),
+        updates: UpdateSession::new(Arc::new(TauriUpdater::new(app.clone())), events),
         board,
         favorites,
         hotkeys,

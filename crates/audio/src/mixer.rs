@@ -17,7 +17,8 @@ use crate::mic::MicSlot;
 /// Sounds playing at once on one mixer. Starting more drops the newest.
 const MAX_VOICES: usize = 64;
 const COMMAND_CAPACITY: usize = 256;
-/// Every voice is either still queued, playing, or on its way back, so this never fills up.
+/// Every voice is still queued, playing, or on its way back, and adding one first collects the
+/// finished ones, so this never fills up and the callback never has to free a voice.
 const RETURN_CAPACITY: usize = COMMAND_CAPACITY + MAX_VOICES;
 const LIMITER_KNEE: f32 = 0.8;
 /// How much of the microphone is mixed in one go, so no buffer has to be allocated for it.
@@ -93,6 +94,7 @@ pub(crate) fn pair(controls: Arc<Controls>, mic: Option<MicSlot>) -> (Mixer, Mix
 
 impl MixerHandle {
     pub(crate) fn add(&mut self, clip: Arc<SoundClip>, volume: f32, tag: PlaybackTag) {
+        self.collect_finished();
         let id = self.next_id;
         self.next_id += 1;
         let voice = Voice {
@@ -119,10 +121,14 @@ impl MixerHandle {
     }
 
     pub(crate) fn is_playing(&mut self, tag: PlaybackTag) -> bool {
+        self.collect_finished();
+        self.playing.iter().any(|&(_, playing)| playing == tag)
+    }
+
+    fn collect_finished(&mut self) {
         while let Ok(finished) = self.returned.pop() {
             self.playing.retain(|&(id, _)| id != finished.id);
         }
-        self.playing.iter().any(|&(_, playing)| playing == tag)
     }
 }
 
@@ -248,6 +254,19 @@ mod tests {
         mixer.render(&mut block);
 
         assert!(block.iter().all(|&sample| sample == 0.0));
+    }
+
+    #[test]
+    fn adding_collects_finished_voices_even_if_nobody_asks_what_is_playing() {
+        let (mut mixer, mut handle, _) = mixer();
+        let tag = PlaybackTag::of("a");
+
+        for _ in 0..RETURN_CAPACITY * 2 {
+            handle.add(clip(0.1, 2), 1.0, tag);
+            mixer.render(&mut [0.0; 4]);
+        }
+
+        assert!(handle.returned.slots() <= 1);
     }
 
     #[test]

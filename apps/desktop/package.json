@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "e2e": "playwright test",
-    "gen:ipc": "UPDATE_BINDINGS=1 cargo test -p instantpad-desktop --test bindings"
+    "gen:ipc": "UPDATE_BINDINGS=1 cargo test -p instantpad-desktop --lib bindings"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

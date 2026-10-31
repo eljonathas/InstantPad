@@ -26,7 +26,8 @@ pub fn system_audio() -> Arc<dyn SystemAudio> {
     return Arc::new(linux::LinuxSystemAudio);
 }
 
-/// On Linux the cable is created here, and removed when the last handle is dropped.
+/// On Linux the cable is created here. It stays after the app closes, and the next start reuses
+/// it, because Tauri never drops what it manages.
 pub fn virtual_cable() -> Arc<dyn VirtualCable> {
     #[cfg(target_os = "windows")]
     return Arc::new(windows::VbCable);

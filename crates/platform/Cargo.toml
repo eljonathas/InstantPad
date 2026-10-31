@@ -16,6 +16,10 @@ instantpad-application.workspace = true
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 cpal = "0.18"
 
+# The same host the audio crate uses, or the ids of the two would not match.
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = { version = "0.18", features = ["pulseaudio"] }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 tokio = { workspace = true, features = ["rt"] }

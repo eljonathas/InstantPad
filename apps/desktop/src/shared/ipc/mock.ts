@@ -236,6 +236,7 @@ export function installMock() {
   let playing = new Set<string>();
   let counter = 0;
   let startedAt = 0;
+  let isFullscreen = false;
   const loading = new Set<number>();
 
   /** Shows `slot` as loading for a moment, like a sound that has to download. */
@@ -581,6 +582,11 @@ export function installMock() {
     "plugin:dialog|save": () => "/mock/Downloads/sound.mp3",
     "plugin:path|resolve_directory": () => "/mock/Music",
     "plugin:path|join": ({ paths }) => (paths as string[]).join("/"),
+    "plugin:window|is_fullscreen": () => isFullscreen,
+    "plugin:window|set_fullscreen": ({ value }) => {
+      isFullscreen = value as boolean;
+      window.dispatchEvent(new Event("resize"));
+    },
   };
 
   mockWindows("main");

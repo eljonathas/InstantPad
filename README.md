@@ -82,6 +82,7 @@ In Discord, set **Input Profile** to **Studio**. Voice Isolation removes everyth
 | Change a pad's shortcut, volume, color or name | Right-click the pad |
 | Rearrange pads | Hold Ctrl and drag |
 | Stop everything | **Stop** |
+| Fill the screen | The full screen key next to minimize, or `F11` |
 | Turn a knob | Drag up or down, or use the mouse wheel. Double-click resets it. The exact value shows under the knob while you hold it |
 
 The knobs set your voice in the game (**Mic**), the sounds in the game (**Game**) and the sounds you hear (**Headphones**).

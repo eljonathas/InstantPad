@@ -128,6 +128,10 @@
   --icon: var(--icon-stop);
 }
 
+.icon-fullscreen {
+  --icon: var(--icon-fullscreen);
+}
+
 /* Key with a LED strip (HwToggle): tabs, panel tabs and the mic switch */
 .toggle {
   display: grid;

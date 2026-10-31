@@ -5,6 +5,23 @@ test.beforeEach(async ({ page }) => openApp(page));
 
 const value = async (knob: import("@playwright/test").Locator) => Number(await knob.getAttribute("aria-valuenow"));
 
+test("full screen fills the window and comes back", async ({ page }) => {
+  const key = page.getByTitle("Full screen (F11)");
+  const window = page.viewportSize()!;
+
+  await key.click();
+  await expect(page.getByTitle("Leave full screen (F11)")).toBeVisible();
+  await expect(page.locator(".grip")).toHaveCount(0);
+  const device = (await page.locator(".device").boundingBox())!;
+  expect(device.width).toBeCloseTo(window.width, 0);
+  expect(device.height).toBeCloseTo(window.height, 0);
+
+  await page.keyboard.press("F11");
+  await expect(key).toBeVisible();
+  await expect(page.locator(".grip")).toBeVisible();
+  expect((await page.locator(".device").boundingBox())!.width).toBeLessThan(window.width);
+});
+
 test("a knob follows a vertical drag, even outside the knob", async ({ page }) => {
   const mic = page.getByRole("slider", { name: "Mic" });
   expect(await value(mic)).toBe(100);

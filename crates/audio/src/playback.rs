@@ -53,7 +53,8 @@ impl Conversion {
     /// Left and right go to the first two channels and any others stay silent.
     fn fill(&mut self, mixer: &mut Mixer, block: &mut [f32]) {
         for frame in block.chunks_exact_mut(self.channels) {
-            if self.next == self.ready {
+            // A resampler can hold on to a whole block and produce nothing for it.
+            while self.next == self.ready {
                 self.refill(mixer);
             }
 
@@ -150,6 +151,17 @@ mod tests {
         playback.fill(&mut block);
 
         assert!(block.iter().all(|&sample| sample == 0.5));
+    }
+
+    #[test]
+    fn a_rate_where_the_resampler_skips_blocks_still_fills_every_callback() {
+        for rate in [11_025, 22_050] {
+            let mut playback = playback(2, rate, 0.5, 48_000);
+
+            for _ in 0..20 {
+                playback.fill(&mut vec![0.0; 600 * CHANNELS]);
+            }
+        }
     }
 
     #[test]

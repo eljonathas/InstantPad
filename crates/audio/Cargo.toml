@@ -18,6 +18,10 @@ rubato = "5.0"
 symphonia = { version = "0.6", default-features = false, features = ["mp3", "aac", "isomp4", "flac", "wav", "pcm", "ogg", "vorbis", "id3v2"] }
 tokio = { workspace = true, features = ["rt", "sync", "time"] }
 
+# Linux needs PulseAudio or PipeWire for the virtual cable: ALSA never lists it.
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = { version = "0.18", features = ["pulseaudio"] }
+
 [dev-dependencies]
 instantpad-test-support.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "test-util"] }

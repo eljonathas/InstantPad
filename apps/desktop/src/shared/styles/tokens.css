@@ -1,0 +1,279 @@
+/* Every color and measure of the interface, taken from Hardware.xaml, MainWindow.xaml,
+   InterfaceDialog.xaml, Knob.cs and LedMeter.cs. Components read these, never raw values. */
+
+@font-face {
+  font-family: "Lexend";
+  font-weight: 400;
+  src: url("./fonts/Lexend-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Lexend";
+  font-weight: 600;
+  src: url("./fonts/Lexend-SemiBold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Lexend";
+  font-weight: 700;
+  src: url("./fonts/Lexend-Bold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Lexend";
+  font-weight: 900;
+  src: url("./fonts/Lexend-Black.ttf") format("truetype");
+}
+
+:root {
+  /* Type */
+  --font-family: "Lexend", sans-serif;
+  --weight-regular: 400;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-black: 900;
+  --font-logo: 24px;
+  --font-lcd-main: 24px;
+  --font-star: 14px;
+  --font-input: 14px;
+  --font-screen: 13px;
+  --font-pad-name: 13px;
+  --font-key: 12px;
+  --font-status: 12px;
+  --font-silk: 11px;
+  --font-pad-label: 11px;
+  --font-dialog-label: 11px;
+  --font-meter-label: 10px;
+  --font-pad-shortcut: 10px;
+  --font-tagline: 9px;
+  --font-hotkey-prompt: 15px;
+  --font-menu: 12px;
+
+  /* The four grays. Every surface of the device is one of these. */
+  --gray-1: #424549;
+  --gray-2: #36393e;
+  --gray-3: #282b30;
+  --gray-4: #1e2124;
+
+  /* Palette */
+  --color-amber: #ffb03a;
+  --color-accent: #ffb03a; /* Replaced at runtime by the accent of the active interface. */
+  --color-lcd: #7dffa0;
+  --color-lcd-dim: #3f8f5a;
+  --color-silk: #a6a9b0;
+  --color-screen-back: var(--gray-4);
+  --color-screen-line: var(--gray-2);
+  --color-key-text: #d8dae0;
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-danger: #ff6b6b;
+  --color-stop: #7a1f1f;
+  --color-star: #ffd21f;
+  --color-too-small: orangered;
+  --color-dialog-label: gray;
+
+  /* Chassis */
+  --gradient-chassis: linear-gradient(158deg, var(--gray-1) 0%, var(--gray-2) 45%, var(--gray-3) 100%);
+  --color-chassis-border: var(--gray-1);
+  --shadow-chassis: 0 3px 10px rgb(0 0 0 / 70%);
+  --color-screw-fill: var(--gray-4);
+  --color-screw-stroke: var(--gray-1);
+  --gradient-lcd: linear-gradient(180deg, #0c1a11 0%, #102418 100%);
+  --color-bezel: var(--gray-4);
+  --color-row-hover: var(--gray-3);
+
+  /* Keys and pads */
+  --gradient-sheen: linear-gradient(180deg, rgb(255 255 255 / 12%) 0%, rgb(255 255 255 / 0%) 45%);
+  --color-key-face: var(--gray-1);
+  --color-pad-face: var(--gray-2);
+  --color-well: var(--gray-4);
+  --color-led-off: var(--gray-2);
+  --color-pad-label: var(--color-silk);
+  --color-pad-label-lit: #e8e8ea;
+  --color-pad-shortcut-lit: #ffe0b0;
+  --pad-face-mix: 58%;
+  --opacity-key-disabled: 0.4;
+  --blur-pad-glow: 16px;
+
+  /* Tactile keys: a cap with a lit edge and a body under it, sitting in a dark well. */
+  --cap-light-mix: 70%;
+  --cap-edge-mix: 52%;
+  --cap-travel: 2px;
+  --cap-travel-pad: 5px;
+  --cap-press-time: 60ms;
+  --cap-release-time: 130ms;
+  --cap-hover-brightness: 1.1;
+  --shadow-cap-cast: 2px 4px 8px rgb(0 0 0 / 45%);
+  --shadow-cap-cast-pad: 4px 7px 14px rgb(0 0 0 / 50%);
+  --shadow-cap-pressed: inset -3px -3px 8px rgb(0 0 0 / 25%);
+  --shadow-cap-pressed-pad: inset -8px -8px 24px rgb(0 0 0 / 25%);
+  --shadow-well: inset 0 2px 5px rgb(0 0 0 / 65%);
+  --well-gap: 2px;
+  --radius-well: 4px;
+
+  /* Dragging onto pads */
+  --drop-time: 120ms;
+  --drop-lift: -2px;
+  --drop-ring: 2px;
+  --drop-glow: 0 0 20px color-mix(in srgb, var(--color-accent) 55%, transparent);
+  --drop-mark-size: 36px;
+  --drop-icon-inset: 8px;
+  --icon-plus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 4v16M4 12h16'/%3E%3C/svg%3E");
+  --icon-replace: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12a8 8 0 1 1-2.5-5.8L20 8.5M20 3v5.5h-5.5'/%3E%3C/svg%3E");
+  --icon-swap: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8h17M16 4l4 4-4 4M21 16H4M8 12l-4 4 4 4'/%3E%3C/svg%3E");
+  --key-icon-size: 16px;
+  --icon-cog: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+  --icon-stop: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='3' width='18' height='18' rx='3'/%3E%3C/svg%3E");
+  --gradient-skeleton: linear-gradient(90deg, var(--gray-3) 30%, var(--gray-1) 50%, var(--gray-3) 70%);
+  --skeleton-time: 1500ms;
+  --skeleton-text-height: 12px;
+  --skeleton-key-height: 23px;
+  --skeleton-short-name: 54px;
+  --skeleton-shorter-name: 28px;
+  --loader-size: 36px;
+  --loader-width: 3px;
+  --loader-track: rgb(255 255 255 / 18%);
+  --loader-spin-time: 800ms;
+  --loader-pulse-time: 700ms;
+  --loader-back: rgb(0 0 0 / 45%);
+  --loader-dim: 0.15;
+  --drag-dim-brightness: 0.7;
+  --drag-source-opacity: 0.4;
+  --land-time: 360ms;
+  --land-flash-brightness: 1.5;
+  --land-ring-scale: 1.14;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ghost-tilt: -2deg;
+  --ghost-max-width: 220px;
+  --ghost-dot-size: 10px;
+  --shadow-ghost: 6px 12px 24px rgb(0 0 0 / 55%);
+  --shadow-pad-name: 0 1px 4px rgb(0 0 0 / 90%);
+
+  /* Fields */
+  --color-field-back: var(--gray-3);
+  --color-option-highlight: var(--gray-1);
+  --color-dialog-back: var(--gray-3);
+
+  /* Knob */
+  --knob-size: 92px;
+  --knob-stroke-width: 1px;
+  --knob-tick-width: 1.5px;
+  --knob-tick-lit-width: 2px;
+  --knob-pointer-width: 3px;
+  --knob-tick-unlit: var(--gray-1);
+  --knob-shadow: rgb(0 0 0 / 47%);
+  --knob-skirt-top: var(--gray-1);
+  --knob-skirt-bottom: var(--gray-4);
+  --knob-cap-light: var(--gray-1);
+  --knob-cap-dark: var(--gray-3);
+  --knob-cap-stroke: var(--gray-4);
+
+  /* LED meter */
+  --led-green: #35f27a;
+  --led-amber: #ffb03a;
+  --led-red: #ff3b3b;
+  --led-off: var(--gray-3);
+  --led-gap: 2px;
+  --led-radius: 1px;
+  --meter-width: 24px;
+
+  /* Layout */
+  --device-width: 1320px;
+  --device-height: 800px;
+  --window-margin: 10px;
+  --radius-chassis: 20px;
+  --screw-size: 12px;
+  --screw-inset: 11px;
+  --strip-width: 148px;
+  --side-panel-width: 372px;
+  --column-gap: 16px;
+  --device-padding: 32px 26px 24px;
+  --lcd-height: 92px;
+  --tabs-row-height: 52px;
+  --panel-tabs-height: 34px;
+  --panel-tabs-gap: 6px;
+  --mic-toggle-height: 38px;
+  --power-key-width: 30px;
+  --power-key-height: 20px;
+  --power-key-gap: 5px;
+  --power-keys-top: 8px;
+  --power-keys-right: 14px;
+  --grip-size: 18px;
+  --key-icon-width: 28px;
+  --key-plus-width: 30px;
+  --key-mic-width: 36px;
+  --key-pad-width: 48px;
+  --key-stop-width: 86px;
+  --lcd-padding: 8px 14px;
+  --interface-bar-margin: 10px 5px 4px;
+  --logo-line-height: 1.25;
+  --logo-pad-offset: -10px;
+  --strip-gap: 8px;
+  --strip-gap-last: 10px;
+  --meter-label-gap: 3px;
+  --toggle-led-row: 5px;
+  --toggle-led-margin: 3px 10px 0;
+  --panel-padding: 10px;
+  --settings-padding: 10px 12px;
+  --focus-ring-width: 2px;
+
+  /* Shapes */
+  --radius-screen: 6px;
+  --radius-key: 5px;
+  --radius-pad-inner: 8px;
+  --radius-pad-glow: 12px;
+  --radius-led-strip: 1.5px;
+  --radius-scroll-thumb: 3px;
+  --border-bezel: 3px;
+  --border-pad: 2px;
+  --gap-pad: 5px;
+  --pad-glow-spread: 3px;
+  --led-strip-height: 3px;
+  --key-padding: 4px 10px;
+  --field-padding: 4px 6px;
+  --field-height: 30px;
+  --tab-min-width: 58px;
+  --tab-max-width: 160px;
+  --scrollbar-width: 8px;
+  --combo-max-height: 260px;
+  --border-width: 1px;
+  --sound-dot-size: 8px;
+  --sound-gap: 3px;
+  --sound-row-height: 33px;
+  --sound-row-padding: 3px 2px;
+  --sound-key-padding: 3px 0;
+  --pad-label-top: 5px;
+  --pad-label-side: 8px;
+  --pad-star-right: 7px;
+  --pad-star-bottom: 3px;
+  --pad-name-inset: 20px 8px 8px;
+  --radius-swatch: 2px;
+  --space-1: 3px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+
+  /* Dialogs */
+  --dialog-width: 380px;
+  --dialog-padding: 16px;
+  --dialog-button-width: 96px;
+  --dialog-button-height: 32px;
+  --swatch-size: 30px;
+  --swatch-border: 3px;
+  --swatch-gap: 6px;
+  --color-backdrop: rgb(0 0 0 / 55%);
+
+  /* Context menus */
+  --menu-min-width: 180px;
+  --menu-padding: 4px;
+  --menu-item-padding: 6px 14px;
+  --menu-swatch-width: 60px;
+  --menu-swatch-height: 14px;
+  --shadow-menu: 0 6px 18px rgb(0 0 0 / 60%);
+  --z-ghost: 30;
+  --z-dialog: 20;
+  --z-menu: 10;
+}

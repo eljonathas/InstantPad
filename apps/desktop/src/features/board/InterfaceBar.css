@@ -1,0 +1,50 @@
+.interface-bar {
+  display: flex;
+  margin: var(--interface-bar-margin);
+  min-width: 0;
+}
+
+.interface-tabs {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  /* Room for the height and shadow of the keys, which the scrolling box would cut off. The
+     margin takes it back, so the tabs stay as tall as the keys beside them. */
+  margin-bottom: calc(-1 * var(--space-3));
+  padding-bottom: var(--space-3);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.interface-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.interface-tab {
+  flex: none;
+  min-width: var(--tab-min-width);
+  max-width: var(--tab-max-width);
+  margin-right: var(--panel-tabs-gap);
+}
+
+.interface-keys {
+  display: flex;
+  gap: var(--panel-tabs-gap);
+}
+
+.interface-bar > .interface-step {
+  margin-right: var(--panel-tabs-gap);
+}
+
+.interface-step {
+  width: var(--key-icon-width);
+}
+
+.interface-plus {
+  width: var(--key-plus-width);
+}
+
+.interface-stop {
+  gap: var(--space-3);
+  width: var(--key-stop-width);
+}

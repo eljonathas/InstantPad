@@ -1,0 +1,39 @@
+[package]
+name = "instantpad-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait.workspace = true
+instantpad-application.workspace = true
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+cpal = "0.18"
+
+# The same host the audio crate uses, or the ids of the two would not match.
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = { version = "0.18", features = ["pulseaudio"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
+tokio = { workspace = true, features = ["rt"] }
+uuid.workspace = true
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Security_Cryptography",
+    "Win32_Security_WinTrust",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+instantpad-test-support.workspace = true

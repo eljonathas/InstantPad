@@ -1,0 +1,21 @@
+[package]
+name = "instantpad-storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+instantpad-application.workspace = true
+instantpad-domain.workspace = true
+percent-encoding = "2.3.2"
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+instantpad-test-support.workspace = true
+tempfile = "3.27.0"

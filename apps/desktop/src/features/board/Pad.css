@@ -1,0 +1,251 @@
+.pad-grid {
+  display: grid;
+  min-height: 0;
+}
+
+/* The dark well the cap sits in */
+.pad {
+  position: relative;
+  margin: var(--gap-pad);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-well);
+  background: var(--color-well);
+  box-shadow: var(--shadow-well);
+  cursor: pointer;
+}
+
+.pad-glow {
+  position: absolute;
+  inset: calc(-1 * var(--pad-glow-spread));
+  border-radius: var(--radius-pad-glow);
+  background: var(--pad-color);
+  filter: blur(var(--blur-pad-glow));
+}
+
+.pad-body {
+  --cap-face: var(--color-pad-face);
+  --cap-height: var(--cap-travel-pad);
+  --cap-cast: var(--shadow-cap-cast-pad);
+  --cap-sunk: var(--shadow-cap-pressed-pad);
+  position: absolute;
+  inset: var(--well-gap) var(--well-gap) calc(var(--well-gap) + var(--cap-travel-pad));
+  overflow: hidden;
+  border-radius: var(--radius-pad-inner);
+  /* The text of a loaded pad: the labels dim, the name white. */
+  --pad-label: var(--color-pad-label);
+  --pad-shortcut: var(--color-pad-label);
+  --pad-name: var(--color-white);
+}
+
+.pad-sheen {
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-sheen);
+}
+
+.pad-slot,
+.pad-shortcut,
+.pad-star,
+.pad-name {
+  position: absolute;
+}
+
+.pad-slot {
+  top: var(--pad-label-top);
+  left: var(--pad-label-side);
+  color: var(--pad-label);
+  font-size: var(--font-pad-label);
+}
+
+.pad-shortcut {
+  top: var(--pad-label-top);
+  right: var(--pad-label-side);
+  color: var(--pad-shortcut);
+  font-size: var(--font-pad-shortcut);
+}
+
+.pad-star {
+  right: var(--pad-star-right);
+  bottom: var(--pad-star-bottom);
+  color: var(--color-star);
+  font-size: var(--font-star);
+}
+
+.pad-name {
+  inset: var(--pad-name-inset);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--pad-name);
+  font-size: var(--font-pad-name);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  text-shadow: var(--shadow-pad-name);
+  overflow-wrap: anywhere;
+}
+
+.pad[data-loaded] .pad-body {
+  --cap-face: color-mix(in srgb, var(--pad-color) var(--pad-face-mix), var(--color-pad-face));
+  --pad-label: var(--color-pad-label-lit);
+  --pad-shortcut: var(--color-pad-shortcut-lit);
+}
+
+.pad[data-target] .pad-body {
+  border-color: var(--color-accent);
+}
+
+.pad[data-playing] .pad-body {
+  --cap-face: var(--pad-color);
+  --pad-label: var(--pad-contrast);
+  --pad-shortcut: var(--pad-contrast);
+  --pad-name: var(--pad-contrast);
+}
+
+.pad[data-playing] .pad-name {
+  text-shadow: none;
+}
+
+/* While something is dragged the board steps back, so the pad it would land on stands out. */
+body[data-dragging] .pad:not([data-drop]) .pad-body {
+  filter: brightness(var(--drag-dim-brightness));
+}
+
+.pad[data-drag-source] .pad-body {
+  opacity: var(--drag-source-opacity);
+}
+
+/* The ring goes on the well, because the body of the cap would cover its lower edge. */
+.pad[data-drop] {
+  z-index: 1;
+  box-shadow:
+    var(--shadow-well),
+    0 0 0 var(--drop-ring) var(--color-accent),
+    var(--drop-glow);
+}
+
+.pad[data-drop] .pad-body {
+  transform: translateY(var(--drop-lift));
+  transition-duration: var(--drop-time);
+}
+
+/* What the drop will do: fill the pad, replace its sound or swap the two. */
+.pad-drop-mark {
+  --drop-icon: var(--icon-plus);
+  position: absolute;
+  inset: 0;
+  display: none;
+  width: var(--drop-mark-size);
+  height: var(--drop-mark-size);
+  margin: auto;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: var(--shadow-cap-cast);
+}
+
+.pad[data-drop] .pad-drop-mark {
+  display: block;
+  animation: drop-mark-in var(--drop-time) var(--ease-spring);
+}
+
+.pad[data-loaded] .pad-drop-mark {
+  --drop-icon: var(--icon-replace);
+}
+
+body[data-dragging="swap"] .pad-drop-mark {
+  --drop-icon: var(--icon-swap);
+}
+
+.pad-drop-mark::before {
+  content: "";
+  position: absolute;
+  inset: var(--drop-icon-inset);
+  background: var(--gray-4);
+  -webkit-mask: var(--drop-icon) center / contain no-repeat;
+  mask: var(--drop-icon) center / contain no-repeat;
+}
+
+@keyframes drop-mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+/* A sound on its way: the well breathes around a spinner until it arrives. */
+.pad[data-loading] {
+  animation: pad-waiting var(--loader-pulse-time) ease-in-out infinite alternate;
+}
+
+.pad[data-loading] .pad-name,
+.pad[data-loading] .pad-star {
+  opacity: var(--loader-dim);
+}
+
+.pad-loader {
+  position: absolute;
+  inset: 0;
+  width: var(--loader-size);
+  height: var(--loader-size);
+  margin: auto;
+  border: var(--loader-width) solid var(--loader-track);
+  border-top-color: var(--color-white);
+  border-radius: 50%;
+  background: var(--loader-back);
+  animation: pad-spin var(--loader-spin-time) linear infinite;
+}
+
+@keyframes pad-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes pad-waiting {
+  from {
+    box-shadow:
+      var(--shadow-well),
+      0 0 0 var(--drop-ring) transparent;
+  }
+
+  to {
+    box-shadow:
+      var(--shadow-well),
+      0 0 0 var(--drop-ring) var(--color-accent),
+      var(--drop-glow);
+  }
+}
+
+/* The thud of something landing: the cap takes the hit, flashes and settles. */
+.pad[data-landed] .pad-body {
+  animation: pad-land var(--land-time) ease-out;
+}
+
+.pad[data-landed]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: var(--drop-ring) solid var(--color-accent);
+  border-radius: var(--radius-well);
+  animation: pad-ring var(--land-time) ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes pad-land {
+  from {
+    filter: brightness(var(--land-flash-brightness));
+    transform: translateY(var(--cap-height));
+  }
+
+  50% {
+    transform: translateY(var(--drop-lift));
+  }
+}
+
+@keyframes pad-ring {
+  to {
+    opacity: 0;
+    transform: scale(var(--land-ring-scale));
+  }
+}

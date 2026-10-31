@@ -12,6 +12,6 @@ You should get a first answer within a week. Once a fix is out, we can publish t
 
 ## Scope
 
-The self-update flow replaces the running executable, and the VB-CABLE install runs a downloaded setup with elevation, so reports about either are especially useful. So are problems in how the app parses pages from the sound catalog.
+The self-update flow replaces the installed app, and the VB-CABLE install runs a downloaded setup with elevation, so reports about either are especially useful. So are problems in how the app parses pages from the sound catalog.
 
 VB-CABLE and the sites the app talks to belong to third parties. Please report problems in them to their owners.

@@ -1,0 +1,58 @@
+.sound-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sound-gap);
+  padding: var(--sound-row-padding);
+  border-bottom: var(--border-width) solid var(--color-screen-line);
+  list-style: none;
+}
+
+.sound-row:hover {
+  background: var(--color-row-hover);
+}
+
+.sound-row[data-drag-source] {
+  opacity: var(--drag-source-opacity);
+}
+
+.sound-dot {
+  flex: none;
+  width: var(--sound-dot-size);
+  height: var(--sound-dot-size);
+  margin-right: var(--sound-gap);
+  border-radius: 50%;
+}
+
+.sound-name {
+  flex: 1;
+  min-width: 0;
+  margin: 0 var(--sound-gap);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-row .key {
+  flex: none;
+  padding: var(--sound-key-padding);
+}
+
+.sound-icon {
+  width: var(--key-icon-width);
+}
+
+.sound-mic {
+  width: var(--key-mic-width);
+}
+
+.sound-pad {
+  width: var(--key-pad-width);
+}
+
+.sound-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}

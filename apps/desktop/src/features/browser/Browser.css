@@ -1,0 +1,82 @@
+.browser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: var(--panel-padding);
+}
+
+.browser-search {
+  display: flex;
+  gap: var(--panel-tabs-gap);
+  margin-bottom: var(--space-4);
+}
+
+.browser-status {
+  display: flex;
+  align-items: center;
+  gap: var(--panel-tabs-gap);
+  margin-bottom: var(--space-3);
+}
+
+.browser-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-lcd-dim);
+  font-size: var(--font-status);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-more {
+  margin-top: var(--space-4);
+}
+
+/* A sound on its way */
+.sound-skeleton {
+  display: flex;
+  align-items: center;
+  gap: var(--sound-gap);
+  height: var(--sound-row-height);
+  padding: var(--sound-row-padding);
+  border-bottom: var(--border-width) solid var(--color-screen-line);
+  list-style: none;
+}
+
+.skeleton {
+  flex: none;
+  background: var(--gradient-skeleton);
+  background-size: 200% 100%;
+  animation: skeleton-sweep var(--skeleton-time) linear infinite;
+}
+
+.sound-skeleton-name {
+  flex: 1;
+  height: var(--skeleton-text-height);
+  margin: 0 var(--sound-gap);
+  border-radius: var(--radius-led-strip);
+}
+
+.sound-skeleton:nth-child(3n + 2) .sound-skeleton-name {
+  margin-right: var(--skeleton-short-name);
+}
+
+.sound-skeleton:nth-child(3n) .sound-skeleton-name {
+  margin-right: var(--skeleton-shorter-name);
+}
+
+.sound-skeleton-key {
+  height: var(--skeleton-key-height);
+  border-radius: var(--radius-key);
+}
+
+@keyframes skeleton-sweep {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}

@@ -21,8 +21,8 @@ Closes #
 ## Checklist
 
 - [ ] The title follows Conventional Commits, in English
-- [ ] `dotnet test InstantPad.sln` passes
+- [ ] `cargo test --workspace` and `pnpm check && pnpm lint && pnpm test` pass
 - [ ] New behavior has tests
-- [ ] Domain and Application stay free of WPF, NAudio and network types
-- [ ] New text is in both `Strings.resx` and `Strings.pt.resx`, in sentence case
+- [ ] `domain` and `application` stay free of Tauri, cpal, reqwest and Windows types
+- [ ] New text is in both `en.json` and `pt.json`, in sentence case
 - [ ] The README and other docs are up to date

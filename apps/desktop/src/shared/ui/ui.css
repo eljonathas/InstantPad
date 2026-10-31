@@ -1,0 +1,262 @@
+/* The parts of Hardware.xaml that more than one feature uses. */
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-accent);
+  outline-offset: var(--border-width);
+}
+
+/* A tactile cap: a lit top edge, a body below that gives it height, and a real travel when
+   pressed. Anything that sets --cap-face gets its own shades of those. */
+.key,
+.toggle,
+.pad-body {
+  --cap-light: color-mix(in srgb, var(--cap-face) var(--cap-light-mix), white);
+  --cap-edge: color-mix(in srgb, var(--cap-face) var(--cap-edge-mix), black);
+  border: var(--border-width) solid var(--cap-face);
+  border-top-color: var(--cap-light);
+  border-left-color: var(--cap-light);
+  background: var(--cap-face);
+  box-shadow:
+    0 var(--cap-height) 0 var(--cap-edge),
+    var(--cap-cast);
+  transition:
+    transform var(--cap-release-time) ease-out,
+    box-shadow var(--cap-release-time) ease-out,
+    filter var(--cap-release-time) ease-out;
+}
+
+.key,
+.toggle {
+  --cap-face: var(--color-key-face);
+  --cap-height: var(--cap-travel);
+  --cap-cast: var(--shadow-cap-cast);
+  --cap-sunk: var(--shadow-cap-pressed);
+}
+
+.key:hover:not(:disabled),
+.toggle:hover {
+  filter: brightness(var(--cap-hover-brightness));
+}
+
+.key:active:not(:disabled),
+.toggle:active,
+.toggle[aria-pressed="true"],
+.toggle[aria-selected="true"],
+.pad:active .pad-body,
+.pad[data-playing] .pad-body {
+  border-top-color: var(--cap-face);
+  border-left-color: var(--cap-face);
+  box-shadow:
+    0 var(--border-width) 0 var(--cap-edge),
+    var(--cap-sunk);
+  transform: translateY(calc(var(--cap-height) - var(--border-width)));
+}
+
+.key:active:not(:disabled),
+.toggle:active,
+.pad:active .pad-body {
+  transition-duration: var(--cap-press-time);
+}
+
+/* Hardware key (HwButton) */
+.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--key-padding);
+  border-radius: var(--radius-key);
+  color: var(--color-key-text);
+  font-size: var(--font-key);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.key:disabled {
+  opacity: var(--opacity-key-disabled);
+  cursor: default;
+}
+
+.key-bare {
+  padding: 0;
+}
+
+.key-accent {
+  color: var(--color-accent);
+}
+
+.key-amber {
+  color: var(--color-amber);
+}
+
+.key-star {
+  color: var(--color-star);
+}
+
+.key-danger {
+  color: var(--color-danger);
+}
+
+.key-stop {
+  --cap-face: var(--color-stop);
+  color: var(--color-white);
+}
+
+/* A drawn icon in the color of its key */
+.icon {
+  flex: none;
+  display: block;
+  width: var(--key-icon-size);
+  height: var(--key-icon-size);
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+
+.icon-plus {
+  --icon: var(--icon-plus);
+}
+
+.icon-cog {
+  --icon: var(--icon-cog);
+}
+
+.icon-stop {
+  --icon: var(--icon-stop);
+}
+
+/* Key with a LED strip (HwToggle): tabs, panel tabs and the mic switch */
+.toggle {
+  display: grid;
+  grid-template-rows: var(--toggle-led-row) 1fr;
+  padding: 0;
+  border-radius: var(--radius-key);
+  color: var(--color-key-text);
+  font-size: var(--font-key);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.toggle-led {
+  height: var(--led-strip-height);
+  margin: var(--toggle-led-margin);
+  border-radius: var(--radius-led-strip);
+  background: var(--color-led-off);
+}
+
+.toggle[aria-pressed="true"] .toggle-led,
+.toggle[aria-selected="true"] .toggle-led {
+  background: var(--color-accent);
+}
+
+.toggle-label {
+  align-self: center;
+  justify-self: center;
+  max-width: 100%;
+  padding: 0 var(--space-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Text on the green screens */
+.screen-text {
+  color: var(--color-lcd);
+  font-size: var(--font-screen);
+}
+
+.silk {
+  color: var(--color-silk);
+  font-size: var(--font-silk);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+}
+
+/* Text boxes and drop-downs */
+.field {
+  width: 100%;
+  min-height: var(--field-height);
+  padding: var(--field-padding);
+  border: var(--border-width) solid var(--color-screen-line);
+  background: var(--color-field-back);
+  color: var(--color-lcd);
+  caret-color: var(--color-lcd);
+  font-size: var(--font-input);
+}
+
+/* The page is not selectable, but a field must be: WebKit refuses typing into an inherited none. */
+input.field,
+select.field {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+select.field {
+  font-size: var(--font-key);
+}
+
+select.field option {
+  background: var(--color-screen-back);
+  color: var(--color-lcd);
+}
+
+/* Scroll bars (ScrollBar style) */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-scroll-thumb);
+  background: var(--color-lcd-dim);
+}
+
+/* A row or pad being dragged: a small key lifted off the board */
+.drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-ghost);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: var(--ghost-max-width);
+  padding: var(--key-padding);
+  border: var(--border-width) solid var(--gray-1);
+  border-top-color: var(--color-key-text);
+  border-radius: var(--radius-key);
+  background: var(--color-key-face);
+  box-shadow: var(--shadow-ghost);
+  color: var(--color-key-text);
+  font-size: var(--font-key);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  pointer-events: none;
+  rotate: var(--ghost-tilt);
+  animation: ghost-lift var(--drop-time) var(--ease-spring);
+}
+
+.drag-ghost::before {
+  content: "";
+  flex: none;
+  width: var(--ghost-dot-size);
+  height: var(--ghost-dot-size);
+  border-radius: 50%;
+  background: var(--ghost-color);
+}
+
+.drag-ghost span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes ghost-lift {
+  from {
+    opacity: 0;
+    scale: 0.8;
+  }
+}
+
+body[data-dragging] {
+  cursor: grabbing;
+}

@@ -1,7 +1,9 @@
-bin/
-obj/
 dist/
-*.user
-.vs/
 .vscode/
-TestResults/
+target/
+node_modules/
+playwright-report/
+test-results/
+apps/desktop/src-tauri/gen/
+
+.claude/

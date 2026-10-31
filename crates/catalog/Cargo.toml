@@ -11,7 +11,7 @@ workspace = true
 
 [dependencies]
 async-trait.workspace = true
-html-escape = "0.2"
+html-escape = "0.3"
 instantpad-application.workspace = true
 instantpad-domain.workspace = true
 regex = "1"

@@ -81,6 +81,8 @@
   "MicOpen": "Mic aberto",
   "MicStopped": "Microfone parou: {0}",
   "Minimize": "Minimizar",
+  "Fullscreen": "Tela cheia (F11)",
+  "ExitFullscreen": "Sair da tela cheia (F11)",
   "Missing": "ausente",
   "Name": "Nome",
   "NewInterfaceTitle": "Nova interface",

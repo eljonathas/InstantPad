@@ -13,20 +13,31 @@ import { RollingText } from "../shared/ui/RollingText";
 import { ToggleKey } from "../shared/ui/ToggleKey";
 import "./Device.css";
 import { RightPanel } from "./RightPanel";
+import { useFullscreen } from "./useFullscreen";
 
-/** Scales the device to the window like a WPF Viewbox: the whole of it, never cropped or stretched. */
-function useFitToWindow() {
+/**
+ * Scales the device to the window like a WPF Viewbox: the whole of it, never cropped or stretched.
+ * In full screen it then grows to the shape of the screen, so no desktop shows around it.
+ */
+function useFitToWindow(isFullscreen: boolean) {
   const box = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const fit = () => {
-      const { offsetWidth, offsetHeight, style } = box.current!;
-      style.setProperty("--fit", String(Math.min(window.innerWidth / offsetWidth, window.innerHeight / offsetHeight)));
+      const { style } = box.current!;
+      style.removeProperty("--device-width");
+      style.removeProperty("--device-height");
+      const { offsetWidth, offsetHeight } = box.current!;
+      const scale = Math.min(window.innerWidth / offsetWidth, window.innerHeight / offsetHeight);
+      style.setProperty("--fit", String(scale));
+      if (!isFullscreen) return;
+      style.setProperty("--device-width", `${window.innerWidth / scale}px`);
+      style.setProperty("--device-height", `${window.innerHeight / scale}px`);
     };
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, []);
+  }, [isFullscreen]);
 
   return box;
 }
@@ -43,13 +54,14 @@ export function Device() {
   const isChangingVoice = useBackend((state) => state.voice.active !== "natural");
 
   const { t } = useText();
-  const box = useFitToWindow();
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen();
+  const box = useFitToWindow(isFullscreen);
   const actions = useBoardActions();
 
   return (
     <>
-      <div ref={box} className="viewbox">
-        <div className="device" data-screen={screen} data-drag onMouseDown={dragWindow}>
+      <div ref={box} className="viewbox" data-fullscreen={isFullscreen ? "" : undefined}>
+        <div className="device" data-screen={screen} data-drag onMouseDown={isFullscreen ? undefined : dragWindow}>
           <div className="chassis" />
           <i className="screw screw-top-left" />
           <i className="screw screw-bottom-left" />
@@ -62,6 +74,13 @@ export function Device() {
               onClick={() => void getCurrentWindow().minimize()}
             >
               –
+            </button>
+            <button
+              className="key key-bare power-key"
+              title={t(isFullscreen ? "ExitFullscreen" : "Fullscreen")}
+              onClick={toggleFullscreen}
+            >
+              <i className="icon icon-fullscreen" />
             </button>
             <button
               className="key key-bare key-danger power-key"
@@ -117,7 +136,9 @@ export function Device() {
           </div>
         </div>
       </div>
-      <div className="grip" onMouseDown={() => void getCurrentWindow().startResizeDragging("SouthEast")} />
+      {!isFullscreen && (
+        <div className="grip" onMouseDown={() => void getCurrentWindow().startResizeDragging("SouthEast")} />
+      )}
     </>
   );
 }

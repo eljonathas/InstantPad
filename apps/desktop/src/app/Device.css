@@ -7,6 +7,12 @@
   transform: translate(-50%, -50%) scale(var(--fit, 1));
 }
 
+.viewbox[data-fullscreen] {
+  --window-margin: 0px;
+  --radius-chassis: 0px;
+  --shadow-chassis: none;
+}
+
 .device {
   position: absolute;
   inset: var(--window-margin);
@@ -63,6 +69,11 @@
 .power-key {
   width: var(--power-key-width);
   height: var(--power-key-height);
+}
+
+.power-key .icon {
+  width: var(--power-icon-size);
+  height: var(--power-icon-size);
 }
 
 .layout {

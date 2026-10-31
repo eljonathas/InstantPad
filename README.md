@@ -1,7 +1,7 @@
 English | [Português](README.pt-BR.md)
 
 <p align="center">
-  <img src="assets/social-preview.png" alt="InstantPad" width="640">
+  <a href="assets/reel.mp4"><img src="assets/reel.gif" alt="Short video of InstantPad: pads playing, a sound dragged in from MyInstants, and the voice effects" width="720"></a>
 </p>
 
 # InstantPad
@@ -9,6 +9,12 @@ English | [Português](README.pt-BR.md)
 InstantPad is a free, open source soundboard for Windows, macOS and Linux. It looks like a hardware sampler and has the MyInstants library built in. It mixes your microphone with the sounds you trigger and sends the result to a virtual audio cable, which your game or Discord uses as its microphone. Your friends hear your voice and the sound together.
 
 ![InstantPad showing MyInstants results next to the pad grid](apps/desktop/tests/e2e/screenshots/myinstants.png)
+
+<p align="center">
+  <img src="apps/desktop/tests/e2e/screenshots/voice.png" alt="InstantVoice with the Deep voice effect on" width="32%">
+  <img src="apps/desktop/tests/e2e/screenshots/favorites.png" alt="The favorites panel" width="32%">
+  <img src="apps/desktop/tests/e2e/screenshots/settings.png" alt="The settings panel" width="32%">
+</p>
 
 ## Install
 
@@ -76,6 +82,7 @@ In Discord, set **Input Profile** to **Studio**. Voice Isolation removes everyth
 | Change a pad's shortcut, volume, color or name | Right-click the pad |
 | Rearrange pads | Hold Ctrl and drag |
 | Stop everything | **Stop** |
+| Fill the screen | The full screen key next to minimize, or `F11` |
 | Turn a knob | Drag up or down, or use the mouse wheel. Double-click resets it. The exact value shows under the knob while you hold it |
 
 The knobs set your voice in the game (**Mic**), the sounds in the game (**Game**) and the sounds you hear (**Headphones**).

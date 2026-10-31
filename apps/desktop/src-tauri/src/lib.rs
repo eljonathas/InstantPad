@@ -4,13 +4,10 @@ mod commands;
 mod composition;
 mod events;
 
-use specta_typescript::Typescript;
 use tauri::{Manager, Wry};
 use tauri_specta::{Builder, collect_commands, collect_events};
 
 use crate::events::{BackendEvent, MeterEvent};
-
-pub const BINDINGS_FILE: &str = "bindings.ts";
 
 fn specta_builder() -> Builder<Wry> {
     Builder::<Wry>::new()
@@ -62,13 +59,6 @@ fn specta_builder() -> Builder<Wry> {
         .disable_serde_phases()
 }
 
-/// Writes the TypeScript bindings of every command and event to `path`.
-pub fn export_bindings(path: &std::path::Path) {
-    specta_builder()
-        .export(Typescript::default(), path)
-        .expect("export the TypeScript bindings");
-}
-
 pub fn run() {
     let builder = specta_builder();
 
@@ -82,4 +72,46 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("run the app");
+}
+
+// A unit test, because only the library's test binary gets the Windows manifest that Tauri
+// needs to load.
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+    use std::{env, fs};
+
+    use specta_typescript::Typescript;
+
+    use super::specta_builder;
+
+    fn export(path: &Path) {
+        specta_builder()
+            .export(Typescript::default(), path)
+            .expect("export the TypeScript bindings");
+    }
+
+    /// Fails when the committed bindings drifted from the commands and events.
+    /// Run with `UPDATE_BINDINGS=1` to rewrite them.
+    #[test]
+    fn the_typescript_bindings_are_current() {
+        let committed =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../src/shared/ipc/bindings.ts");
+
+        if env::var_os("UPDATE_BINDINGS").is_some() {
+            export(&committed);
+            return;
+        }
+
+        let generated = env::temp_dir().join(format!("instantpad-{}.ts", std::process::id()));
+        export(&generated);
+        let current = fs::read_to_string(&generated).expect("read the generated bindings");
+        fs::remove_file(&generated).expect("remove the generated bindings");
+
+        assert_eq!(
+            fs::read_to_string(&committed).expect("read the committed bindings"),
+            current,
+            "run `pnpm gen:ipc` in apps/desktop",
+        );
+    }
 }

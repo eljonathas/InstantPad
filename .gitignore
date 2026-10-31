@@ -10,3 +10,5 @@ node_modules/
 playwright-report/
 test-results/
 apps/desktop/src-tauri/gen/
+
+.claude/

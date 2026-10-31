@@ -19,6 +19,11 @@ impl PulseCable {
     /// Without `pactl`, or when it refuses, the cable simply finds nothing.
     #[cfg(target_os = "linux")]
     pub fn load() -> Self {
+        // A crash leaves the sink behind, and loading again would show a second device.
+        if pactl(&["list", "short", "sinks"]).is_some_and(|sinks| sinks.contains(SINK)) {
+            return Self::default();
+        }
+
         let modules = [
             pactl(&[
                 "load-module",

@@ -1,5 +1,6 @@
 {
   "AddToPad": "+ Pad",
+  "AllFiles": "All files",
   "AudioDeviceNotResponding": "An audio device is not responding. If you just installed VB-CABLE, restart your PC.",
   "AudioFileType": "Audio",
   "Cancel": "Cancel",
@@ -76,7 +77,6 @@
   "Name": "Name",
   "NewInterfaceTitle": "New interface",
   "NextInterface": "Next interface",
-  "NoCatalogConnection": "No connection to MyInstants",
   "NoDriverHint": "No virtual driver: open Settings and install it",
   "NothingFound": "Nothing found",
   "NumericAltDigits": "Alt + 1 to 0",

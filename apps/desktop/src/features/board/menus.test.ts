@@ -4,6 +4,8 @@ import type { InterfaceTab, PadView, SoundView } from "../../shared/ipc";
 import type { MenuEntry } from "../../shared/ui/ContextMenu";
 import { interfaceMenu, padMenu, type PadMenuActions } from "./menus";
 
+const colors = Array.from({ length: 8 }, (_, index) => `#00000${index}`);
+
 const t = (id: TextId, args?: string[]) => translate("en", id, args);
 
 const sound: SoundView = {
@@ -41,7 +43,7 @@ const item = (entries: MenuEntry[], label: string) =>
 describe("pad menu", () => {
   it("only offers to load a file when the pad is empty", () => {
     const run = actions();
-    const menu = padMenu(empty, [], t, run);
+    const menu = padMenu(empty, [], colors, t, run);
 
     expect(labels(menu)).toEqual(["Load audio file..."]);
     item(menu, "Load audio file...").run!();
@@ -49,7 +51,7 @@ describe("pad menu", () => {
   });
 
   it("offers everything for a pad with a sound", () => {
-    const menu = padMenu(loaded, [memes], t, actions());
+    const menu = padMenu(loaded, [memes], colors, t, actions());
 
     expect(labels(menu)).toEqual([
       "Add to favorites",
@@ -67,7 +69,7 @@ describe("pad menu", () => {
 
   it("changes the favorite wording, offers to remove a shortcut, and hides Send to without other interfaces", () => {
     const favorite = { ...loaded, isFavorite: true, sound: { ...sound, hasHotkey: true } };
-    const menu = padMenu(favorite, [], t, actions());
+    const menu = padMenu(favorite, [], colors, t, actions());
 
     expect(labels(menu)).toContain("Remove from favorites");
     expect(labels(menu)).toContain("Remove shortcut");
@@ -76,7 +78,7 @@ describe("pad menu", () => {
 
   it("checks the current volume among 25, 50, 75, 100 and 150%", () => {
     const run = actions();
-    const volume = item(padMenu({ ...loaded, sound: { ...sound, volume: 1.5 } }, [], t, run), "Volume");
+    const volume = item(padMenu({ ...loaded, sound: { ...sound, volume: 1.5 } }, [], colors, t, run), "Volume");
     const choices = volume.children as Item[];
 
     expect(choices.map((choice) => choice.label)).toEqual(["25%", "50%", "75%", "100%", "150%"]);
@@ -87,7 +89,7 @@ describe("pad menu", () => {
 
   it("lists the other interfaces to send the sound to, and eight colors", () => {
     const run = actions();
-    const menu = padMenu(loaded, [memes], t, run);
+    const menu = padMenu(loaded, [memes], colors, t, run);
 
     (item(menu, "Send to interface").children![0] as Item).run!();
     expect(run.sendTo).toHaveBeenCalledWith("memes");

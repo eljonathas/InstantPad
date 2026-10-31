@@ -1,5 +1,4 @@
 import type { InterfaceTab, PadView } from "../../shared/ipc";
-import { PAD_COLORS } from "../../shared/palette";
 import type { Translate } from "../../shared/store/text";
 import type { MenuEntry } from "../../shared/ui/ContextMenu";
 
@@ -20,7 +19,13 @@ export interface PadMenuActions {
 }
 
 /** The right-click menu of a pad (BoardMenus.ForPad). `others` are the interfaces but the active one. */
-export function padMenu(pad: PadView, others: InterfaceTab[], t: Translate, run: PadMenuActions): MenuEntry[] {
+export function padMenu(
+  pad: PadView,
+  others: InterfaceTab[],
+  colors: string[],
+  t: Translate,
+  run: PadMenuActions,
+): MenuEntry[] {
   const { sound } = pad;
   if (!sound) return [{ label: t("MenuLoadFile"), run: run.loadFile }];
 
@@ -41,7 +46,7 @@ export function padMenu(pad: PadView, others: InterfaceTab[], t: Translate, run:
     },
     {
       label: t("Color"),
-      children: PAD_COLORS.map((color) => ({ label: color, swatch: color, run: () => run.setColor(color) })),
+      children: colors.map((color) => ({ label: color, swatch: color, run: () => run.setColor(color) })),
     },
     ...(others.length > 0
       ? [

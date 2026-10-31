@@ -1,3 +1,4 @@
+import { audioDir, join } from "@tauri-apps/api/path";
 import { save } from "@tauri-apps/plugin-dialog";
 import { commands, type SoundSource } from "../ipc";
 import { useBackend } from "../store/backend";
@@ -14,9 +15,11 @@ function useIsFavorite(path: string) {
 }
 
 /** Saves a copy of the sound where the user chooses. The backend reports how it went. */
-export async function saveToComputer(source: SoundSource) {
-  const defaultPath = await commands.suggestedFileName(source);
-  const destination = await whileHeld(() => save({ defaultPath }));
+export async function saveToComputer(source: SoundSource, fileType: string) {
+  const name = await commands.suggestedFileName(source);
+  const defaultPath = await join(await audioDir(), name);
+  const filters = [{ name: fileType, extensions: [name.split(".").pop() ?? ""] }];
+  const destination = await whileHeld(() => save({ defaultPath, filters }));
   if (destination) await commands.saveToComputer(source, destination);
 }
 
@@ -53,7 +56,7 @@ export function SoundRow({ source }: { source: SoundSource }) {
       <button className="key key-star sound-icon" title={t("Favorite")} onClick={() => commands.toggleFavorite(source)}>
         {isFavorite ? "★" : "☆"}
       </button>
-      <button className="key sound-icon" title={t("SaveToComputer")} onClick={() => void saveToComputer(source)}>
+      <button className="key sound-icon" title={t("SaveToComputer")} onClick={() => void saveToComputer(source, t("AudioFileType"))}>
         ↓
       </button>
     </li>

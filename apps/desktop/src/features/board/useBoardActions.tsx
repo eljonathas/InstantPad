@@ -1,7 +1,6 @@
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import type { MouseEvent } from "react";
 import { commands, type InterfaceLayout, type InterfaceTab, type PadView } from "../../shared/ipc";
-import { ACCENT_COLORS } from "../../shared/palette";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { useAskHotkey } from "../../shared/ui/HotkeyDialog";
@@ -13,7 +12,6 @@ import { interfaceMenu, padMenu } from "./menus";
 import { TextDialog } from "./TextDialog";
 
 const AUDIO_EXTENSIONS = ["mp3", "wav", "m4a", "aac", "flac"];
-const NEW_INTERFACE = { rows: 4, columns: 6 };
 
 /** What the menus and keys of the board do: ask the user what is needed, then call the backend. */
 export function useBoardActions() {
@@ -22,6 +20,8 @@ export function useBoardActions() {
   const { t } = useText();
   const interfaces = useBackend((state) => state.board.interfaces);
   const activeId = useBackend((state) => state.board.activeId);
+  const nextAccent = useBackend((state) => state.board.nextAccent);
+  const limits = useBackend((state) => state.limits);
 
   const askInterface = (title: string, initial: InterfaceLayout, soundCount: number) =>
     overlay.dialog<InterfaceLayout>((done) => (
@@ -31,8 +31,9 @@ export function useBoardActions() {
   async function addInterface() {
     const initial = {
       name: t("DefaultNewInterfaceName", [String(interfaces.length + 1)]),
-      ...NEW_INTERFACE,
-      accent: ACCENT_COLORS[interfaces.length % ACCENT_COLORS.length],
+      rows: limits.defaultRows,
+      columns: limits.defaultColumns,
+      accent: nextAccent,
     };
     const layout = await askInterface(t("NewInterfaceTitle"), initial, 0);
     if (layout) await commands.addInterface(layout);
@@ -53,7 +54,11 @@ export function useBoardActions() {
   }
 
   async function loadFile(slot: number) {
-    const path = await whileHeld(() => open({ filters: [{ name: t("AudioFileType"), extensions: AUDIO_EXTENSIONS }] }));
+    const filters = [
+      { name: t("AudioFileType"), extensions: AUDIO_EXTENSIONS },
+      { name: t("AllFiles"), extensions: ["*"] },
+    ];
+    const path = await whileHeld(() => open({ filters }));
     if (path) await commands.importFile(path, slot);
   }
 
@@ -90,7 +95,7 @@ export function useBoardActions() {
       const run = {
         loadFile: () => void loadFile(slot),
         toggleFavorite: () => void commands.toggleFavorite(source!),
-        download: () => void saveToComputer(source!),
+        download: () => void saveToComputer(source!, t("AudioFileType")),
         setShortcut: () => void setShortcut(slot),
         removeShortcut: () => void commands.clearPadHotkey(slot),
         rename: () => void rename(slot, sound!.name),
@@ -100,7 +105,7 @@ export function useBoardActions() {
         remove: () => void commands.removePad(slot),
       };
       const others = interfaces.filter((tab) => tab.id !== activeId);
-      overlay.menu(event.clientX, event.clientY, padMenu(pad, others, t, run));
+      overlay.menu(event.clientX, event.clientY, padMenu(pad, others, limits.padColors, t, run));
     },
   };
 }

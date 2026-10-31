@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import { ContextMenu, type MenuEntry } from "./ContextMenu";
+import { holdHotkeys } from "./hotkeyPause";
 
 type Layer = { kind: "menu"; x: number; y: number; entries: MenuEntry[] } | { kind: "dialog"; content: ReactNode };
 
@@ -18,10 +19,20 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
   const [layer, setLayer] = useState<Layer | null>(null);
   const settle = useRef<(result: unknown) => void>(null);
 
-  const close = useCallback(() => setLayer(null), []);
+  const releaseKeys = useRef<(() => void) | null>(null);
+
+  const close = useCallback(() => {
+    releaseKeys.current?.();
+    releaseKeys.current = null;
+    setLayer(null);
+  }, []);
 
   const overlay: Overlay = {
-    menu: (x, y, entries) => setLayer({ kind: "menu", x, y, entries }),
+    menu: (x, y, entries) => {
+      // A key that changes the interface would leave the menu acting on the wrong pads.
+      releaseKeys.current ??= holdHotkeys();
+      setLayer({ kind: "menu", x, y, entries });
+    },
     dialog: (render) =>
       new Promise((resolve) => {
         const finish = (result: unknown) => {

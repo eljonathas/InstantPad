@@ -7,7 +7,7 @@ import { App } from "./App";
 
 async function main() {
   // Outside Tauri there is no backend, so the browser runs against the mock.
-  if (!("__TAURI_INTERNALS__" in window)) {
+  if (import.meta.env.DEV && !("__TAURI_INTERNALS__" in window)) {
     const { installMock } = await import("../shared/ipc/mock");
     installMock();
   }

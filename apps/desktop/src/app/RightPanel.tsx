@@ -14,13 +14,13 @@ type Tab = "browse" | "favorites" | "settings";
 export function RightPanel() {
   const { t } = useText();
   const [tab, setTab] = useState<Tab>("browse");
-  const targetSlot = useBackend((state) => state.board.targetSlot);
-  const [seenTarget, setSeenTarget] = useState(targetSlot);
+  const sourceRequests = useBackend((state) => state.sourceRequests);
+  const [seenRequests, setSeenRequests] = useState(sourceRequests);
 
-  // Picking an empty pad means a sound is wanted, so the settings give way to the sources.
-  if (seenTarget !== targetSlot) {
-    setSeenTarget(targetSlot);
-    if (targetSlot !== null && tab === "settings") setTab("browse");
+  // Pressing an empty pad means a sound is wanted, so the settings give way to the sources.
+  if (seenRequests !== sourceRequests) {
+    setSeenRequests(sourceRequests);
+    if (tab === "settings") setTab("browse");
   }
 
   const tabs: { id: Tab; label: string }[] = [

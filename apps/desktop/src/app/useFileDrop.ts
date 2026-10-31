@@ -4,9 +4,11 @@ import { useEffect } from "react";
 import { commands } from "../shared/ipc";
 import { padSlotAt } from "../shared/ui/drag";
 
+// Only WebView2 reports physical pixels. The other webviews already report what the page uses.
+const pixelsPerPoint = () => (navigator.userAgent.includes("Windows") ? window.devicePixelRatio : 1);
+
 const padAt = (position: { x: number; y: number }) =>
-  // The webview reports physical pixels; the page works in CSS pixels.
-  padSlotAt(position.x / window.devicePixelRatio, position.y / window.devicePixelRatio);
+  padSlotAt(position.x / pixelsPerPoint(), position.y / pixelsPerPoint());
 
 function highlight(slot: number | null) {
   document.querySelector("[data-drop]")?.removeAttribute("data-drop");

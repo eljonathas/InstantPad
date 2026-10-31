@@ -1,13 +1,9 @@
 import { useState } from "react";
 import type { InterfaceLayout } from "../../shared/ipc";
-import { ACCENT_COLORS } from "../../shared/palette";
+import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { Dialog, DialogLabel } from "../../shared/ui/Dialog";
 import "./InterfaceDialog.css";
-
-// The grid limits of crates/domain/src/board.rs. The backend refuses anything else.
-const MAX_ROWS = 8;
-const MAX_COLUMNS = 10;
 
 const upTo = (limit: number) => Array.from({ length: limit }, (_, index) => index + 1);
 
@@ -21,6 +17,7 @@ interface InterfaceDialogProps {
 /** Edits name, grid and color. A grid too small for the sounds cannot be saved. */
 export function InterfaceDialog({ title, initial, soundCount, onDone }: InterfaceDialogProps) {
   const { t } = useText();
+  const limits = useBackend((state) => state.limits);
   const [layout, setLayout] = useState(initial);
   const change = (patch: Partial<InterfaceLayout>) => setLayout({ ...layout, ...patch });
 
@@ -48,7 +45,7 @@ export function InterfaceDialog({ title, initial, soundCount, onDone }: Interfac
             value={layout.rows}
             onChange={(event) => change({ rows: Number(event.target.value) })}
           >
-            {upTo(MAX_ROWS).map((rows) => (
+            {upTo(limits.maxRows).map((rows) => (
               <option key={rows}>{rows}</option>
             ))}
           </select>
@@ -60,7 +57,7 @@ export function InterfaceDialog({ title, initial, soundCount, onDone }: Interfac
             value={layout.columns}
             onChange={(event) => change({ columns: Number(event.target.value) })}
           >
-            {upTo(MAX_COLUMNS).map((columns) => (
+            {upTo(limits.maxColumns).map((columns) => (
               <option key={columns}>{columns}</option>
             ))}
           </select>
@@ -73,7 +70,7 @@ export function InterfaceDialog({ title, initial, soundCount, onDone }: Interfac
 
       <DialogLabel>{t("Color")}</DialogLabel>
       <div className="interface-swatches">
-        {ACCENT_COLORS.map((color) => (
+        {limits.accentColors.map((color) => (
           <button
             key={color}
             type="button"

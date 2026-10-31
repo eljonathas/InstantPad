@@ -2,7 +2,6 @@
 // state to make every screen work; the real rules live in the Rust crates.
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-import { ACCENT_COLORS, PAD_COLORS } from "../palette";
 import type {
   AppEvent,
   BoardView,
@@ -16,6 +15,26 @@ import type {
   SoundSource,
   StartView,
 } from "./bindings";
+
+const PAD_COLORS = ["#ff3b5c", "#ff8a1f", "#ffd21f", "#35f27a", "#1fd6ff", "#4f7dff", "#b45cff", "#ff5cc8"];
+const ACCENT_COLORS = ["#ffb03a", "#35f27a", "#1fd6ff", "#4f7dff", "#b45cff", "#ff5cc8", "#ff3b5c", "#e8e8ea"];
+
+const LIMITS = {
+  padColors: PAD_COLORS,
+  accentColors: ACCENT_COLORS,
+  maxRows: 8,
+  maxColumns: 10,
+  defaultRows: 4,
+  defaultColumns: 6,
+  defaultMixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
+};
+
+const NUMERIC_HINT_KEYS: Record<NumericScheme, string[]> = {
+  numpad: ["Num1", "Num0", "Num+", "Num-", "Num,"],
+  ctrlNumpad: ["Ctrl+Num1", "Ctrl+Num0", "Ctrl+Num+", "Ctrl+Num-", "Ctrl+Num,"],
+  altDigits: ["Alt+1", "Alt+0", "Alt+=", "Alt+-", "Alt+."],
+  off: [],
+};
 
 const METER_INTERVAL_MS = 33;
 const PLAY_MS = 1800;
@@ -149,6 +168,7 @@ function seed() {
       gameMicrophoneName: "CABLE Output",
       language: null,
       numericScheme: "numpad",
+      numericHintKeys: NUMERIC_HINT_KEYS.numpad,
       stopHotkey: null,
     } as SetupView,
     mixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
@@ -183,6 +203,7 @@ export function installMock() {
       activeId: backend.activeId,
       targetSlot: backend.targetSlot,
       stopShortcut: stop ? hotkeyLabel(stop) : null,
+      nextAccent: ACCENT_COLORS[backend.interfaces.length % ACCENT_COLORS.length],
       pads: Array.from({ length: rows * columns }, (_, slot) => {
         const sound = soundAt(slot);
         const shortcut = sound?.hotkey ?? numeric[slot];
@@ -289,6 +310,7 @@ export function installMock() {
         mixer: backend.mixer,
         setup: backend.setup,
         favorites: backend.favorites,
+        limits: LIMITS,
       } satisfies StartView;
     },
     press_pad: ({ slot }) => {
@@ -428,6 +450,7 @@ export function installMock() {
     choose_monitor_output: ({ id }) => ((backend.setup.monitorOutputId = id as string | null), publishSetup()),
     set_numeric_scheme: ({ scheme }) => {
       backend.setup.numericScheme = scheme as NumericScheme;
+      backend.setup.numericHintKeys = NUMERIC_HINT_KEYS[scheme as NumericScheme];
       publishSetup();
       publish();
     },
@@ -454,6 +477,8 @@ export function installMock() {
     "plugin:dialog|message": () => "Yes",
     "plugin:dialog|open": () => "/mock/Music/Applause.mp3",
     "plugin:dialog|save": () => "/mock/Downloads/sound.mp3",
+    "plugin:path|resolve_directory": () => "/mock/Music",
+    "plugin:path|join": ({ paths }) => (paths as string[]).join("/"),
   };
 
   mockWindows("main");

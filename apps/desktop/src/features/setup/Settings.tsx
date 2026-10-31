@@ -136,7 +136,7 @@ export function Settings({ children }: { children: ReactNode }) {
         </select>
       </label>
       <p className="screen-text setting-note setting-spaced">
-        {describeNumericKeys(setup.numericScheme, stopShortcut, t)}
+        {describeNumericKeys(setup.numericScheme, setup.numericHintKeys, t)}
       </p>
 
       <h3 className="setting-title screen-text">{t("StopShortcut")}</h3>

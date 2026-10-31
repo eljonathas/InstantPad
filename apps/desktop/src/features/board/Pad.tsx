@@ -1,5 +1,6 @@
 import { memo, type CSSProperties, type MouseEvent } from "react";
 import { commands, type PadView } from "../../shared/ipc";
+import { requestSources } from "../../shared/store/backend";
 import { useIsPlaying } from "../../shared/store/meter";
 import { beginDrag } from "../../shared/ui/drag";
 import "./Pad.css";
@@ -45,6 +46,7 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
           });
           return;
         }
+        if (!sound) requestSources();
         void commands.pressPad(pad.slot);
       }}
     >

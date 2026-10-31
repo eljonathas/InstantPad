@@ -9,13 +9,12 @@ import "./MixerStrip.css";
 type Volume = "micVolume" | "gameVolume" | "monitorVolume";
 
 const knobs = [
-  { field: "micVolume", text: "Mic", fallback: 1, send: commands.setMicVolume },
-  { field: "gameVolume", text: "Game", fallback: 0.8, send: commands.setGameVolume },
-  { field: "monitorVolume", text: "Headphones", fallback: 0.6, send: commands.setMonitorVolume },
+  { field: "micVolume", text: "Mic", send: commands.setMicVolume },
+  { field: "gameVolume", text: "Game", send: commands.setGameVolume },
+  { field: "monitorVolume", text: "Headphones", send: commands.setMonitorVolume },
 ] as const satisfies readonly {
   field: Volume;
   text: "Mic" | "Game" | "Headphones";
-  fallback: number;
   send: (volume: number) => Promise<void>;
 }[];
 
@@ -23,6 +22,7 @@ const knobs = [
 export function MixerStrip() {
   const { t } = useText();
   const mixer = useBackend((state) => state.mixer);
+  const defaults = useBackend((state) => state.limits.defaultMixer);
 
   function change(field: Volume, send: (volume: number) => Promise<void>, volume: number) {
     setMixer({ [field]: volume } satisfies Partial<MixerView>);
@@ -32,12 +32,12 @@ export function MixerStrip() {
   return (
     <div className="mixer-strip">
       <div className="knobs">
-        {knobs.map(({ field, text, fallback, send }) => (
+        {knobs.map(({ field, text, send }) => (
           <div key={field}>
             <Knob
               label={t(text)}
               value={mixer[field]}
-              defaultValue={fallback}
+              defaultValue={defaults[field]}
               onChange={(volume) => change(field, send, volume)}
             />
             <div className="silk">{t(text)}</div>

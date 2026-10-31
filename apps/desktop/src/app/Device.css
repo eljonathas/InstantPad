@@ -91,6 +91,28 @@
   color: var(--color-accent);
 }
 
+/* Two keys that release each other, like the mode keys of a real sampler. */
+.mode-keys {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--panel-tabs-gap);
+  height: var(--panel-tabs-height);
+  margin-bottom: var(--space-5);
+}
+
+.side {
+  min-width: 0;
+  min-height: 0;
+}
+
+.side-page {
+  height: 100%;
+}
+
+.side-page[hidden] {
+  display: none;
+}
+
 .logo-tagline {
   font-size: var(--font-tagline);
 }

@@ -1,11 +1,16 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useLayoutEffect, useRef, type MouseEvent } from "react";
+import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { InterfaceBar } from "../features/board/InterfaceBar";
 import { PadGrid } from "../features/board/PadGrid";
 import { useBoardActions } from "../features/board/useBoardActions";
 import { Lcd } from "../features/display/Lcd";
 import { MixerStrip } from "../features/mixer/MixerStrip";
+import { EFFECTS, type Effect } from "../features/voice/effects";
+import { VoiceBoard } from "../features/voice/VoiceBoard";
+import { VoiceControls } from "../features/voice/VoiceControls";
 import { useText } from "../shared/store/text";
+import { RollingText } from "../shared/ui/RollingText";
+import { ToggleKey } from "../shared/ui/ToggleKey";
 import "./Device.css";
 import { RightPanel } from "./RightPanel";
 
@@ -33,6 +38,16 @@ function dragWindow(event: MouseEvent) {
 }
 
 export function Device() {
+  const [screen, setScreen] = useState<"pad" | "voice">("pad");
+  const [selected, setSelected] = useState(EFFECTS[0]);
+  const [active, setActive] = useState<string[]>([]);
+  const isVoice = screen === "voice";
+
+  function press(effect: Effect) {
+    setSelected(effect);
+    setActive(active.includes(effect.id) ? active.filter((id) => id !== effect.id) : [...active, effect.id]);
+  }
+
   const { t } = useText();
   const box = useFitToWindow();
   const actions = useBoardActions();
@@ -67,19 +82,38 @@ export function Device() {
             <div className="strip">
               <div className="logo">
                 <div className="logo-word">Instant</div>
-                <div className="logo-word logo-pad">Pad</div>
-                <div className="silk logo-tagline">Sound sampler</div>
+                <RollingText className="logo-word logo-pad" text={isVoice ? "Voice" : "Pad"} />
+                <RollingText className="silk logo-tagline" text={isVoice ? "Voice changer" : "Sound sampler"} />
+              </div>
+              <div className="mode-keys" role="tablist">
+                <ToggleKey kind="tab" label="Pad" on={!isVoice} onClick={() => setScreen("pad")} />
+                <ToggleKey kind="tab" label="Voice" on={isVoice} onClick={() => setScreen("voice")} />
               </div>
               <MixerStrip />
             </div>
 
             <div className="centre">
               <Lcd />
-              <InterfaceBar actions={actions} />
-              <PadGrid onMenu={actions.openPadMenu} />
+              {isVoice ? (
+                <VoiceBoard active={active} selected={selected.id} onPress={press} />
+              ) : (
+                <>
+                  <InterfaceBar actions={actions} />
+                  <PadGrid onMenu={actions.openPadMenu} />
+                </>
+              )}
             </div>
 
-            <RightPanel />
+            <div className="side">
+              <div className="side-page" hidden={isVoice}>
+                <RightPanel />
+              </div>
+              {isVoice && (
+                <div className="panel-screen side-page">
+                  <VoiceControls key={selected.id} effect={selected} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

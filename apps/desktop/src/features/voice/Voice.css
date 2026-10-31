@@ -1,0 +1,46 @@
+.voice-board {
+  grid-row: 2 / 4;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  min-height: 0;
+  margin-top: var(--space-5);
+}
+
+.voice-empty {
+  cursor: default;
+}
+
+.voice-controls {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--panel-padding);
+}
+
+.voice-title {
+  margin: 0 0 var(--space-7);
+  font-size: var(--font-lcd-main);
+  font-weight: var(--weight-bold);
+  text-align: center;
+}
+
+.voice-knobs {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: center;
+  gap: var(--space-7) var(--voice-knob-gap);
+}
+
+.voice-hear {
+  flex: none;
+  height: var(--mic-toggle-height);
+}
+
+.voice-note {
+  margin: var(--space-4) 0 0;
+  color: var(--color-lcd-dim);
+  font-size: var(--font-status);
+}

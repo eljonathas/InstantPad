@@ -48,10 +48,17 @@
   display: none;
 }
 
+.now-playing[hidden][data-reserved] {
+  display: flex;
+  visibility: hidden;
+}
+
 .now-playing-bars {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--now-playing-bar-gap);
+  width: var(--now-playing-bars-width);
   height: var(--now-playing-height);
 }
 
@@ -69,7 +76,9 @@
 }
 
 .now-playing-time {
+  min-width: var(--now-playing-time-width);
   color: var(--color-lcd);
+  text-align: right;
   font-size: var(--font-screen);
   font-variant-numeric: tabular-nums;
   font-weight: var(--weight-bold);

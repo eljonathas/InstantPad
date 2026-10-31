@@ -107,7 +107,7 @@ test("Ctrl+drag swaps two pads, a plain press never drags", async ({ page }) => 
   await expect(pad(page, "05 Vine boom")).toBeVisible();
   await expect(emptyPad(page, "01")).toBeVisible();
   // Ctrl+press does not fire the sound.
-  await expect(lcd(page)).toHaveText("Ready");
+  await expect(lcd(page)).toHaveText("No audio playing");
 });
 
 test("a row dragged onto a pad puts its sound there", async ({ page }) => {
@@ -178,11 +178,30 @@ test("a name too long for the display rolls past, and a short one stays still", 
   await expect(page.locator(".scrolling-track")).toHaveAttribute("data-rolls", "");
 });
 
-test("the display goes back to Ready when the sound ends", async ({ page }) => {
+test("the display says no audio is playing when the sound ends", async ({ page }) => {
   await pad(page, "01 Vine boom").click();
   await expect(lcd(page)).toHaveText("01 Vine boom");
 
-  await expect(lcd(page)).toHaveText("Ready");
+  await expect(lcd(page)).toHaveText("No audio playing");
+});
+
+test("the name of a sound keeps one width from its first frame", async ({ page }) => {
+  await page.evaluate(() => {
+    const seen = new Set<string>();
+    const main = document.querySelector(".lcd-main")!;
+    const sample = () => {
+      if (main.textContent?.includes("Vine boom")) seen.add(String(main.clientWidth));
+      requestAnimationFrame(sample);
+    };
+    sample();
+    Object.assign(window, { seenWidths: seen });
+  });
+
+  await pad(page, "01 Vine boom").click();
+  await expect(page.locator(".now-playing")).toBeVisible();
+
+  const widths = await page.evaluate(() => [...(window as unknown as { seenWidths: Set<string> }).seenWidths]);
+  expect(widths).toHaveLength(1);
 });
 
 test("a small movement on a row drags nothing", async ({ page }) => {

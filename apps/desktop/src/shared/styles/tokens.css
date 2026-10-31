@@ -128,6 +128,8 @@
   --now-playing-gap: 12px;
   --scrolling-gap: 48px;
   --now-playing-height: 24px;
+  --now-playing-bars-width: 132px;
+  --now-playing-time-width: 84px;
   --now-playing-bar-width: 2px;
   --now-playing-bar-gap: 1px;
   --now-playing-bar-min: 2px;

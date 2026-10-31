@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useBackend } from "../../shared/store/backend";
 import { meter } from "../../shared/store/meter";
 
 const clock = (seconds: number) => {
@@ -11,6 +12,7 @@ export function NowPlaying() {
   const root = useRef<HTMLDivElement>(null);
   const bars = useRef<HTMLDivElement>(null);
   const time = useRef<HTMLSpanElement>(null);
+  const isNamingSound = useBackend((state) => state.display.isSound);
 
   useEffect(() => {
     const paint = () => {
@@ -37,7 +39,9 @@ export function NowPlaying() {
   }, []);
 
   return (
-    <div ref={root} className="now-playing" hidden>
+    // The name of a sound arrives before the first frame of its bars. The room is kept from that
+    // moment, or the name would take the whole line and then jump when it gets cut.
+    <div ref={root} className="now-playing" data-reserved={isNamingSound ? "" : undefined} hidden>
       <div ref={bars} className="now-playing-bars" aria-hidden />
       <span ref={time} className="now-playing-time" />
     </div>

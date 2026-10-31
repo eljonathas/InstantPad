@@ -15,7 +15,8 @@ export function ScrollingText({ text, className }: { text: string; className: st
     observer.observe(box.current!);
     observer.observe(line.current!);
     return () => observer.disconnect();
-  }, []);
+    // The line is a new element for each text.
+  }, [text]);
 
   const rolls = size.text > size.room;
   const style = {

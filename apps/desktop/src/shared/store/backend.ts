@@ -13,10 +13,10 @@ import type {
   VoiceView,
 } from "../ipc";
 
-/** What the LCD shows. A bare text id is one of the interface's own words ("Ready", "Error"). */
+/** What the LCD shows. A bare text id is one of the interface's own words ("NoAudioPlaying", "Error"). */
 export interface DisplayState {
   main: Message | TextId;
-  /** The main line names a sound, so it goes back to "Ready" when the sound ends. */
+  /** The main line names a sound, so it goes back to "NoAudioPlaying" when the sound ends. */
   isSound: boolean;
   status: Message | null;
   hint: Message | null;
@@ -61,7 +61,7 @@ let state: BackendState = {
     oneSoundAtATime: false,
   },
   favorites: [],
-  display: { main: "Ready", isSound: false, status: null, hint: null },
+  display: { main: "NoAudioPlaying", isSound: false, status: null, hint: null },
   driverStatus: null,
   update: null,
   limits: {
@@ -131,7 +131,7 @@ export function applyEvent(event: AppEvent) {
       }
       if (shown.kind === "silent") {
         return state.display.isSound
-          ? replace({ display: { ...state.display, main: "Ready", isSound: false } })
+          ? replace({ display: { ...state.display, main: "NoAudioPlaying", isSound: false } })
           : undefined;
       }
       if (shown.kind === "error") {

@@ -89,7 +89,7 @@ test("the language switches every text without a restart", async ({ page }) => {
 
   await expect(page.getByRole("button", { name: /Parar/ })).toBeVisible();
   await expect(page.getByLabel("Idioma")).toHaveValue("pt");
-  await expect(page.locator(".lcd-main")).toHaveText("Pronto");
+  await expect(page.locator(".lcd-main")).toHaveText("Nenhum áudio tocando");
   await page.getByLabel("Idioma").selectOption("en");
-  await expect(page.locator(".lcd-main")).toHaveText("Ready");
+  await expect(page.locator(".lcd-main")).toHaveText("No audio playing");
 });

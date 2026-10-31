@@ -33,6 +33,8 @@
   "DriverVerifying": "Checking the digital signature...",
   "EffectCycle": "Pitch cycle",
   "EffectDeep": "Deep voice",
+  "EffectNatural": "Natural",
+  "EffectNaturalHint": "Your voice with no effects.",
   "EffectThin": "Thin voice",
   "EmptyPad": "Pad {0} is empty",
   "Error": "Error",
@@ -145,5 +147,6 @@
   "Version": "Version {0}",
   "VersionInstalled": "Version {0} is installed. It opens the next time you start the app.",
   "VirtualDriver": "Virtual driver",
+  "VoiceEffects": "Voice effects",
   "Volume": "Volume"
 }

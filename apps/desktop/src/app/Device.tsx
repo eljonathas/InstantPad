@@ -5,8 +5,8 @@ import { PadGrid } from "../features/board/PadGrid";
 import { useBoardActions } from "../features/board/useBoardActions";
 import { Lcd } from "../features/display/Lcd";
 import { MixerStrip } from "../features/mixer/MixerStrip";
-import { EFFECTS, type Effect } from "../features/voice/effects";
-import { VoiceBoard } from "../features/voice/VoiceBoard";
+import { EFFECTS } from "../features/voice/effects";
+import { EffectList } from "../features/voice/EffectList";
 import { VoiceControls } from "../features/voice/VoiceControls";
 import { useText } from "../shared/store/text";
 import { RollingText } from "../shared/ui/RollingText";
@@ -40,13 +40,7 @@ function dragWindow(event: MouseEvent) {
 export function Device() {
   const [screen, setScreen] = useState<"pad" | "voice">("pad");
   const [selected, setSelected] = useState(EFFECTS[0]);
-  const [active, setActive] = useState<string[]>([]);
   const isVoice = screen === "voice";
-
-  function press(effect: Effect) {
-    setSelected(effect);
-    setActive(active.includes(effect.id) ? active.filter((id) => id !== effect.id) : [...active, effect.id]);
-  }
 
   const { t } = useText();
   const box = useFitToWindow();
@@ -55,7 +49,7 @@ export function Device() {
   return (
     <>
       <div ref={box} className="viewbox">
-        <div className="device" data-drag onMouseDown={dragWindow}>
+        <div className="device" data-screen={screen} data-drag onMouseDown={dragWindow}>
           <div className="chassis" />
           <i className="screw screw-top-left" />
           <i className="screw screw-bottom-left" />
@@ -95,7 +89,7 @@ export function Device() {
             <div className="centre">
               <Lcd />
               {isVoice ? (
-                <VoiceBoard active={active} selected={selected.id} onPress={press} />
+                <EffectList selected={selected.id} onSelect={setSelected} />
               ) : (
                 <>
                   <InterfaceBar actions={actions} />

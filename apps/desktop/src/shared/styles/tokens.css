@@ -58,6 +58,7 @@
   /* Palette */
   --color-amber: #ffb03a;
   --color-accent: #ffb03a; /* Replaced at runtime by the accent of the active interface. */
+  --color-voice: #1fd6ff;
   --color-lcd: #7dffa0;
   --color-lcd-dim: #3f8f5a;
   --color-silk: #a6a9b0;
@@ -127,6 +128,11 @@
   --rolling-time: 340ms;
   --ease-push: cubic-bezier(0.3, 0.9, 0.3, 1);
   --voice-knob-gap: 28px;
+  --effect-size: 116px;
+  --effect-well-gap: 10px;
+  --effect-icon-size: 46px;
+  --effect-gap: 22px;
+  --cap-travel-effect: 4px;
   --gradient-skeleton: linear-gradient(90deg, var(--gray-3) 30%, var(--gray-1) 50%, var(--gray-3) 70%);
   --skeleton-time: 1500ms;
   --skeleton-text-height: 12px;

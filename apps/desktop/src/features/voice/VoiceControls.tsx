@@ -15,6 +15,7 @@ export function VoiceControls({ effect }: { effect: Effect }) {
     <div className="voice-controls">
       <h3 className="screen-text voice-title">{t(effect.name)}</h3>
       <div className="voice-knobs">
+        {effect.params.length === 0 && <p className="screen-text voice-empty">{t("EffectNaturalHint")}</p>}
         {effect.params.map((param) => {
           const key = `${effect.id}.${param.id}`;
           return (

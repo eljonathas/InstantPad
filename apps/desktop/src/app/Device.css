@@ -12,6 +12,12 @@
   inset: var(--window-margin);
 }
 
+/* The Voice screen has a color of its own, whatever the interface on the Pad screen uses. */
+.device[data-screen="voice"] {
+  --color-accent: var(--color-voice);
+  --drop-glow: 0 0 20px color-mix(in srgb, var(--color-voice) 55%, transparent);
+}
+
 .chassis {
   position: absolute;
   inset: 0;

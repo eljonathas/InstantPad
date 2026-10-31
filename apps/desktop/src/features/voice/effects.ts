@@ -10,17 +10,22 @@ export interface EffectParam {
   value: number;
 }
 
+export type EffectIconName = "mic" | "feather" | "mountain" | "wave";
+
 export interface Effect {
   id: string;
   name: TextId;
+  icon: EffectIconName;
   color: string;
   params: EffectParam[];
 }
 
 export const EFFECTS: Effect[] = [
+  { id: "natural", name: "EffectNatural", icon: "mic", color: "#1fd6ff", params: [] },
   {
     id: "thin",
     name: "EffectThin",
+    icon: "feather",
     color: "#1fd6ff",
     params: [
       { id: "intensity", label: "ParamIntensity", min: 0, max: 1, value: 0.5 },
@@ -30,6 +35,7 @@ export const EFFECTS: Effect[] = [
   {
     id: "deep",
     name: "EffectDeep",
+    icon: "mountain",
     color: "#b45cff",
     params: [
       { id: "intensity", label: "ParamIntensity", min: 0, max: 1, value: 0.5 },
@@ -39,6 +45,7 @@ export const EFFECTS: Effect[] = [
   {
     id: "cycle",
     name: "EffectCycle",
+    icon: "wave",
     color: "#35f27a",
     params: [
       { id: "time", label: "ParamTime", min: 0, max: 1, value: 0.4 },

@@ -8,12 +8,13 @@ use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{
     AppUpdater, AudioDevice, AudioMix, AudioRouter, BoardRepository, CatalogPage, EventSink,
     FavoritesRepository, HotkeyHost, PlaybackTag, SettingsRepository, SoundCatalog, SoundFileStore,
-    SoundPlayer, SystemAudio, VirtualCable,
+    SoundPlayer, SystemAudio, VirtualCable, VoiceChanger,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
+use instantpad_domain::voice::VoiceShift;
 
 pub fn device(id: &str, name: &str) -> AudioDevice {
     AudioDevice {
@@ -154,6 +155,22 @@ impl AudioMix for FakeMix {
 }
 
 #[derive(Default)]
+pub struct FakeVoiceChanger {
+    pub shift: Mutex<Option<VoiceShift>>,
+    pub is_hearing: Mutex<bool>,
+}
+
+impl VoiceChanger for FakeVoiceChanger {
+    fn set_voice(&self, shift: Option<VoiceShift>) {
+        *self.shift.lock().unwrap() = shift;
+    }
+
+    fn set_hearing_voice(&self, enabled: bool) {
+        *self.is_hearing.lock().unwrap() = enabled;
+    }
+}
+
+#[derive(Default)]
 pub struct FakeSystemAudio {
     pub default_microphone: Mutex<Option<String>>,
     pub default_output: Mutex<Option<String>>,
@@ -182,6 +199,10 @@ pub struct FakeCable;
 
 #[async_trait]
 impl VirtualCable for FakeCable {
+    fn product_name(&self) -> &'static str {
+        "CABLE"
+    }
+
     fn find_game_output(&self, outputs: &[AudioDevice]) -> Option<AudioDevice> {
         outputs
             .iter()

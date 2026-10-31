@@ -92,7 +92,7 @@ export function Settings({ children }: { children: ReactNode }) {
       )}
       {!setup.hasCable && (
         <button className="key key-amber setting-key" disabled={installing} onClick={() => void install()}>
-          {t("InstallVbCable")}
+          {t("InstallCable", [setup.cableName])}
         </button>
       )}
 

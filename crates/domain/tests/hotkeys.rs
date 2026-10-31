@@ -118,3 +118,11 @@ fn suggested_names_come_from_the_sound_name() {
 
     assert_eq!(source.suggested_file_name(), "vine_ boom_.mp3");
 }
+
+#[test]
+fn the_numpad_schemes_have_keys_for_the_voice() {
+    let layout = NumericLayout::for_scheme(NumericScheme::Numpad);
+
+    assert_eq!(label(&layout.toggle_voice), "Num*");
+    assert_eq!(label(&layout.next_voice), "Num/");
+}

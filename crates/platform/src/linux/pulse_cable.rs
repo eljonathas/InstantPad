@@ -55,6 +55,10 @@ impl Drop for PulseCable {
 
 #[async_trait]
 impl VirtualCable for PulseCable {
+    fn product_name(&self) -> &'static str {
+        "PulseAudio"
+    }
+
     fn find_game_output(&self, outputs: &[AudioDevice]) -> Option<AudioDevice> {
         outputs
             .iter()

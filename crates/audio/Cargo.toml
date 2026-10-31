@@ -13,8 +13,10 @@ workspace = true
 async-trait.workspace = true
 cpal = "0.18"
 instantpad-application.workspace = true
+instantpad-domain.workspace = true
 rtrb = "0.4"
 rubato = "5.0"
+signalsmith-stretch = "0.1.3"
 symphonia = { version = "0.6", default-features = false, features = ["mp3", "aac", "isomp4", "flac", "wav", "pcm", "ogg", "vorbis", "id3v2"] }
 tokio = { workspace = true, features = ["rt", "sync", "time"] }
 

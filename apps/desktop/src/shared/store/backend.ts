@@ -1,6 +1,17 @@
 import { useSyncExternalStore } from "react";
 import type { TextId } from "../i18n";
-import type { AppEvent, BoardView, Limits, Message, MixerView, SetupView, SoundSource, StartView, UpdateView } from "../ipc";
+import type {
+  AppEvent,
+  BoardView,
+  Limits,
+  Message,
+  MixerView,
+  SetupView,
+  SoundSource,
+  StartView,
+  UpdateView,
+  VoiceView,
+} from "../ipc";
 
 /** What the LCD shows. A bare text id is one of the interface's own words ("Ready", "Error"). */
 export interface DisplayState {
@@ -20,6 +31,7 @@ export interface BackendState {
   driverStatus: Message | null;
   update: UpdateView | null;
   limits: Limits;
+  voice: VoiceView;
   /** Counts the presses on empty pads, each of which brings the sound sources into view. */
   sourceRequests: number;
 }
@@ -36,11 +48,13 @@ let state: BackendState = {
     gameOutputId: null,
     monitorOutputId: null,
     hasCable: false,
+    cableName: "",
     isSystemOutputOnCable: false,
     gameMicrophoneName: "",
     language: null,
     numericScheme: "numpad",
     numericHintKeys: [],
+    voiceKeys: [],
     stopHotkey: null,
     oneSoundAtATime: false,
   },
@@ -57,6 +71,7 @@ let state: BackendState = {
     defaultColumns: 0,
     defaultMixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
   },
+  voice: { active: "natural", effects: [], isHearing: false },
   sourceRequests: 0,
 };
 
@@ -102,6 +117,8 @@ export function applyEvent(event: AppEvent) {
       return replace({ driverStatus: event.data });
     case "update":
       return replace({ update: event.data });
+    case "voice":
+      return replace({ voice: event.data });
     case "display": {
       const shown = event.data;
       if (shown.kind === "show") return replace({ display: { ...state.display, main: shown.message } });

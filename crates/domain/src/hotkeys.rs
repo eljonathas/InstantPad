@@ -99,6 +99,8 @@ pub struct NumericLayout {
     pub next_interface: Option<Hotkey>,
     pub previous_interface: Option<Hotkey>,
     pub stop_all: Option<Hotkey>,
+    pub toggle_voice: Option<Hotkey>,
+    pub next_voice: Option<Hotkey>,
 }
 
 impl NumericLayout {
@@ -111,6 +113,8 @@ impl NumericLayout {
                 next_interface: Some(Hotkey::new("Equal", HotkeyModifiers::ALT)),
                 previous_interface: Some(Hotkey::new("Minus", HotkeyModifiers::ALT)),
                 stop_all: Some(Hotkey::new("Period", HotkeyModifiers::ALT)),
+                toggle_voice: Some(Hotkey::new("KeyV", HotkeyModifiers::ALT)),
+                next_voice: Some(Hotkey::new("KeyB", HotkeyModifiers::ALT)),
             },
             NumericScheme::Off => Self::default(),
         }
@@ -123,6 +127,8 @@ fn numpad_layout(modifiers: HotkeyModifiers) -> NumericLayout {
         next_interface: Some(Hotkey::new("NumpadAdd", modifiers)),
         previous_interface: Some(Hotkey::new("NumpadSubtract", modifiers)),
         stop_all: Some(Hotkey::new("NumpadDecimal", modifiers)),
+        toggle_voice: Some(Hotkey::new("NumpadMultiply", modifiers)),
+        next_voice: Some(Hotkey::new("NumpadDivide", modifiers)),
     }
 }
 

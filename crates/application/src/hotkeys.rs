@@ -16,6 +16,8 @@ pub enum HotkeyCommand {
     NextInterface,
     PreviousInterface,
     StopAll,
+    ToggleVoice,
+    NextVoice,
 }
 
 pub type Binding = (Hotkey, HotkeyCommand);
@@ -44,6 +46,8 @@ pub fn resolve(
     let navigation = [
         (&layout.next_interface, HotkeyCommand::NextInterface),
         (&layout.previous_interface, HotkeyCommand::PreviousInterface),
+        (&layout.toggle_voice, HotkeyCommand::ToggleVoice),
+        (&layout.next_voice, HotkeyCommand::NextVoice),
     ]
     .into_iter()
     .filter_map(|(hotkey, command)| hotkey.clone().map(|hotkey| (hotkey, command)));

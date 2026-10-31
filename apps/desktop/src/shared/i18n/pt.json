@@ -55,7 +55,7 @@
   "HotkeyTitle": "Definir atalho",
   "InGame": "No jogo",
   "InGameSound": "No jogo: {0}",
-  "InstallVbCable": "Instalar VB-CABLE",
+  "InstallCable": "Instalar {0}",
   "InterfaceFull": "A interface {0} está cheia.",
   "InterfaceFullHint": "Esta interface está cheia. Crie outra ou escolha um pad.",
   "Language": "Idioma",
@@ -148,5 +148,6 @@
   "VersionInstalled": "Versão {0} instalada. Ela abre na próxima vez.",
   "VirtualDriver": "Driver virtual",
   "VoiceEffects": "Efeitos de voz",
+  "VoiceKeysHint": "{0} liga e desliga o efeito, e {1} passa para o próximo.",
   "Volume": "Volume"
 }

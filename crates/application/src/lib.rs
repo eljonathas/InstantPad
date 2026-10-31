@@ -13,3 +13,4 @@ pub mod rows;
 pub mod settings;
 pub mod setup;
 pub mod updates;
+pub mod voice;

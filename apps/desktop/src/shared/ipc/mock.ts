@@ -14,6 +14,9 @@ import type {
   SoundPage,
   SoundSource,
   StartView,
+  VoiceEffect,
+  VoiceParam,
+  VoiceView,
 } from "./bindings";
 
 const DOWNLOAD_MS = 400;
@@ -30,6 +33,51 @@ const LIMITS = {
   defaultColumns: 6,
   defaultMixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
 };
+
+const VOICE_KEYS: Record<NumericScheme, string[]> = {
+  numpad: ["Num*", "Num/"],
+  ctrlNumpad: ["Ctrl+Num*", "Ctrl+Num/"],
+  altDigits: ["Alt+V", "Alt+B"],
+  off: [],
+};
+
+function seedVoice(): VoiceView {
+  const param = (param: VoiceParam, label: "ParamIntensity" | "ParamFormant" | "ParamTime" | "ParamHigh" | "ParamLow") => ({
+    param,
+    label,
+    value: 0.5,
+    defaultValue: 0.5,
+    text: "50%",
+  });
+  return {
+    active: "natural",
+    isHearing: false,
+    effects: [
+      { effect: "natural", name: "EffectNatural", icon: "mic", color: "#1fd6ff", params: [] },
+      {
+        effect: "thin",
+        name: "EffectThin",
+        icon: "feather",
+        color: "#1fd6ff",
+        params: [param("thinIntensity", "ParamIntensity"), param("thinFormant", "ParamFormant")],
+      },
+      {
+        effect: "deep",
+        name: "EffectDeep",
+        icon: "mountain",
+        color: "#b45cff",
+        params: [param("deepIntensity", "ParamIntensity"), param("deepFormant", "ParamFormant")],
+      },
+      {
+        effect: "pitchCycle",
+        name: "EffectCycle",
+        icon: "wave",
+        color: "#35f27a",
+        params: [param("cycleTime", "ParamTime"), param("cycleHigh", "ParamHigh"), param("cycleLow", "ParamLow")],
+      },
+    ],
+  };
+}
 
 const NUMERIC_HINT_KEYS: Record<NumericScheme, string[]> = {
   numpad: ["Num1", "Num0", "Num+", "Num-", "Num,"],
@@ -166,15 +214,18 @@ function seed() {
       gameOutputId: "cable",
       monitorOutputId: "phones",
       hasCable: true,
+      cableName: "VB-CABLE",
       isSystemOutputOnCable: false,
       gameMicrophoneName: "CABLE Output",
       language: null,
       numericScheme: "numpad",
       numericHintKeys: NUMERIC_HINT_KEYS.numpad,
+      voiceKeys: VOICE_KEYS.numpad,
       stopHotkey: null,
       oneSoundAtATime: false,
     } as SetupView,
     mixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
+    voice: seedVoice(),
   };
 }
 
@@ -326,6 +377,7 @@ export function installMock() {
         setup: backend.setup,
         favorites: backend.favorites,
         limits: LIMITS,
+        voice: backend.voice,
       } satisfies StartView;
     },
     press_pad: ({ slot }) => {
@@ -466,6 +518,26 @@ export function installMock() {
     choose_microphone: ({ id }) => ((backend.setup.microphoneId = id as string | null), publishSetup()),
     choose_game_output: ({ id }) => ((backend.setup.gameOutputId = id as string | null), publishSetup()),
     choose_monitor_output: ({ id }) => ((backend.setup.monitorOutputId = id as string | null), publishSetup()),
+    select_voice_effect: ({ effect }) => {
+      backend.voice = { ...backend.voice, active: effect as VoiceEffect };
+      send({ kind: "voice", data: backend.voice });
+    },
+    set_voice_param: ({ param, value }) => {
+      const effects = backend.voice.effects.map((item) => ({
+        ...item,
+        params: item.params.map((entry) =>
+          entry.param === param
+            ? { ...entry, value: value as number, text: `${Math.round((value as number) * 100)}%` }
+            : entry,
+        ),
+      }));
+      backend.voice = { ...backend.voice, effects };
+      send({ kind: "voice", data: backend.voice });
+    },
+    set_hearing_voice: ({ enabled }) => {
+      backend.voice = { ...backend.voice, isHearing: enabled as boolean };
+      send({ kind: "voice", data: backend.voice });
+    },
     set_one_sound_at_a_time: ({ enabled }) => {
       backend.setup.oneSoundAtATime = enabled as boolean;
       publishSetup();
@@ -473,6 +545,7 @@ export function installMock() {
     set_numeric_scheme: ({ scheme }) => {
       backend.setup.numericScheme = scheme as NumericScheme;
       backend.setup.numericHintKeys = NUMERIC_HINT_KEYS[scheme as NumericScheme];
+      backend.setup.voiceKeys = VOICE_KEYS[scheme as NumericScheme];
       publishSetup();
       publish();
     },

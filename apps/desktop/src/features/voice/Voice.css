@@ -130,6 +130,13 @@
   gap: var(--space-7) var(--voice-knob-gap);
 }
 
+.voice-value {
+  margin-top: var(--space-1);
+  color: var(--color-lcd-dim);
+  font-size: var(--font-status);
+  text-align: center;
+}
+
 .voice-empty {
   margin: 0;
   color: var(--color-lcd-dim);

@@ -5,9 +5,9 @@ import { PadGrid } from "../features/board/PadGrid";
 import { useBoardActions } from "../features/board/useBoardActions";
 import { Lcd } from "../features/display/Lcd";
 import { MixerStrip } from "../features/mixer/MixerStrip";
-import { EFFECTS } from "../features/voice/effects";
 import { EffectList } from "../features/voice/EffectList";
 import { VoiceControls } from "../features/voice/VoiceControls";
+import { useBackend } from "../shared/store/backend";
 import { useText } from "../shared/store/text";
 import { RollingText } from "../shared/ui/RollingText";
 import { ToggleKey } from "../shared/ui/ToggleKey";
@@ -39,8 +39,8 @@ function dragWindow(event: MouseEvent) {
 
 export function Device() {
   const [screen, setScreen] = useState<"pad" | "voice">("pad");
-  const [selected, setSelected] = useState(EFFECTS[0]);
   const isVoice = screen === "voice";
+  const isChangingVoice = useBackend((state) => state.voice.active !== "natural");
 
   const { t } = useText();
   const box = useFitToWindow();
@@ -81,7 +81,13 @@ export function Device() {
               </div>
               <div className="mode-keys" role="tablist">
                 <ToggleKey kind="tab" label="Pad" on={!isVoice} onClick={() => setScreen("pad")} />
-                <ToggleKey kind="tab" label="Voice" on={isVoice} onClick={() => setScreen("voice")} />
+                <ToggleKey
+                  kind="tab"
+                  className={isChangingVoice ? "mode-voice-on" : undefined}
+                  label="Voice"
+                  on={isVoice}
+                  onClick={() => setScreen("voice")}
+                />
               </div>
               <MixerStrip />
             </div>
@@ -89,7 +95,7 @@ export function Device() {
             <div className="centre">
               <Lcd />
               {isVoice ? (
-                <EffectList selected={selected.id} onSelect={setSelected} />
+                <EffectList />
               ) : (
                 <>
                   <InterfaceBar actions={actions} />
@@ -104,7 +110,7 @@ export function Device() {
               </div>
               {isVoice && (
                 <div className="panel-screen side-page">
-                  <VoiceControls key={selected.id} effect={selected} />
+                  <VoiceControls />
                 </div>
               )}
             </div>

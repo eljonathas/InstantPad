@@ -65,6 +65,9 @@ fn specta_builder() -> Builder<Wry> {
             commands::setup::install_driver,
             commands::setup::open_sound_settings,
             commands::updates::restart_now,
+            commands::voice::select_voice_effect,
+            commands::voice::set_voice_param,
+            commands::voice::set_hearing_voice,
         ])
         .events(collect_events![BackendEvent, MeterEvent])
         .disable_serde_phases()

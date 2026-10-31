@@ -10,11 +10,13 @@ use instantpad_application::rows::SoundRows;
 use instantpad_application::settings::Settings;
 use instantpad_application::setup::SetupSession;
 use instantpad_application::updates::UpdateSession;
+use instantpad_application::voice::VoiceSession;
 use instantpad_domain::hotkeys::NumericScheme;
 use instantpad_domain::sounds::SoundSource;
+use instantpad_domain::voice::{PitchShape, VoiceEffect, VoiceParam};
 use instantpad_test_support::fakes::{
-    FakeCable, FakeMix, FakeRouter, FakeSystemAudio, FakeUpdater, InMemorySettings,
-    RecordingEvents, device,
+    FakeCable, FakeMix, FakeRouter, FakeSystemAudio, FakeUpdater, FakeVoiceChanger,
+    InMemorySettings, RecordingEvents, device,
 };
 use support::World;
 
@@ -477,4 +479,74 @@ async fn closing_without_a_new_version_does_nothing() {
     session.apply_on_exit();
 
     assert!(updater.applied.lock().unwrap().is_empty());
+}
+
+fn voice() -> (Arc<FakeVoiceChanger>, Arc<RecordingEvents>, VoiceSession) {
+    let changer = Arc::new(FakeVoiceChanger::default());
+    let events = Arc::new(RecordingEvents::default());
+    let settings = Arc::new(Settings::load(Arc::new(InMemorySettings::default())));
+    let session = VoiceSession::new(changer.clone(), settings, events.clone());
+    (changer, events, session)
+}
+
+#[test]
+fn picking_an_effect_reaches_the_engine_and_natural_clears_it() {
+    let (changer, _, session) = voice();
+
+    session.select(VoiceEffect::Deep);
+    assert!(changer.shift.lock().unwrap().is_some());
+
+    session.select(VoiceEffect::Natural);
+    assert!(changer.shift.lock().unwrap().is_none());
+}
+
+#[test]
+fn a_knob_changes_the_running_effect_and_what_the_screen_reads() {
+    let (changer, _, session) = voice();
+    session.select(VoiceEffect::PitchCycle);
+
+    session.set_param(VoiceParam::CycleTime, 1.0);
+
+    assert!(matches!(
+        changer.shift.lock().unwrap().unwrap().pitch,
+        PitchShape::Cycle { seconds: 6.0, .. }
+    ));
+    let view = session.view();
+    assert_eq!(view.effects[3].params[0].text, "6.0 s");
+}
+
+#[test]
+fn every_effect_but_the_natural_voice_has_knobs() {
+    let (_, _, session) = voice();
+
+    let view = session.view();
+
+    assert!(view.effects[0].params.is_empty());
+    assert!(
+        view.effects[1..]
+            .iter()
+            .all(|effect| !effect.params.is_empty())
+    );
+}
+
+#[test]
+fn the_toggle_key_says_which_effect_came_on() {
+    let (changer, events, session) = voice();
+
+    session.toggle();
+
+    assert!(changer.shift.lock().unwrap().is_some());
+    let expected = AppEvent::show(Message::text(TextKey::EffectThin));
+    assert!(events.0.lock().unwrap().contains(&expected));
+}
+
+#[test]
+fn hearing_the_voice_always_starts_off() {
+    let (changer, _, session) = voice();
+    assert!(!session.view().is_hearing);
+
+    session.set_hearing(true);
+
+    assert!(*changer.is_hearing.lock().unwrap());
+    assert!(session.view().is_hearing);
 }

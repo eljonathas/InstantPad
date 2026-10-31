@@ -18,6 +18,7 @@ use crate::controls::AtomicF32;
 use crate::format::{CHANNELS, SAMPLE_RATE};
 use crate::mixer::Mixer;
 use crate::playback::{Conversion, Playback};
+use crate::voice::VoiceControls;
 
 const OUTPUT_BUFFER_MS: u32 = 30;
 const CAPTURE_BUFFER_MS: u32 = 20;
@@ -121,8 +122,9 @@ pub(crate) fn open_output(
 
 pub(crate) fn open_capture(
     id: &str,
-    ring: Producer<f32>,
+    rings: [Producer<f32>; 2],
     level: Arc<AtomicF32>,
+    voice: Arc<VoiceControls>,
     events: Arc<dyn EventSink>,
 ) -> Result<Stream, Failure> {
     let device = find(id)?;
@@ -137,9 +139,14 @@ pub(crate) fn open_capture(
             native.buffer_size(),
         ),
     };
-    let processor =
-        CaptureProcessor::new(native.channels().into(), native.sample_rate(), ring, level)
-            .map_err(unavailable)?;
+    let processor = CaptureProcessor::new(
+        native.channels().into(),
+        native.sample_rate(),
+        rings,
+        level,
+        voice,
+    )
+    .map_err(unavailable)?;
     let on_error = report(events, TextKey::MicStopped);
 
     let stream = match native.sample_format() {

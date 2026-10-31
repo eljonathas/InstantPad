@@ -80,7 +80,7 @@ pub fn plugin<R: Runtime>() -> tauri::plugin::TauriPlugin<R> {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
                 if let Some(core) = app.try_state::<Core>() {
-                    core.board.on_hotkey(command).await;
+                    core.on_hotkey(command).await;
                 }
             });
         })

@@ -55,7 +55,7 @@
   "HotkeyTitle": "Set shortcut",
   "InGame": "In the game",
   "InGameSound": "In the game: {0}",
-  "InstallVbCable": "Install VB-CABLE",
+  "InstallCable": "Install {0}",
   "InterfaceFull": "The {0} interface is full.",
   "InterfaceFullHint": "This interface is full. Create another one or choose a pad.",
   "Language": "Language",
@@ -148,5 +148,6 @@
   "VersionInstalled": "Version {0} is installed. It opens the next time you start the app.",
   "VirtualDriver": "Virtual driver",
   "VoiceEffects": "Voice effects",
+  "VoiceKeysHint": "{0} switches the effect on and off, and {1} moves to the next one.",
   "Volume": "Volume"
 }

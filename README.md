@@ -39,7 +39,7 @@ If you prefer not to install the app, download `InstantPad-portable.exe` instead
 1. Download the `.dmg` that matches your Mac: the Apple silicon one for M1 and newer chips, the Intel one for older Macs. Open it and drag InstantPad to Applications.
 2. The app is not notarized yet, so macOS blocks it the first time. Try to open it once, then open **System Settings**, go to **Privacy & Security** and click **Open Anyway**.
 3. Allow the microphone when macOS asks.
-4. Install [BlackHole 2ch](https://existential.audio/blackhole/), the virtual cable. The **Install VB-CABLE** button in **Settings** opens its download page on macOS, even though the label mentions VB-CABLE.
+4. Install [BlackHole 2ch](https://existential.audio/blackhole/), the virtual cable. The **Install BlackHole** button in **Settings** opens its download page.
 
 ### Linux
 
@@ -88,6 +88,20 @@ Only one copy of the app runs at a time. Opening it again brings the existing wi
 
 Create as many interfaces as you want with **+**. Each has its own name, color and grid, up to 8 rows by 10 columns. The gear button (**Configure this interface**) configures the current one, and right-clicking a tab moves or deletes it.
 
+### Voice effects
+
+The **Voice** key under the logo opens InstantVoice, where you change your own voice in calls and games. Click an effect to turn it on, and its knobs appear on the right. **Natural** turns effects off. The effect stays on when you go back to **Pad**, and the LED on the **Voice** key shows that it is running.
+
+| Effect | Knobs |
+| --- | --- |
+| Thin voice | **Intensity** and **Formant** |
+| Deep voice | **Intensity** and **Formant** |
+| Pitch cycle, which rises to a high pitch and falls to a low one | **Time**, **High** and **Low** |
+
+Turn on **Hear my voice** to try an effect on your headphones. Use headphones for this, because speakers feed back into the mic.
+
+An effect delays your voice by about 40 ms. **Natural** adds no delay.
+
 ### One sound at a time
 
 **Settings** has a **One sound at a time** option. When it is on, a new sound stops the one that was playing.
@@ -101,6 +115,8 @@ These are on by default and work while a game has focus:
 | `Num1` to `Num9`, `Num0` | The first 10 pads of the active interface |
 | `Num+` / `Num-` | Next / previous interface |
 | `Num,` | Stop everything |
+| `Num*` | Turn the voice effect on or off |
+| `Num/` | Next voice effect |
 
 **Settings** can switch them to `Ctrl` plus the numeric keypad, or `Alt` plus `1` to `0`, or turn them off. Keep NumLock on. A shortcut you set on a pad takes priority over these.
 

@@ -39,7 +39,7 @@ Se preferir não instalar o app, baixe o `InstantPad-portable.exe`. Ele roda soz
 1. Baixe o `.dmg` que combina com o seu Mac: o de Apple silicon para chips M1 e mais novos, o de Intel para Macs mais antigos. Abra e arraste o InstantPad para Aplicativos.
 2. O app ainda não é notarizado, então o macOS o bloqueia na primeira vez. Tente abrir uma vez, depois abra os **Ajustes do Sistema**, vá em **Privacidade e Segurança** e clique em **Abrir Mesmo Assim**.
 3. Permita o acesso ao microfone quando o macOS perguntar.
-4. Instale o [BlackHole 2ch](https://existential.audio/blackhole/), o cabo virtual. No macOS, o botão **Instalar VB-CABLE** em **Ajustes** abre a página de download dele, apesar de o nome citar o VB-CABLE.
+4. Instale o [BlackHole 2ch](https://existential.audio/blackhole/), o cabo virtual. O botão **Instalar BlackHole** em **Ajustes** abre a página de download dele.
 
 ### Linux
 
@@ -88,6 +88,20 @@ Só uma cópia do app roda por vez. Abrir de novo traz a janela que já existe p
 
 Crie quantas interfaces quiser com **+**. Cada uma tem nome, cor e grade próprios, de até 8 linhas por 10 colunas. A engrenagem (**Configurar esta interface**) configura a interface atual, e o botão direito numa aba move ou exclui.
 
+### Efeitos de voz
+
+A tecla **Voice** abaixo do logo abre o InstantVoice, onde você muda a própria voz em chamadas e jogos. Clique num efeito para ligá-lo, e os knobs dele aparecem à direita. **Natural** desliga os efeitos. O efeito continua ligado quando você volta para **Pad**, e o LED da tecla **Voice** mostra que ele está ativo.
+
+| Efeito | Knobs |
+| --- | --- |
+| Voz fina | **Intensidade** e **Formante** |
+| Voz grossa | **Intensidade** e **Formante** |
+| Variação de pitch, que sobe até um tom alto e desce até um baixo | **Tempo**, **Alto** e **Baixo** |
+
+Ligue **Ouvir minha voz** para testar um efeito nos fones. Use fones nesse teste, porque caixas de som realimentam o microfone.
+
+Um efeito atrasa sua voz em cerca de 40 ms. **Natural** não acrescenta atraso.
+
 ### Um som por vez
 
 Em **Ajustes** há a opção **Um som por vez**. Com ela ligada, um som novo para o que estava tocando.
@@ -101,6 +115,8 @@ Vêm ligados por padrão e funcionam com o jogo em foco:
 | `Num1` a `Num9`, `Num0` | Os 10 primeiros pads da interface ativa |
 | `Num+` / `Num-` | Próxima / anterior interface |
 | `Num,` | Parar tudo |
+| `Num*` | Ligar ou desligar o efeito de voz |
+| `Num/` | Próximo efeito de voz |
 
 Em **Ajustes** você pode trocar por `Ctrl` mais o teclado numérico, ou `Alt` mais `1` a `0`, ou desligar. Deixe o NumLock ligado. Um atalho definido num pad tem prioridade sobre esses.
 

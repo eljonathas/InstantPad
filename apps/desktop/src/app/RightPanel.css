@@ -1,0 +1,25 @@
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--panel-tabs-gap);
+  height: var(--panel-tabs-height);
+  margin-bottom: var(--space-4);
+}
+
+.panel-screen {
+  flex: 1;
+  min-height: 0;
+  border: var(--border-bezel) solid var(--color-bezel);
+  border-radius: var(--radius-screen);
+  background: var(--color-screen-back);
+}
+
+.panel-page {
+  height: 100%;
+}

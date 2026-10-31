@@ -1,0 +1,129 @@
+.pad-grid {
+  display: grid;
+  min-height: 0;
+}
+
+.pad {
+  position: relative;
+  margin: var(--gap-pad);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.pad:active {
+  transform: scale(var(--scale-pad-pressed));
+}
+
+.pad-glow {
+  position: absolute;
+  inset: calc(-1 * var(--pad-glow-spread));
+  border-radius: var(--radius-pad-glow);
+  background: var(--pad-color);
+  filter: blur(var(--blur-pad-glow));
+}
+
+.pad-body {
+  position: absolute;
+  inset: 0;
+  border: var(--border-pad) solid var(--color-key-border);
+  border-radius: var(--radius-pad);
+  background: var(--gradient-rubber);
+  /* The text of a loaded pad: the labels dim, the name white. */
+  --pad-label: var(--color-pad-label);
+  --pad-shortcut: var(--color-pad-label);
+  --pad-name: var(--color-white);
+}
+
+.pad-light,
+.pad-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-pad-inner);
+}
+
+.pad-light {
+  background: var(--pad-color);
+  opacity: 0;
+}
+
+.pad-sheen {
+  background: var(--gradient-sheen);
+}
+
+.pad-slot,
+.pad-shortcut,
+.pad-star,
+.pad-name {
+  position: absolute;
+}
+
+.pad-slot {
+  top: var(--pad-label-top);
+  left: var(--pad-label-side);
+  color: var(--pad-label);
+  font-size: var(--font-pad-label);
+}
+
+.pad-shortcut {
+  top: var(--pad-label-top);
+  right: var(--pad-label-side);
+  color: var(--pad-shortcut);
+  font-size: var(--font-pad-shortcut);
+}
+
+.pad-star {
+  right: var(--pad-star-right);
+  bottom: var(--pad-star-bottom);
+  color: var(--color-star);
+  font-size: var(--font-star);
+}
+
+.pad-name {
+  inset: var(--pad-name-inset);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--pad-name);
+  font-size: var(--font-pad-name);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  text-shadow: var(--shadow-pad-name);
+  overflow-wrap: anywhere;
+}
+
+.pad[data-loaded] .pad-light {
+  opacity: var(--opacity-pad-loaded);
+}
+
+.pad[data-loaded] .pad-body {
+  --pad-label: var(--color-pad-label-lit);
+  --pad-shortcut: var(--color-pad-shortcut-lit);
+}
+
+.pad[data-target] .pad-body {
+  border-color: var(--color-accent);
+}
+
+.pad[data-playing] .pad-light {
+  opacity: 1;
+}
+
+.pad[data-playing] .pad-body {
+  --pad-label: var(--pad-contrast);
+  --pad-shortcut: var(--pad-contrast);
+  --pad-name: var(--pad-contrast);
+  border-color: var(--color-pad-playing-border);
+}
+
+.pad[data-playing] .pad-name {
+  text-shadow: none;
+}
+
+/* Where a pad or row being dragged would land */
+body[data-dragging] .pad:hover .pad-body,
+.pad[data-drop] .pad-body {
+  border-color: var(--color-accent);
+}

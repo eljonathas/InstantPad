@@ -1,0 +1,25 @@
+.led-meter {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--led-gap);
+  width: var(--meter-width);
+  height: 100%;
+}
+
+.led {
+  flex: 1;
+  border-radius: var(--led-radius);
+  background: var(--led-off);
+}
+
+.led-green[data-lit] {
+  background: var(--led-green);
+}
+
+.led-amber[data-lit] {
+  background: var(--led-amber);
+}
+
+.led-red[data-lit] {
+  background: var(--led-red);
+}

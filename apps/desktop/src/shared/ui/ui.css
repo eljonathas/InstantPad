@@ -1,0 +1,180 @@
+/* The parts of Hardware.xaml that more than one feature uses. */
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-accent);
+  outline-offset: var(--border-width);
+}
+
+/* Hardware key (HwButton) */
+.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--key-padding);
+  border: var(--border-width) solid var(--color-key-border);
+  border-radius: var(--radius-key);
+  background: var(--gradient-rubber);
+  color: var(--color-key-text);
+  font-size: var(--font-key);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.key:hover {
+  border-color: var(--color-key-hover-border);
+}
+
+.key:active {
+  opacity: var(--opacity-key-pressed);
+}
+
+.key:disabled {
+  opacity: var(--opacity-key-disabled);
+  cursor: default;
+}
+
+.key-bare {
+  padding: 0;
+}
+
+.key-accent {
+  color: var(--color-accent);
+}
+
+.key-amber {
+  color: var(--color-amber);
+}
+
+.key-star {
+  color: var(--color-star);
+}
+
+.key-danger {
+  color: var(--color-danger);
+}
+
+.key-stop {
+  background: var(--color-stop);
+  color: var(--color-white);
+}
+
+.key-add-interface {
+  font-size: var(--font-add-interface);
+}
+
+/* Key with a LED strip (HwToggle): tabs, panel tabs and the mic switch */
+.toggle {
+  display: grid;
+  grid-template-rows: var(--toggle-led-row) 1fr;
+  padding: 0;
+  border: var(--border-width) solid var(--color-key-border);
+  border-radius: var(--radius-key);
+  background: var(--gradient-rubber);
+  color: var(--color-key-text);
+  font-size: var(--font-key);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.toggle:active {
+  background: var(--color-key-pressed);
+}
+
+.toggle-led {
+  height: var(--led-strip-height);
+  margin: var(--toggle-led-margin);
+  border-radius: var(--radius-led-strip);
+  background: var(--color-led-off);
+}
+
+.toggle[aria-pressed="true"] .toggle-led,
+.toggle[aria-selected="true"] .toggle-led {
+  background: var(--color-accent);
+}
+
+.toggle-label {
+  align-self: center;
+  justify-self: center;
+  max-width: 100%;
+  padding: 0 var(--space-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Text on the green screens */
+.screen-text {
+  color: var(--color-lcd);
+  font-size: var(--font-screen);
+}
+
+.silk {
+  color: var(--color-silk);
+  font-size: var(--font-silk);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+}
+
+/* Text boxes and drop-downs */
+.field {
+  width: 100%;
+  min-height: var(--field-height);
+  padding: var(--field-padding);
+  border: var(--border-width) solid var(--color-screen-line);
+  background: var(--color-field-back);
+  color: var(--color-lcd);
+  caret-color: var(--color-lcd);
+  font-size: var(--font-input);
+}
+
+/* The page is not selectable, but a field must be: WebKit refuses typing into an inherited none. */
+input.field,
+select.field {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+select.field {
+  font-size: var(--font-key);
+}
+
+select.field option {
+  background: var(--color-screen-back);
+  color: var(--color-lcd);
+}
+
+/* Scroll bars (ScrollBar style) */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-scroll-thumb);
+  background: var(--color-lcd-dim);
+}
+
+/* A row or pad being dragged */
+.drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-ghost);
+  max-width: var(--dialog-width);
+  padding: var(--key-padding);
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-key-hover-border);
+  border-radius: var(--radius-key);
+  background: var(--gradient-rubber);
+  color: var(--color-key-text);
+  font-size: var(--font-key);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+body[data-dragging] {
+  cursor: grabbing;
+}

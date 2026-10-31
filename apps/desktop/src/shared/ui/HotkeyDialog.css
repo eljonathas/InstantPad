@@ -1,0 +1,6 @@
+.hotkey-prompt {
+  margin: var(--dialog-padding) 0;
+  font-size: var(--font-hotkey-prompt);
+  text-align: center;
+  white-space: pre-line;
+}

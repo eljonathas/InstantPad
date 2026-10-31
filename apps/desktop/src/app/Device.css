@@ -1,0 +1,118 @@
+.viewbox {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--device-width) + 2 * var(--window-margin));
+  height: calc(var(--device-height) + 2 * var(--window-margin));
+  transform: translate(-50%, -50%) scale(var(--fit, 1));
+}
+
+.device {
+  position: absolute;
+  inset: var(--window-margin);
+}
+
+.chassis {
+  position: absolute;
+  inset: 0;
+  border: var(--border-width) solid var(--color-chassis-border);
+  border-radius: var(--radius-chassis);
+  background: var(--gradient-chassis);
+  box-shadow: var(--shadow-chassis);
+}
+
+.screw {
+  position: absolute;
+  width: var(--screw-size);
+  height: var(--screw-size);
+  border: var(--border-width) solid var(--color-screw-stroke);
+  border-radius: 50%;
+  background: var(--color-screw-fill);
+}
+
+.screw-top-left {
+  top: var(--screw-inset);
+  left: var(--screw-inset);
+}
+
+.screw-bottom-left {
+  bottom: var(--screw-inset);
+  left: var(--screw-inset);
+}
+
+.screw-bottom-right {
+  right: var(--screw-inset);
+  bottom: var(--screw-inset);
+}
+
+.power-keys {
+  position: absolute;
+  z-index: 1;
+  top: var(--power-keys-top);
+  right: var(--power-keys-right);
+  display: flex;
+  gap: var(--power-key-gap);
+}
+
+.power-key {
+  width: var(--power-key-width);
+  height: var(--power-key-height);
+}
+
+.layout {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: var(--strip-width) 1fr var(--side-panel-width);
+  column-gap: var(--column-gap);
+  padding: var(--device-padding);
+}
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.logo {
+  margin-bottom: var(--space-5);
+  text-align: center;
+}
+
+.logo-word {
+  color: var(--color-white);
+  font-size: var(--font-logo);
+  font-weight: var(--weight-black);
+  line-height: var(--logo-line-height);
+}
+
+.logo-pad {
+  margin-top: var(--logo-pad-offset);
+  color: var(--color-accent);
+}
+
+.logo-tagline {
+  font-size: var(--font-tagline);
+}
+
+.centre {
+  display: grid;
+  grid-template-rows: var(--lcd-height) var(--tabs-row-height) 1fr;
+  min-width: 0;
+  min-height: 0;
+}
+
+.grip {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: var(--grip-size);
+  height: var(--grip-size);
+  cursor: nwse-resize;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 var(--space-1),
+    var(--color-screw-stroke) var(--space-1) var(--space-2)
+  );
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}

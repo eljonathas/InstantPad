@@ -1,0 +1,29 @@
+.lcd {
+  display: grid;
+  grid-template-rows: repeat(3, 1fr);
+  padding: var(--lcd-padding);
+  border: var(--border-bezel) solid var(--color-bezel);
+  border-radius: var(--radius-screen);
+  background: var(--gradient-lcd);
+}
+
+.lcd > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.lcd-main {
+  font-size: var(--font-lcd-main);
+  font-weight: var(--weight-bold);
+}
+
+.lcd-line {
+  align-self: center;
+}
+
+.lcd-hint {
+  color: var(--color-lcd-dim);
+}

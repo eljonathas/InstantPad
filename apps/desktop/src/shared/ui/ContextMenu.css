@@ -1,0 +1,80 @@
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-menu);
+}
+
+.menu {
+  position: fixed;
+  min-width: var(--menu-min-width);
+  padding: var(--menu-padding);
+  background: var(--color-dialog-back);
+  border: var(--border-width) solid var(--color-key-hover-border);
+  border-radius: var(--radius-key);
+  box-shadow: var(--shadow-menu);
+  font-size: var(--font-menu);
+  color: var(--color-key-text);
+}
+
+.menu-sub {
+  position: absolute;
+  top: calc(-1 * var(--menu-padding) - var(--border-width));
+  left: 100%;
+}
+
+.menu-row {
+  position: relative;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--menu-item-padding);
+  border: 0;
+  border-radius: var(--radius-key);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible {
+  background: var(--color-option-highlight);
+}
+
+.menu-item:disabled {
+  opacity: var(--opacity-key-disabled);
+  cursor: default;
+}
+
+.menu-check {
+  width: 1em;
+  color: var(--color-accent);
+}
+
+.menu-label {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.menu-item[aria-haspopup]::after {
+  content: "▸";
+  margin-left: auto;
+  color: var(--color-silk);
+}
+
+.menu-swatch {
+  display: block;
+  width: var(--menu-swatch-width);
+  height: var(--menu-swatch-height);
+  border-radius: var(--radius-swatch);
+}
+
+.menu-separator {
+  height: var(--border-width);
+  margin: var(--menu-padding) 0;
+  border: 0;
+  background: var(--color-screen-line);
+}

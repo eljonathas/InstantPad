@@ -1,0 +1,55 @@
+.knob {
+  display: block;
+  width: var(--knob-size);
+  height: var(--knob-size);
+  margin: 0 auto;
+  cursor: ns-resize;
+  touch-action: none;
+  outline-offset: calc(-1 * var(--space-2));
+}
+
+.knob-tick {
+  stroke: var(--knob-tick-unlit);
+  stroke-width: var(--knob-tick-width);
+}
+
+.knob-tick-lit {
+  stroke: var(--color-accent);
+  stroke-width: var(--knob-tick-lit-width);
+}
+
+.knob-shadow {
+  fill: var(--knob-shadow);
+}
+
+.knob-skirt {
+  stroke: var(--color-black);
+  stroke-width: var(--knob-stroke-width);
+}
+
+.knob-cap {
+  stroke: var(--knob-cap-stroke);
+  stroke-width: var(--knob-stroke-width);
+}
+
+.knob-skirt-top {
+  stop-color: var(--knob-skirt-top);
+}
+
+.knob-skirt-bottom {
+  stop-color: var(--knob-skirt-bottom);
+}
+
+.knob-cap-light {
+  stop-color: var(--knob-cap-light);
+}
+
+.knob-cap-dark {
+  stop-color: var(--knob-cap-dark);
+}
+
+.knob-pointer {
+  stroke: var(--color-accent);
+  stroke-width: var(--knob-pointer-width);
+  stroke-linecap: round;
+}

@@ -1,0 +1,43 @@
+.mixer-strip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.knobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--strip-gap);
+  margin-bottom: var(--strip-gap-last);
+}
+
+.meters {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 0;
+  margin-bottom: var(--strip-gap-last);
+}
+
+.meter-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+}
+
+.meter-cell .led-meter {
+  flex: 1;
+  min-height: 0;
+}
+
+.meter-label {
+  margin-top: var(--meter-label-gap);
+  font-size: var(--font-meter-label);
+}
+
+.mic-switch {
+  flex: none;
+  height: var(--mic-toggle-height);
+}

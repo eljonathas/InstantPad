@@ -6,3 +6,4 @@ pub mod browser;
 pub mod mixer;
 pub mod setup;
 pub mod updates;
+pub mod voice;

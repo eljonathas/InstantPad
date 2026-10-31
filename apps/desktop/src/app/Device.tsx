@@ -1,11 +1,16 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useLayoutEffect, useRef, type MouseEvent } from "react";
+import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { InterfaceBar } from "../features/board/InterfaceBar";
 import { PadGrid } from "../features/board/PadGrid";
 import { useBoardActions } from "../features/board/useBoardActions";
 import { Lcd } from "../features/display/Lcd";
 import { MixerStrip } from "../features/mixer/MixerStrip";
+import { EffectList } from "../features/voice/EffectList";
+import { VoiceControls } from "../features/voice/VoiceControls";
+import { useBackend } from "../shared/store/backend";
 import { useText } from "../shared/store/text";
+import { RollingText } from "../shared/ui/RollingText";
+import { ToggleKey } from "../shared/ui/ToggleKey";
 import "./Device.css";
 import { RightPanel } from "./RightPanel";
 
@@ -33,6 +38,10 @@ function dragWindow(event: MouseEvent) {
 }
 
 export function Device() {
+  const [screen, setScreen] = useState<"pad" | "voice">("pad");
+  const isVoice = screen === "voice";
+  const isChangingVoice = useBackend((state) => state.voice.active !== "natural");
+
   const { t } = useText();
   const box = useFitToWindow();
   const actions = useBoardActions();
@@ -40,7 +49,7 @@ export function Device() {
   return (
     <>
       <div ref={box} className="viewbox">
-        <div className="device" data-drag onMouseDown={dragWindow}>
+        <div className="device" data-screen={screen} data-drag onMouseDown={dragWindow}>
           <div className="chassis" />
           <i className="screw screw-top-left" />
           <i className="screw screw-bottom-left" />
@@ -67,19 +76,44 @@ export function Device() {
             <div className="strip">
               <div className="logo">
                 <div className="logo-word">Instant</div>
-                <div className="logo-word logo-pad">Pad</div>
-                <div className="silk logo-tagline">Sound sampler</div>
+                <RollingText className="logo-word logo-pad" text={isVoice ? "Voice" : "Pad"} />
+                <RollingText className="silk logo-tagline" text={isVoice ? "Voice changer" : "Sound sampler"} />
+              </div>
+              <div className="mode-keys" role="tablist">
+                <ToggleKey kind="tab" label="Pad" on={!isVoice} onClick={() => setScreen("pad")} />
+                <ToggleKey
+                  kind="tab"
+                  className={isChangingVoice ? "mode-voice-on" : undefined}
+                  label="Voice"
+                  on={isVoice}
+                  onClick={() => setScreen("voice")}
+                />
               </div>
               <MixerStrip />
             </div>
 
             <div className="centre">
               <Lcd />
-              <InterfaceBar actions={actions} />
-              <PadGrid onMenu={actions.openPadMenu} />
+              {isVoice ? (
+                <EffectList />
+              ) : (
+                <>
+                  <InterfaceBar actions={actions} />
+                  <PadGrid onMenu={actions.openPadMenu} />
+                </>
+              )}
             </div>
 
-            <RightPanel />
+            <div className="side">
+              <div className="side-page" hidden={isVoice}>
+                <RightPanel />
+              </div>
+              {isVoice && (
+                <div className="panel-screen side-page">
+                  <VoiceControls />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

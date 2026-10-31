@@ -50,6 +50,9 @@ export const commands = {
 	installDriver: () => typedError<null, null>(__TAURI_INVOKE("install_driver")),
 	openSoundSettings: () => __TAURI_INVOKE<void>("open_sound_settings"),
 	restartNow: () => __TAURI_INVOKE<void>("restart_now"),
+	selectVoiceEffect: (effect: VoiceEffect) => __TAURI_INVOKE<void>("select_voice_effect", { effect }),
+	setVoiceParam: (param: VoiceParam, value: number | null) => __TAURI_INVOKE<void>("set_voice_param", { param, value }),
+	setHearingVoice: (enabled: boolean) => __TAURI_INVOKE<void>("set_hearing_voice", { enabled }),
 };
 
 /** Events */
@@ -59,7 +62,7 @@ export const events = {
 };
 
 /* Types */
-export type AppEvent = { kind: "board"; data: BoardView } | { kind: "favorites"; data: SoundSource[] } | { kind: "setup"; data: SetupView } | { kind: "driverStatus"; data: Message } | { kind: "update"; data: UpdateView } | { kind: "display"; data: DisplayEvent };
+export type AppEvent = { kind: "board"; data: BoardView } | { kind: "favorites"; data: SoundSource[] } | { kind: "setup"; data: SetupView } | { kind: "driverStatus"; data: Message } | { kind: "update"; data: UpdateView } | { kind: "voice"; data: VoiceView } | { kind: "display"; data: DisplayEvent };
 
 export type AudioDevice = {
 	id: string,
@@ -82,6 +85,14 @@ export type BoardView = {
 
 /**  The LCD at the top of the device. */
 export type DisplayEvent = { kind: "show"; message: Message } | { kind: "error"; message: Message } | { kind: "routing"; status: Message; hint: Message };
+
+export type EffectView = {
+	effect: VoiceEffect,
+	name: TextKey,
+	icon: VoiceIcon,
+	color: string,
+	params: ParamView[],
+};
 
 /**  Something a port could not do, in words for the user. */
 export type Failure = Message;
@@ -160,6 +171,16 @@ export type PadView = {
 	sound: SoundView | null,
 };
 
+/**  A knob of an effect. The interface draws whatever an effect lists here. */
+export type ParamView = {
+	param: VoiceParam,
+	label: TextKey,
+	value: number,
+	defaultValue: number,
+	/**  The value as the user reads it, such as "+5.0 st". */
+	text: string,
+};
+
 export type SetupView = {
 	microphones: AudioDevice[],
 	gameOutputs: AudioDevice[],
@@ -168,12 +189,15 @@ export type SetupView = {
 	gameOutputId: string | null,
 	monitorOutputId: string | null,
 	hasCable: boolean,
+	cableName: string,
 	isSystemOutputOnCable: boolean,
 	gameMicrophoneName: string,
 	language: string | null,
 	numericScheme: NumericScheme,
 	/**  First pad, last pad, next, previous and stop keys of the scheme. Empty when it is off. */
 	numericHintKeys: string[],
+	/**  The keys that switch the voice effect and move to the next one. Empty when off. */
+	voiceKeys: string[],
 	stopHotkey: Hotkey | null,
 	oneSoundAtATime: boolean,
 };
@@ -211,17 +235,31 @@ export type StartView = {
 	setup: SetupView,
 	favorites: SoundSource[],
 	limits: Limits,
+	voice: VoiceView,
 };
 
 /**
  *  A key of the translated texts. The frontend owns the translations, so TypeScript refuses
  *  a variant that is missing from them.
  */
-export type TextKey = "AudioDeviceNotResponding" | "CatalogNoConnection" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "RoutingStatus" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
+export type TextKey = "AudioDeviceNotResponding" | "CatalogNoConnection" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectNatural" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamFormant" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamTime" | "RoutingStatus" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
 
 export type UpdateView = {
 	status: Message,
 	isReadyToRestart: boolean,
+};
+
+export type VoiceEffect = "natural" | "thin" | "deep" | "pitchCycle";
+
+export type VoiceIcon = "mic" | "feather" | "mountain" | "wave";
+
+/**  A setting of an effect. Every value goes from 0 to 1, which is what a knob gives. */
+export type VoiceParam = "thinIntensity" | "thinFormant" | "deepIntensity" | "deepFormant" | "cycleTime" | "cycleHigh" | "cycleLow";
+
+export type VoiceView = {
+	active: VoiceEffect,
+	effects: EffectView[],
+	isHearing: boolean,
 };
 
 /* Tauri Specta runtime */

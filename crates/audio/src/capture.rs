@@ -9,6 +9,7 @@ use rubato::{Fft, FixedSync, Resampler, ResamplerConstructionError};
 
 use crate::controls::AtomicF32;
 use crate::format::{CHANNELS, SAMPLE_RATE};
+use crate::voice::{VoiceControls, VoiceProcessor};
 
 /// Frames written to the ring at a time when no resampling is needed.
 const BLOCK_FRAMES: usize = 480;
@@ -20,7 +21,9 @@ pub(crate) struct CaptureProcessor {
     block: Vec<f32>,
     filled: usize,
     resampled: Vec<f32>,
-    ring: Producer<f32>,
+    voice: VoiceProcessor,
+    /// Where the voice goes: the game, and the headphones for hearing yourself.
+    rings: [Producer<f32>; 2],
     level: Arc<AtomicF32>,
 }
 
@@ -28,8 +31,9 @@ impl CaptureProcessor {
     pub(crate) fn new(
         channels: usize,
         rate: u32,
-        ring: Producer<f32>,
+        rings: [Producer<f32>; 2],
         level: Arc<AtomicF32>,
+        voice: Arc<VoiceControls>,
     ) -> Result<Self, ResamplerConstructionError> {
         let resampler = (rate != SAMPLE_RATE)
             .then(|| {
@@ -53,7 +57,8 @@ impl CaptureProcessor {
             block: vec![0.0; block_frames * CHANNELS],
             filled: 0,
             resampled: vec![0.0; resampled_frames * CHANNELS],
-            ring,
+            voice: VoiceProcessor::new(voice),
+            rings,
             level,
         })
     }
@@ -100,8 +105,13 @@ impl CaptureProcessor {
             None => &self.block[..],
         };
 
-        // When nobody reads, because the game output is closed, the newest audio is dropped.
-        let _ = self.ring.push_partial_slice(ready);
+        let rings = &mut self.rings;
+        self.voice.process(ready, |voice| {
+            // When nobody reads, because an output is closed, the newest audio is dropped.
+            for ring in rings.iter_mut() {
+                let _ = ring.push_partial_slice(voice);
+            }
+        });
         self.filled = 0;
     }
 }
@@ -115,8 +125,12 @@ mod tests {
 
     fn processor(channels: usize, rate: u32) -> (CaptureProcessor, Consumer<f32>, Arc<AtomicF32>) {
         let (writer, reader) = RingBuffer::new(48_000 * CHANNELS);
+        let (headphones, _) = RingBuffer::new(CHANNELS);
         let level = Arc::new(AtomicF32::new(0.0));
-        let processor = CaptureProcessor::new(channels, rate, writer, level.clone()).unwrap();
+        let voice = Arc::new(VoiceControls::new());
+        let processor =
+            CaptureProcessor::new(channels, rate, [writer, headphones], level.clone(), voice)
+                .unwrap();
         (processor, reader, level)
     }
 

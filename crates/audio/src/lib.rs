@@ -11,6 +11,7 @@ mod mic;
 mod mixer;
 mod playback;
 mod role;
+mod voice;
 
 pub use engine::AudioEngine;
 

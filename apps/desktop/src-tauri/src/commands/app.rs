@@ -25,5 +25,6 @@ pub fn start(app: AppHandle, core: State<'_, Core>, default_interface_name: Stri
         setup: core.setup.view(),
         favorites: core.favorites.list(),
         limits: Limits::current(),
+        voice: core.voice.view(),
     }
 }

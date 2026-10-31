@@ -172,6 +172,8 @@ impl BoardSession {
             HotkeyCommand::NextInterface => self.step_interface(1),
             HotkeyCommand::PreviousInterface => self.step_interface(-1),
             HotkeyCommand::StopAll => self.stop_all(),
+            // The voice session answers these.
+            HotkeyCommand::ToggleVoice | HotkeyCommand::NextVoice => {}
         }
     }
 

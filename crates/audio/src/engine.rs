@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use instantpad_application::message::{Failure, TextKey};
 use instantpad_application::ports::{
-    AudioDevice, AudioMix, AudioRouter, EventSink, PlaybackTag, SoundPlayer,
+    AudioDevice, AudioMix, AudioRouter, EventSink, PlaybackTag, SoundPlayer, VoiceChanger,
 };
+use instantpad_domain::voice::VoiceShift;
 use tokio::sync::OnceCell;
 
 use crate::clip::SoundClip;
@@ -19,6 +20,7 @@ use crate::devices;
 use crate::mic::{self, MicSlot};
 use crate::mixer::{self, MixerHandle};
 use crate::role::Role;
+use crate::voice::VoiceControls;
 
 type Clips = HashMap<String, Arc<OnceCell<Arc<SoundClip>>>>;
 
@@ -81,7 +83,10 @@ fn close(stream: &mut Option<cpal::Stream>) -> Result<(), Failure> {
 struct Microphone {
     role: Role<cpal::Stream>,
     reader: MicSlot,
+    /// The same voice for the headphones, which the monitor mixer only mixes on request.
+    hearing: MicSlot,
     level: Arc<AtomicF32>,
+    voice: Arc<VoiceControls>,
 }
 
 /// Plays sounds and routes the microphone, with nothing in the audio callbacks that locks,
@@ -97,16 +102,21 @@ pub struct AudioEngine {
 impl AudioEngine {
     pub fn new(events: Arc<dyn EventSink>) -> Self {
         let reader = mic::empty_slot();
+        let hearing = mic::empty_slot();
+        let monitor = Output::new("monitor output", Some(hearing.clone()));
+        monitor.controls.mic_enabled.store(false, Ordering::Relaxed);
         Self {
             events,
             clips: Mutex::default(),
             microphone: Microphone {
                 role: Role::spawn("microphone"),
                 reader: reader.clone(),
+                hearing,
                 level: Arc::new(AtomicF32::new(0.0)),
+                voice: Arc::new(VoiceControls::new()),
             },
             game: Output::new("game output", Some(reader)),
-            monitor: Output::new("monitor output", None),
+            monitor,
         }
     }
 
@@ -194,6 +204,7 @@ impl AudioRouter for AudioEngine {
     async fn set_microphone(&self, device_id: Option<&str>) -> Result<(), Failure> {
         let microphone = &self.microphone;
         *microphone.reader.lock().unwrap() = None;
+        *microphone.hearing.lock().unwrap() = None;
         microphone.level.store(0.0);
 
         let Some(id) = device_id.map(str::to_owned) else {
@@ -201,18 +212,22 @@ impl AudioRouter for AudioEngine {
         };
 
         let (ring, reader) = mic::ring();
+        let (hearing_ring, hearing) = mic::ring();
         let level = microphone.level.clone();
+        let voice = microphone.voice.clone();
         let events = self.events.clone();
         microphone
             .role
             .run(move |stream| {
                 *stream = None;
-                *stream = Some(devices::open_capture(&id, ring, level, events)?);
+                let rings = [ring, hearing_ring];
+                *stream = Some(devices::open_capture(&id, rings, level, voice, events)?);
                 Ok(())
             })
             .await?;
 
         *microphone.reader.lock().unwrap() = Some(reader);
+        *microphone.hearing.lock().unwrap() = Some(hearing);
         Ok(())
     }
 
@@ -225,9 +240,23 @@ impl AudioRouter for AudioEngine {
     }
 }
 
+impl VoiceChanger for AudioEngine {
+    fn set_voice(&self, shift: Option<VoiceShift>) {
+        self.microphone.voice.set(shift);
+    }
+
+    fn set_hearing_voice(&self, enabled: bool) {
+        self.monitor
+            .controls
+            .mic_enabled
+            .store(enabled, Ordering::Relaxed);
+    }
+}
+
 impl AudioMix for AudioEngine {
     fn set_mic_volume(&self, volume: f32) {
         self.game.controls.mic_volume.store(volume);
+        self.monitor.controls.mic_volume.store(volume);
     }
 
     fn set_game_volume(&self, volume: f32) {

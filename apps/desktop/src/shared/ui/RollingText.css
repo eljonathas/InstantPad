@@ -1,0 +1,31 @@
+.rolling {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.rolling-term {
+  display: block;
+}
+
+.rolling-term[data-entering] {
+  animation: rolling-in var(--rolling-time) var(--ease-push);
+}
+
+.rolling-leaving {
+  position: absolute;
+  inset: 0;
+  animation: rolling-out var(--rolling-time) var(--ease-push) forwards;
+}
+
+@keyframes rolling-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes rolling-out {
+  to {
+    transform: translateY(-100%);
+  }
+}

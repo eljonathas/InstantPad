@@ -14,6 +14,10 @@ pub struct BlackHole;
 
 #[async_trait]
 impl VirtualCable for BlackHole {
+    fn product_name(&self) -> &'static str {
+        NAME
+    }
+
     fn find_game_output(&self, outputs: &[AudioDevice]) -> Option<AudioDevice> {
         let named = |wanted: &str| outputs.iter().find(|device| device.name.contains(wanted));
         named(STEREO_NAME).or_else(|| named(NAME)).cloned()

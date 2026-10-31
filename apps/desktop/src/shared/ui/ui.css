@@ -9,7 +9,8 @@
    pressed. Anything that sets --cap-face gets its own shades of those. */
 .key,
 .toggle,
-.pad-body {
+.pad-body,
+.effect-cap {
   --cap-light: color-mix(in srgb, var(--cap-face) var(--cap-light-mix), white);
   --cap-edge: color-mix(in srgb, var(--cap-face) var(--cap-edge-mix), black);
   border: var(--border-width) solid var(--cap-face);
@@ -43,7 +44,9 @@
 .toggle[aria-pressed="true"],
 .toggle[aria-selected="true"],
 .pad:active .pad-body,
-.pad[data-playing] .pad-body {
+.pad[data-playing] .pad-body,
+.effect:active .effect-cap,
+.effect[aria-pressed="true"] .effect-cap {
   border-top-color: var(--cap-face);
   border-left-color: var(--cap-face);
   box-shadow:

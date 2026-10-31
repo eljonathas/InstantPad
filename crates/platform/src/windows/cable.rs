@@ -8,6 +8,10 @@ pub struct VbCable;
 
 #[async_trait]
 impl VirtualCable for VbCable {
+    fn product_name(&self) -> &'static str {
+        "VB-CABLE"
+    }
+
     fn find_game_output(&self, outputs: &[AudioDevice]) -> Option<AudioDevice> {
         vb_audio::find_game_output(outputs)
     }

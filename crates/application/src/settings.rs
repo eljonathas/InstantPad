@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use instantpad_domain::hotkeys::{Hotkey, NumericScheme};
+use instantpad_domain::voice::VoiceSettings;
 use serde::{Deserialize, Serialize};
 
 use crate::message::Failure;
@@ -24,6 +25,7 @@ pub struct AppSettings {
     pub stop_hotkey: Option<Hotkey>,
     /// Playing a sound stops whatever was playing.
     pub one_sound_at_a_time: bool,
+    pub voice: VoiceSettings,
 }
 
 impl Default for AppSettings {
@@ -41,6 +43,7 @@ impl Default for AppSettings {
             numeric_scheme: NumericScheme::Numpad,
             stop_hotkey: None,
             one_sound_at_a_time: false,
+            voice: VoiceSettings::default(),
         }
     }
 }

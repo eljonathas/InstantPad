@@ -68,11 +68,13 @@ impl SetupSession {
             game_output_id: settings.game_output_id.clone(),
             monitor_output_id: settings.monitor_output_id.clone(),
             has_cable: cable.find_game_output(&outputs).is_some(),
+            cable_name: cable.product_name().to_owned(),
             is_system_output_on_cable: system_output.is_some_and(|device| cable.is_virtual(device)),
             game_microphone_name: cable.game_microphone_name(game_output),
             language: settings.language.clone(),
             numeric_scheme: settings.numeric_scheme,
             numeric_hint_keys: numeric_hint_keys(settings.numeric_scheme),
+            voice_keys: voice_keys(settings.numeric_scheme),
             stop_hotkey: settings.stop_hotkey.clone(),
             one_sound_at_a_time: settings.one_sound_at_a_time,
         }
@@ -224,6 +226,15 @@ fn numeric_hint_keys(scheme: NumericScheme) -> Vec<String> {
     .flatten()
     .map(Hotkey::to_string)
     .collect()
+}
+
+fn voice_keys(scheme: NumericScheme) -> Vec<String> {
+    let layout = NumericLayout::for_scheme(scheme);
+    [layout.toggle_voice, layout.next_voice]
+        .iter()
+        .flatten()
+        .map(Hotkey::to_string)
+        .collect()
 }
 
 fn id_of(device: &Option<AudioDevice>) -> Option<&str> {

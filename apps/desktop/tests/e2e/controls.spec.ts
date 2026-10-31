@@ -61,3 +61,20 @@ test("the device is scaled to the window without cropping", async ({ page }) => 
     .toBe(true);
   await expect(page.getByTitle("Minimize")).toBeVisible();
 });
+
+test("a held knob shows its exact value and glows, and both stop on release", async ({ page }) => {
+  const knob = page.getByRole("slider", { name: "Game" });
+  const box = (await knob.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+
+  await expect(page.locator(".knob-readout")).toHaveText("80%");
+  await expect(knob).toHaveAttribute("data-held", "");
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 18);
+  await expect(page.locator(".knob-readout")).toHaveText("90%");
+
+  await page.mouse.up();
+  await expect(page.locator(".knob-readout")).toHaveCount(0);
+  await expect(knob).not.toHaveAttribute("data-held", "");
+});

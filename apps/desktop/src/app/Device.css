@@ -12,6 +12,12 @@
   inset: var(--window-margin);
 }
 
+/* The Voice screen has a color of its own, whatever the interface on the Pad screen uses. */
+.device[data-screen="voice"] {
+  --color-accent: var(--color-voice);
+  --drop-glow: 0 0 20px color-mix(in srgb, var(--color-voice) 55%, transparent);
+}
+
 .chassis {
   position: absolute;
   inset: 0;
@@ -89,6 +95,33 @@
 .logo-pad {
   margin-top: var(--logo-pad-offset);
   color: var(--color-accent);
+}
+
+/* Two keys that release each other, like the mode keys of a real sampler. */
+.mode-keys {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--panel-tabs-gap);
+  height: var(--panel-tabs-height);
+  margin-bottom: var(--space-5);
+}
+
+/* The effect keeps working on the Pad screen, so this LED says so from there. */
+.mode-voice-on .toggle-led {
+  background: var(--color-voice);
+}
+
+.side {
+  min-width: 0;
+  min-height: 0;
+}
+
+.side-page {
+  height: 100%;
+}
+
+.side-page[hidden] {
+  display: none;
 }
 
 .logo-tagline {

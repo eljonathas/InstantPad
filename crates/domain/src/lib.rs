@@ -4,3 +4,4 @@ pub mod board;
 pub mod hotkeys;
 pub mod palette;
 pub mod sounds;
+pub mod voice;

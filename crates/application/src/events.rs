@@ -1,10 +1,11 @@
 use instantpad_domain::hotkeys::{Hotkey, NumericScheme};
 use instantpad_domain::sounds::SoundSource;
+use instantpad_domain::voice::{VoiceEffect, VoiceParam};
 use instantpad_domain::{board, palette};
 use serde::Serialize;
 use specta::Type;
 
-use crate::message::Message;
+use crate::message::{Message, TextKey};
 use crate::ports::AudioDevice;
 use crate::settings::AppSettings;
 
@@ -72,12 +73,15 @@ pub struct SetupView {
     pub game_output_id: Option<String>,
     pub monitor_output_id: Option<String>,
     pub has_cable: bool,
+    pub cable_name: String,
     pub is_system_output_on_cable: bool,
     pub game_microphone_name: String,
     pub language: Option<String>,
     pub numeric_scheme: NumericScheme,
     /// First pad, last pad, next, previous and stop keys of the scheme. Empty when it is off.
     pub numeric_hint_keys: Vec<String>,
+    /// The keys that switch the voice effect and move to the next one. Empty when off.
+    pub voice_keys: Vec<String>,
     pub stop_hotkey: Option<Hotkey>,
     pub one_sound_at_a_time: bool,
 }
@@ -92,6 +96,47 @@ pub struct MixerView {
     #[specta(type = u32)]
     pub monitor_volume: f64,
     pub mic_enabled: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum VoiceIcon {
+    Mic,
+    Feather,
+    Mountain,
+    Wave,
+}
+
+/// A knob of an effect. The interface draws whatever an effect lists here.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ParamView {
+    pub param: VoiceParam,
+    pub label: TextKey,
+    #[specta(type = u32)]
+    pub value: f64,
+    #[specta(type = u32)]
+    pub default_value: f64,
+    /// The value as the user reads it, such as "+5.0 st".
+    pub text: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectView {
+    pub effect: VoiceEffect,
+    pub name: TextKey,
+    pub icon: VoiceIcon,
+    pub color: String,
+    pub params: Vec<ParamView>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceView {
+    pub active: VoiceEffect,
+    pub effects: Vec<EffectView>,
+    pub is_hearing: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
@@ -118,6 +163,7 @@ pub enum AppEvent {
     Setup(SetupView),
     DriverStatus(Message),
     Update(UpdateView),
+    Voice(VoiceView),
     Display(DisplayEvent),
 }
 
@@ -185,4 +231,5 @@ pub struct StartView {
     pub setup: SetupView,
     pub favorites: Vec<SoundSource>,
     pub limits: Limits,
+    pub voice: VoiceView,
 }

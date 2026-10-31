@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use instantpad_domain::board::PadBoard;
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
+use instantpad_domain::voice::VoiceShift;
 use serde::Serialize;
 use specta::Type;
 
@@ -84,6 +85,15 @@ pub trait AudioMix: Send + Sync {
     fn game_output_level(&self) -> f32;
 }
 
+/// Changes the voice on its way to the game.
+pub trait VoiceChanger: Send + Sync {
+    /// `None` is the natural voice, which gets through with no added delay.
+    fn set_voice(&self, shift: Option<VoiceShift>);
+
+    /// Sends the voice to the headphones too, so the user can hear what the effect does.
+    fn set_hearing_voice(&self, enabled: bool);
+}
+
 /// How the operating system itself has its audio configured.
 pub trait SystemAudio: Send + Sync {
     fn default_microphone_id(&self) -> Option<String>;
@@ -99,6 +109,9 @@ pub trait SystemAudio: Send + Sync {
 /// The virtual cable that carries the mix into the game.
 #[async_trait]
 pub trait VirtualCable: Send + Sync {
+    /// What the user installs to get the cable.
+    fn product_name(&self) -> &'static str;
+
     fn find_game_output(&self, outputs: &[AudioDevice]) -> Option<AudioDevice>;
 
     fn is_virtual(&self, device: &AudioDevice) -> bool;

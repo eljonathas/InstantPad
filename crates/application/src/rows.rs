@@ -92,6 +92,9 @@ impl SoundRows {
                 self.show(Message::plain(format!("{mark}{}", source.name)));
                 self.events.emit(AppEvent::Favorites(self.favorites.list()));
                 self.board.publish();
+                if !is_favorite {
+                    self.board.release_file(&source.path);
+                }
             }
             Err(failure) => self.show_failure(&source, failure),
         }

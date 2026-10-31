@@ -1,9 +1,10 @@
 mod support;
 
 use instantpad_application::hotkeys::HotkeyCommand;
-use instantpad_application::ports::PlaybackTag;
+use instantpad_application::ports::{PlaybackTag, SoundFileStore};
 use instantpad_domain::board::InterfaceLayout;
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
+use instantpad_domain::sounds::SoundSource;
 use support::{World, shown};
 
 fn layout(name: &str) -> InterfaceLayout {
@@ -315,4 +316,93 @@ async fn sounds_overlap_unless_the_user_asks_otherwise() {
     world.board.press_pad(1).await;
 
     assert_eq!(world.board.playing_slots().len(), 2);
+}
+
+fn stored(world: &World, name: &str) {
+    let path = format!("{name}.mp3");
+    world.files.files.lock().unwrap().insert(path);
+}
+
+#[tokio::test]
+async fn removing_a_pad_deletes_its_file() {
+    let world = World::new();
+    stored(&world, "a");
+    fill(&world, 0, "a").await;
+
+    world.board.remove(0);
+
+    assert!(!world.files.exists("a.mp3"));
+}
+
+#[tokio::test]
+async fn a_file_stays_while_another_pad_uses_it() {
+    let world = World::new();
+    stored(&world, "a");
+    fill(&world, 0, "a").await;
+    fill(&world, 1, "a").await;
+
+    world.board.remove(0);
+    assert!(world.files.exists("a.mp3"));
+
+    world.board.remove(1);
+    assert!(!world.files.exists("a.mp3"));
+}
+
+#[tokio::test]
+async fn a_file_stays_while_it_is_a_favorite() {
+    let world = World::new();
+    stored(&world, "a");
+    fill(&world, 0, "a").await;
+    let source = SoundSource {
+        name: "a".to_owned(),
+        color: "#ffffff".to_owned(),
+        path: "a.mp3".to_owned(),
+        sound_url: None,
+    };
+    world.favorites.toggle(&source).await.unwrap();
+
+    world.board.remove(0);
+
+    assert!(world.files.exists("a.mp3"));
+}
+
+#[tokio::test]
+async fn replacing_a_sound_deletes_the_old_file_but_not_the_new_one() {
+    let world = World::new();
+    stored(&world, "old");
+    stored(&world, "new");
+    fill(&world, 0, "old").await;
+
+    fill(&world, 0, "new").await;
+
+    assert!(!world.files.exists("old.mp3"));
+    assert!(world.files.exists("new.mp3"));
+}
+
+#[tokio::test]
+async fn placing_the_same_file_again_keeps_it() {
+    let world = World::new();
+    stored(&world, "a");
+    fill(&world, 0, "a").await;
+
+    fill(&world, 0, "a").await;
+
+    assert!(world.files.exists("a.mp3"));
+}
+
+#[tokio::test]
+async fn deleting_an_interface_deletes_the_files_only_it_used() {
+    let world = World::new();
+    stored(&world, "shared");
+    stored(&world, "only");
+    fill(&world, 0, "shared").await;
+    world.board.add_interface(layout("Memes"));
+    fill(&world, 0, "shared").await;
+    fill(&world, 1, "only").await;
+    let memes = world.board.view().active_id;
+
+    world.board.delete_interface(&memes);
+
+    assert!(world.files.exists("shared.mp3"));
+    assert!(!world.files.exists("only.mp3"));
 }

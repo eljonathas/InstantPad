@@ -222,6 +222,18 @@ fn keeping_a_preview_moves_it_to_the_store() {
 }
 
 #[test]
+fn deleting_never_reaches_outside_the_store() {
+    let (dir, folder) = folder();
+    let store = FolderSoundStore::new(&folder);
+    let outside = dir.path().join("mine.mp3");
+    fs::write(&outside, b"audio").unwrap();
+
+    store.delete(outside.to_str().unwrap());
+
+    assert!(outside.is_file());
+}
+
+#[test]
 fn importing_copies_the_file_into_the_store() {
     let (dir, folder) = folder();
     let store = FolderSoundStore::new(&folder);

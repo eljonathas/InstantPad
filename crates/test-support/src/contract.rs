@@ -114,6 +114,9 @@ pub fn sound_file_store(store: &dyn SoundFileStore, outside: &str, destination: 
         .export(&stored, destination)
         .expect("export a stored file");
 
+    store.delete(&stored);
+    assert!(!store.exists(&stored));
+
     let target = store.path_for_download("https://site/media/sounds/som.mp3");
     assert!(target.ends_with("som.mp3"));
     assert!(!store.exists("this file does not exist.mp3"));

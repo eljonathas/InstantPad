@@ -254,21 +254,40 @@ impl BoardSession {
     }
 
     pub fn delete_interface(&self, id: &str) {
-        {
+        let sounds = {
             let mut state = self.lock();
-            let sounds: Vec<PlaybackTag> = state.board.sounds_of(id).map(sound_tag).collect();
+            let sounds: Vec<Sound> = state.board.sounds_of(id).cloned().collect();
             let Ok(next) = state.board.delete_interface(id) else {
                 return;
             };
-            for tag in sounds {
-                self.player.stop(tag);
+            for sound in &sounds {
+                self.player.stop(sound_tag(sound));
             }
             if state.active_id == id {
                 self.activate(&mut state, next);
             }
-        }
+            sounds
+        };
         self.apply_hotkeys();
         self.after_board_edit();
+        for sound in sounds {
+            self.release_file(&sound.path);
+        }
+    }
+
+    /// Deletes a sound file once no pad and no favorite use it anymore.
+    pub fn release_file(&self, path: &str) {
+        let on_a_pad = self
+            .lock()
+            .board
+            .sounds()
+            .iter()
+            .any(|sound| sound.path == path);
+        if on_a_pad || self.favorites.is_favorite(path) {
+            return;
+        }
+        self.player.forget(path);
+        self.files.delete(path);
     }
 
     pub async fn press_pad(&self, slot: u32) {
@@ -330,7 +349,7 @@ impl BoardSession {
         self.player.forget(path);
         self.player.preload(path).await?;
 
-        {
+        let replaced = {
             let mut state = self.lock();
             let PadTarget { interface_id, slot } = target;
             // The interface may have been deleted or made smaller while the sound was loading.
@@ -342,12 +361,20 @@ impl BoardSession {
                 return Ok(());
             }
 
+            let replaced = state
+                .board
+                .sound_at(interface_id, *slot)
+                .map(|sound| sound.path.clone());
             state.board.place(interface_id, *slot, name, path, color);
             if state.active_id == *interface_id {
                 state.target_slot = None;
             }
-        }
+            replaced
+        };
         self.after_board_edit();
+        if let Some(path) = replaced {
+            self.release_file(&path);
+        }
         self.show(Message::plain(format!("{} {name}", pad_label(target.slot))));
         Ok(())
     }
@@ -451,6 +478,7 @@ impl BoardSession {
         self.lock().board.remove(&sound.id);
         self.apply_hotkeys();
         self.after_board_edit();
+        self.release_file(&sound.path);
     }
 
     /// Redraws the pads after something that changes them from outside, such as a favorite.

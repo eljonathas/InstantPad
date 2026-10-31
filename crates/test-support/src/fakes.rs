@@ -337,6 +337,10 @@ impl SoundFileStore for FakeFileStore {
         Ok(())
     }
 
+    fn delete(&self, stored_path: &str) {
+        self.files.lock().unwrap().remove(stored_path);
+    }
+
     fn exists(&self, path: &str) -> bool {
         self.files.lock().unwrap().contains(path)
     }

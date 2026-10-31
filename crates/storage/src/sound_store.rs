@@ -81,6 +81,14 @@ impl SoundFileStore for FolderSoundStore {
             .map_err(|error| Failure::because(TextKey::SoundSaveFailed, error))
     }
 
+    fn delete(&self, stored_path: &str) {
+        let path = Path::new(stored_path);
+        if path.parent() == Some(self.folder.as_path()) {
+            // Whatever cannot be deleted now only takes a little space.
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
     fn exists(&self, path: &str) -> bool {
         Path::new(path).is_file()
     }

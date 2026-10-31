@@ -194,6 +194,41 @@ async fn favoriting_a_row_lights_the_mark_on_its_pad() {
 }
 
 #[tokio::test]
+async fn unfavoriting_deletes_the_file_of_a_sound_on_no_pad() {
+    let world = World::new();
+    world
+        .files
+        .files
+        .lock()
+        .unwrap()
+        .insert("store/a.mp3".to_owned());
+    let rows = rows(&world);
+    rows.toggle_favorite(online()).await;
+
+    rows.toggle_favorite(online()).await;
+
+    assert!(!world.files.exists("store/a.mp3"));
+}
+
+#[tokio::test]
+async fn unfavoriting_keeps_the_file_of_a_sound_on_a_pad() {
+    let world = World::new();
+    world
+        .files
+        .files
+        .lock()
+        .unwrap()
+        .insert("store/a.mp3".to_owned());
+    let rows = rows(&world);
+    rows.add_to_pad(online(), Some(0)).await;
+    rows.toggle_favorite(online()).await;
+
+    rows.toggle_favorite(online()).await;
+
+    assert!(world.files.exists("store/a.mp3"));
+}
+
+#[tokio::test]
 async fn saving_a_sound_copies_it_to_the_chosen_place() {
     let world = World::new();
 

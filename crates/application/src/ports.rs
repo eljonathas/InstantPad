@@ -178,6 +178,9 @@ pub trait SoundFileStore: Send + Sync {
     /// Copies a stored sound to a place the user chose.
     fn export(&self, stored_path: &str, destination: &str) -> Result<(), Failure>;
 
+    /// Deletes a stored sound. Anything outside the store is left alone.
+    fn delete(&self, stored_path: &str);
+
     fn exists(&self, path: &str) -> bool;
 }
 

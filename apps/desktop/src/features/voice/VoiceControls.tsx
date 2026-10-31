@@ -23,6 +23,7 @@ export function VoiceControls() {
               label={t(label)}
               value={value}
               defaultValue={defaultValue}
+              text={text}
               onChange={(next) => void commands.setVoiceParam(param, next)}
             />
             <div className="silk">{t(label)}</div>

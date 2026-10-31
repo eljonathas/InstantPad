@@ -74,6 +74,16 @@ fn a_damaged_file_is_kept_as_a_backup_and_gives_the_default() {
 }
 
 #[test]
+fn a_file_that_is_not_text_is_kept_as_a_backup_too() {
+    let (dir, folder) = folder();
+    fs::write(dir.path().join("board.json"), [0xff, 0xfe, 0x00]).unwrap();
+
+    JsonBoardRepository::new(&folder).load();
+
+    assert!(dir.path().join("board.json.bak").is_file());
+}
+
+#[test]
 fn saving_leaves_no_partial_file_behind() {
     let (dir, folder) = folder();
 

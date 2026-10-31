@@ -7,10 +7,10 @@ use serde::de::DeserializeOwned;
 /// A missing file is a first run. A damaged one is kept as `.bak` so the next save
 /// does not destroy what the user might still recover.
 pub fn load<T: DeserializeOwned + Default>(path: &Path) -> T {
-    let Ok(text) = std::fs::read_to_string(path) else {
+    let Ok(bytes) = std::fs::read(path) else {
         return T::default();
     };
-    serde_json::from_str(&text).unwrap_or_else(|_| {
+    serde_json::from_slice(&bytes).unwrap_or_else(|_| {
         // If the backup fails too, the app still has to start with the default.
         let _ = std::fs::copy(path, appended(path, "bak"));
         T::default()

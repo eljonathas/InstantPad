@@ -15,7 +15,7 @@ impl AppDataFolder {
         Ok(Self { root, sounds })
     }
 
-    /// `INSTANTPAD_DATA` lets tests and portable installs choose the folder.
+    /// `INSTANTPAD_DATA` keeps development runs away from the real data.
     pub fn resolve(default_root: PathBuf) -> io::Result<Self> {
         match std::env::var_os("INSTANTPAD_DATA") {
             Some(root) if !root.is_empty() => Self::new(PathBuf::from(root)),

@@ -9,7 +9,7 @@
   min-width: var(--menu-min-width);
   padding: var(--menu-padding);
   background: var(--color-dialog-back);
-  border: var(--border-width) solid var(--color-key-hover-border);
+  border: var(--border-width) solid var(--gray-1);
   border-radius: var(--radius-key);
   box-shadow: var(--shadow-menu);
   font-size: var(--font-menu);

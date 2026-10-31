@@ -52,7 +52,6 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
     >
       {lit && <i className="pad-glow" />}
       <span className="pad-body">
-        <i className="pad-light" />
         <i className="pad-sheen" />
         <span className="pad-slot">{pad.label}</span>
         <span className="pad-shortcut">{pad.shortcut}</span>

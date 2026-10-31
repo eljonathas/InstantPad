@@ -50,14 +50,20 @@
   --font-hotkey-prompt: 15px;
   --font-menu: 12px;
 
+  /* The four grays. Every surface of the device is one of these. */
+  --gray-1: #424549;
+  --gray-2: #36393e;
+  --gray-3: #282b30;
+  --gray-4: #1e2124;
+
   /* Palette */
   --color-amber: #ffb03a;
   --color-accent: #ffb03a; /* Replaced at runtime by the accent of the active interface. */
   --color-lcd: #7dffa0;
   --color-lcd-dim: #3f8f5a;
   --color-silk: #a6a9b0;
-  --color-screen-back: #0b0d11;
-  --color-screen-line: #2a2e36;
+  --color-screen-back: var(--gray-4);
+  --color-screen-line: var(--gray-2);
   --color-key-text: #d8dae0;
   --color-white: #ffffff;
   --color-black: #000000;
@@ -68,37 +74,49 @@
   --color-dialog-label: gray;
 
   /* Chassis */
-  --gradient-chassis: linear-gradient(158deg, #34363d 0%, #232429 45%, #17181c 100%);
-  --color-chassis-border: #4a4d55;
+  --gradient-chassis: linear-gradient(158deg, var(--gray-1) 0%, var(--gray-2) 45%, var(--gray-3) 100%);
+  --color-chassis-border: var(--gray-1);
   --shadow-chassis: 0 3px 10px rgb(0 0 0 / 70%);
-  --color-screw-fill: #0e0f12;
-  --color-screw-stroke: #55585f;
+  --color-screw-fill: var(--gray-4);
+  --color-screw-stroke: var(--gray-1);
   --gradient-lcd: linear-gradient(180deg, #0c1a11 0%, #102418 100%);
-  --color-bezel: #050506;
-  --color-row-hover: #14261b;
+  --color-bezel: var(--gray-4);
+  --color-row-hover: var(--gray-3);
 
   /* Keys and pads */
-  --gradient-rubber: linear-gradient(180deg, #34363c 0%, #1f2024 100%);
-  --gradient-sheen: linear-gradient(180deg, rgb(255 255 255 / 20%) 0%, rgb(255 255 255 / 0%) 45%);
-  --color-key-border: #0a0a0c;
-  --color-key-hover-border: #5a5e68;
-  --color-key-pressed: #141518;
-  --color-led-off: #2b2d32;
-  --color-pad-label: #6c7078;
+  --gradient-sheen: linear-gradient(180deg, rgb(255 255 255 / 12%) 0%, rgb(255 255 255 / 0%) 45%);
+  --color-key-face: var(--gray-1);
+  --color-pad-face: var(--gray-2);
+  --color-well: var(--gray-4);
+  --color-led-off: var(--gray-2);
+  --color-pad-label: var(--color-silk);
   --color-pad-label-lit: #e8e8ea;
   --color-pad-shortcut-lit: #ffe0b0;
-  --color-pad-playing-border: rgb(255 255 255 / 93%);
-  --opacity-pad-loaded: 0.5;
-  --opacity-key-pressed: 0.7;
+  --pad-face-mix: 58%;
   --opacity-key-disabled: 0.4;
-  --scale-pad-pressed: 0.96;
   --blur-pad-glow: 16px;
+
+  /* Tactile keys: a cap with a lit edge and a body under it, sitting in a dark well. */
+  --cap-light-mix: 70%;
+  --cap-edge-mix: 52%;
+  --cap-travel: 2px;
+  --cap-travel-pad: 5px;
+  --cap-press-time: 60ms;
+  --cap-release-time: 130ms;
+  --cap-hover-brightness: 1.1;
+  --shadow-cap-cast: 2px 4px 8px rgb(0 0 0 / 45%);
+  --shadow-cap-cast-pad: 4px 7px 14px rgb(0 0 0 / 50%);
+  --shadow-cap-pressed: inset -3px -3px 8px rgb(0 0 0 / 25%);
+  --shadow-cap-pressed-pad: inset -8px -8px 24px rgb(0 0 0 / 25%);
+  --shadow-well: inset 0 2px 5px rgb(0 0 0 / 65%);
+  --well-gap: 2px;
+  --radius-well: 4px;
   --shadow-pad-name: 0 1px 4px rgb(0 0 0 / 90%);
 
   /* Fields */
-  --color-field-back: #050608;
-  --color-option-highlight: #1d3a28;
-  --color-dialog-back: #17181c;
+  --color-field-back: var(--gray-3);
+  --color-option-highlight: var(--gray-1);
+  --color-dialog-back: var(--gray-3);
 
   /* Knob */
   --knob-size: 92px;
@@ -106,19 +124,19 @@
   --knob-tick-width: 1.5px;
   --knob-tick-lit-width: 2px;
   --knob-pointer-width: 3px;
-  --knob-tick-unlit: #4a4d55;
+  --knob-tick-unlit: var(--gray-1);
   --knob-shadow: rgb(0 0 0 / 47%);
-  --knob-skirt-top: #4a4d55;
-  --knob-skirt-bottom: #141518;
-  --knob-cap-light: #3c3f46;
-  --knob-cap-dark: #1a1b1f;
-  --knob-cap-stroke: #08080a;
+  --knob-skirt-top: var(--gray-1);
+  --knob-skirt-bottom: var(--gray-4);
+  --knob-cap-light: var(--gray-1);
+  --knob-cap-dark: var(--gray-3);
+  --knob-cap-stroke: var(--gray-4);
 
   /* LED meter */
   --led-green: #35f27a;
   --led-amber: #ffb03a;
   --led-red: #ff3b3b;
-  --led-off: #1c1e22;
+  --led-off: var(--gray-3);
   --led-gap: 2px;
   --led-radius: 1px;
   --meter-width: 24px;
@@ -166,7 +184,6 @@
   /* Shapes */
   --radius-screen: 6px;
   --radius-key: 5px;
-  --radius-pad: 11px;
   --radius-pad-inner: 8px;
   --radius-pad-glow: 12px;
   --radius-led-strip: 1.5px;

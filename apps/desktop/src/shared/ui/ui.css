@@ -5,28 +5,70 @@
   outline-offset: var(--border-width);
 }
 
+/* A tactile cap: a lit top edge, a body below that gives it height, and a real travel when
+   pressed. Anything that sets --cap-face gets its own shades of those. */
+.key,
+.toggle,
+.pad-body {
+  --cap-light: color-mix(in srgb, var(--cap-face) var(--cap-light-mix), white);
+  --cap-edge: color-mix(in srgb, var(--cap-face) var(--cap-edge-mix), black);
+  border: var(--border-width) solid var(--cap-face);
+  border-top-color: var(--cap-light);
+  border-left-color: var(--cap-light);
+  background: var(--cap-face);
+  box-shadow:
+    0 var(--cap-height) 0 var(--cap-edge),
+    var(--cap-cast);
+  transition:
+    transform var(--cap-release-time) ease-out,
+    box-shadow var(--cap-release-time) ease-out;
+}
+
+.key,
+.toggle {
+  --cap-face: var(--color-key-face);
+  --cap-height: var(--cap-travel);
+  --cap-cast: var(--shadow-cap-cast);
+  --cap-sunk: var(--shadow-cap-pressed);
+}
+
+.key:hover:not(:disabled),
+.toggle:hover {
+  filter: brightness(var(--cap-hover-brightness));
+}
+
+.key:active:not(:disabled),
+.toggle:active,
+.toggle[aria-pressed="true"],
+.toggle[aria-selected="true"],
+.pad:active .pad-body,
+.pad[data-playing] .pad-body {
+  border-top-color: var(--cap-face);
+  border-left-color: var(--cap-face);
+  box-shadow:
+    0 var(--border-width) 0 var(--cap-edge),
+    var(--cap-sunk);
+  transform: translateY(calc(var(--cap-height) - var(--border-width)));
+}
+
+.key:active:not(:disabled),
+.toggle:active,
+.pad:active .pad-body {
+  transition-duration: var(--cap-press-time);
+}
+
 /* Hardware key (HwButton) */
 .key {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: var(--key-padding);
-  border: var(--border-width) solid var(--color-key-border);
   border-radius: var(--radius-key);
-  background: var(--gradient-rubber);
   color: var(--color-key-text);
   font-size: var(--font-key);
   font-weight: var(--weight-semibold);
   white-space: nowrap;
   cursor: pointer;
-}
-
-.key:hover {
-  border-color: var(--color-key-hover-border);
-}
-
-.key:active {
-  opacity: var(--opacity-key-pressed);
 }
 
 .key:disabled {
@@ -55,7 +97,7 @@
 }
 
 .key-stop {
-  background: var(--color-stop);
+  --cap-face: var(--color-stop);
   color: var(--color-white);
 }
 
@@ -68,17 +110,11 @@
   display: grid;
   grid-template-rows: var(--toggle-led-row) 1fr;
   padding: 0;
-  border: var(--border-width) solid var(--color-key-border);
   border-radius: var(--radius-key);
-  background: var(--gradient-rubber);
   color: var(--color-key-text);
   font-size: var(--font-key);
   font-weight: var(--weight-semibold);
   cursor: pointer;
-}
-
-.toggle:active {
-  background: var(--color-key-pressed);
 }
 
 .toggle-led {
@@ -164,9 +200,9 @@ select.field option {
   max-width: var(--dialog-width);
   padding: var(--key-padding);
   overflow: hidden;
-  border: var(--border-width) solid var(--color-key-hover-border);
+  border: var(--border-width) solid var(--gray-1);
   border-radius: var(--radius-key);
-  background: var(--gradient-rubber);
+  background: var(--color-key-face);
   color: var(--color-key-text);
   font-size: var(--font-key);
   font-weight: var(--weight-semibold);

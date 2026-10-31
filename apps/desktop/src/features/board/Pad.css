@@ -3,17 +3,16 @@
   min-height: 0;
 }
 
+/* The dark well the cap sits in */
 .pad {
   position: relative;
   margin: var(--gap-pad);
   padding: 0;
   border: 0;
-  background: none;
+  border-radius: var(--radius-well);
+  background: var(--color-well);
+  box-shadow: var(--shadow-well);
   cursor: pointer;
-}
-
-.pad:active {
-  transform: scale(var(--scale-pad-pressed));
 }
 
 .pad-glow {
@@ -25,30 +24,23 @@
 }
 
 .pad-body {
+  --cap-face: var(--color-pad-face);
+  --cap-height: var(--cap-travel-pad);
+  --cap-cast: var(--shadow-cap-cast-pad);
+  --cap-sunk: var(--shadow-cap-pressed-pad);
   position: absolute;
-  inset: 0;
-  border: var(--border-pad) solid var(--color-key-border);
-  border-radius: var(--radius-pad);
-  background: var(--gradient-rubber);
+  inset: var(--well-gap) var(--well-gap) calc(var(--well-gap) + var(--cap-travel-pad));
+  overflow: hidden;
+  border-radius: var(--radius-pad-inner);
   /* The text of a loaded pad: the labels dim, the name white. */
   --pad-label: var(--color-pad-label);
   --pad-shortcut: var(--color-pad-label);
   --pad-name: var(--color-white);
 }
 
-.pad-light,
 .pad-sheen {
   position: absolute;
   inset: 0;
-  border-radius: var(--radius-pad-inner);
-}
-
-.pad-light {
-  background: var(--pad-color);
-  opacity: 0;
-}
-
-.pad-sheen {
   background: var(--gradient-sheen);
 }
 
@@ -94,11 +86,8 @@
   overflow-wrap: anywhere;
 }
 
-.pad[data-loaded] .pad-light {
-  opacity: var(--opacity-pad-loaded);
-}
-
 .pad[data-loaded] .pad-body {
+  --cap-face: color-mix(in srgb, var(--pad-color) var(--pad-face-mix), var(--color-pad-face));
   --pad-label: var(--color-pad-label-lit);
   --pad-shortcut: var(--color-pad-shortcut-lit);
 }
@@ -107,15 +96,11 @@
   border-color: var(--color-accent);
 }
 
-.pad[data-playing] .pad-light {
-  opacity: 1;
-}
-
 .pad[data-playing] .pad-body {
+  --cap-face: var(--pad-color);
   --pad-label: var(--pad-contrast);
   --pad-shortcut: var(--pad-contrast);
   --pad-name: var(--pad-contrast);
-  border-color: var(--color-pad-playing-border);
 }
 
 .pad[data-playing] .pad-name {

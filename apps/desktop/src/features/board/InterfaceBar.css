@@ -8,6 +8,8 @@
   flex: 1;
   display: flex;
   min-width: 0;
+  /* Room for the height and shadow of the keys, which the scrolling box would cut off. */
+  padding-bottom: var(--space-3);
   overflow-x: auto;
   scrollbar-width: none;
 }

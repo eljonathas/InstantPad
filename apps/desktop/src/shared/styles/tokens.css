@@ -48,6 +48,7 @@
   --font-tagline: 9px;
   --font-add-interface: 16px;
   --font-hotkey-prompt: 15px;
+  --font-menu: 12px;
 
   /* Palette */
   --color-amber: #ffb03a;
@@ -101,6 +102,10 @@
 
   /* Knob */
   --knob-size: 92px;
+  --knob-stroke-width: 1px;
+  --knob-tick-width: 1.5px;
+  --knob-tick-lit-width: 2px;
+  --knob-pointer-width: 3px;
   --knob-tick-unlit: #4a4d55;
   --knob-shadow: rgb(0 0 0 / 47%);
   --knob-skirt-top: #4a4d55;
@@ -136,6 +141,27 @@
   --mic-toggle-height: 38px;
   --power-key-width: 30px;
   --power-key-height: 20px;
+  --power-key-gap: 5px;
+  --power-keys-top: 8px;
+  --power-keys-right: 14px;
+  --grip-size: 18px;
+  --key-icon-width: 28px;
+  --key-plus-width: 30px;
+  --key-mic-width: 36px;
+  --key-pad-width: 48px;
+  --key-stop-width: 86px;
+  --lcd-padding: 8px 14px;
+  --interface-bar-margin: 10px 5px 4px;
+  --logo-line-height: 1.25;
+  --logo-pad-offset: -10px;
+  --strip-gap: 8px;
+  --strip-gap-last: 10px;
+  --meter-label-gap: 3px;
+  --toggle-led-row: 5px;
+  --toggle-led-margin: 3px 10px 0;
+  --panel-padding: 10px;
+  --settings-padding: 10px 12px;
+  --focus-ring-width: 2px;
 
   /* Shapes */
   --radius-screen: 6px;
@@ -157,6 +183,24 @@
   --tab-max-width: 160px;
   --scrollbar-width: 8px;
   --combo-max-height: 260px;
+  --border-width: 1px;
+  --sound-dot-size: 8px;
+  --sound-gap: 3px;
+  --sound-row-padding: 3px 2px;
+  --sound-key-padding: 3px 0;
+  --pad-label-top: 5px;
+  --pad-label-side: 8px;
+  --pad-star-right: 7px;
+  --pad-star-bottom: 3px;
+  --pad-name-inset: 20px 8px 8px;
+  --radius-swatch: 2px;
+  --space-1: 3px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
 
   /* Dialogs */
   --dialog-width: 380px;
@@ -166,4 +210,16 @@
   --swatch-size: 30px;
   --swatch-border: 3px;
   --swatch-gap: 6px;
+  --color-backdrop: rgb(0 0 0 / 55%);
+
+  /* Context menus */
+  --menu-min-width: 180px;
+  --menu-padding: 4px;
+  --menu-item-padding: 6px 14px;
+  --menu-swatch-width: 60px;
+  --menu-swatch-height: 14px;
+  --shadow-menu: 0 6px 18px rgb(0 0 0 / 60%);
+  --z-ghost: 30;
+  --z-dialog: 20;
+  --z-menu: 10;
 }

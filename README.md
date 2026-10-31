@@ -39,7 +39,7 @@ If you prefer not to install the app, download `InstantPad-portable.exe` instead
 1. Download the `.dmg` that matches your Mac: the Apple silicon one for M1 and newer chips, the Intel one for older Macs. Open it and drag InstantPad to Applications.
 2. The app is not notarized yet, so macOS blocks it the first time. Try to open it once, then open **System Settings**, go to **Privacy & Security** and click **Open Anyway**.
 3. Allow the microphone when macOS asks.
-4. Install [BlackHole 2ch](https://existential.audio/blackhole/), the virtual cable. The **Install BlackHole** button in **Settings** opens its download page.
+4. Install [BlackHole 2ch](https://existential.audio/blackhole/), the virtual cable. The **Install BlackHole** button in **Settings** opens its download page. InstantPad does not use VB-CABLE on macOS. After installing, click **Refresh devices**.
 
 ### Linux
 
@@ -76,7 +76,7 @@ In Discord, set **Input Profile** to **Studio**. Voice Isolation removes everyth
 | Change a pad's shortcut, volume, color or name | Right-click the pad |
 | Rearrange pads | Hold Ctrl and drag |
 | Stop everything | **Stop** |
-| Turn a knob | Drag up or down, or use the mouse wheel. Double-click resets it |
+| Turn a knob | Drag up or down, or use the mouse wheel. Double-click resets it. The exact value shows in the middle of the knob while you hold it |
 
 The knobs set your voice in the game (**Mic**), the sounds in the game (**Game**) and the sounds you hear (**Headphones**).
 

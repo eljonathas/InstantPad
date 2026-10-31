@@ -170,6 +170,8 @@
   --knob-tick-lit-width: 2px;
   --knob-pointer-width: 3px;
   --knob-glow-size: 3px;
+  --knob-readout-padding: 1px 4px;
+  --knob-readout-back: rgb(0 0 0 / 60%);
   --knob-tick-unlit: var(--gray-1);
   --knob-shadow: rgb(0 0 0 / 47%);
   --knob-skirt-top: var(--gray-1);

@@ -34,7 +34,7 @@ impl VirtualCable for BlackHole {
     }
 
     async fn install(&self, progress: &(dyn Fn(Message) + Send + Sync)) -> Result<(), Failure> {
-        progress(Message::text(TextKey::DriverOpeningSetup));
+        progress(Message::text(TextKey::DriverOpeningPage));
         let status = Command::new("/usr/bin/open")
             .arg(DOWNLOAD_PAGE)
             .status()

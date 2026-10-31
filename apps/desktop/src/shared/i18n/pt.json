@@ -1,7 +1,7 @@
 {
   "AddToPad": "+ Pad",
   "AllFiles": "Todos os arquivos",
-  "AudioDeviceNotResponding": "Um dispositivo de áudio não está respondendo. Se você acabou de instalar o VB-CABLE, reinicie o PC.",
+  "AudioDeviceNotResponding": "Um dispositivo de áudio não está respondendo. Se você acabou de instalar um cabo virtual, reinicie o computador.",
   "AudioFileType": "Áudio",
   "Cancel": "Cancelar",
   "CatalogNoConnection": "Sem conexão com o MyInstants.",
@@ -24,6 +24,7 @@
   "DriverFound": "Driver encontrado.",
   "DriverInstallCanceled": "Instalação cancelada.",
   "DriverMissing": "Nenhum cabo virtual encontrado. Sem ele os sons não chegam ao jogo.",
+  "DriverOpeningPage": "Abrindo a página de download. Depois de instalar, clique em Atualizar dispositivos.",
   "DriverOpeningSetup": "Abrindo o instalador. Clique em \"Install Driver\" e reinicie o PC ao terminar.",
   "DriverSearching": "Procurando a versão mais recente do VB-CABLE...",
   "DriverSetupMissing": "{0} não veio no pacote baixado.",

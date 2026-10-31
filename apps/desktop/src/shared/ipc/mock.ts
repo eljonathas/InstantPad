@@ -331,8 +331,11 @@ export function installMock() {
     if (!sound) return;
     playing.add(sound.id);
     startedAt = Date.now();
-    setTimeout(() => playing.delete(sound.id), PLAY_MS);
-    show(plain(`${label(slot)} ${sound.name}`));
+    setTimeout(() => {
+      playing.delete(sound.id);
+      if (playing.size === 0) send({ kind: "display", data: { kind: "silent" } });
+    }, PLAY_MS);
+    send({ kind: "display", data: { kind: "sound", message: plain(`${label(slot)} ${sound.name}`) } });
   }
 
   function place(slot: number, name: string, path: string, color: string) {

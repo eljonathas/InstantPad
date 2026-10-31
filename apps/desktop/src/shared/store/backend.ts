@@ -16,6 +16,8 @@ import type {
 /** What the LCD shows. A bare text id is one of the interface's own words ("Ready", "Error"). */
 export interface DisplayState {
   main: Message | TextId;
+  /** The main line names a sound, so it goes back to "Ready" when the sound ends. */
+  isSound: boolean;
   status: Message | null;
   hint: Message | null;
 }
@@ -59,7 +61,7 @@ let state: BackendState = {
     oneSoundAtATime: false,
   },
   favorites: [],
-  display: { main: "Ready", status: null, hint: null },
+  display: { main: "Ready", isSound: false, status: null, hint: null },
   driverStatus: null,
   update: null,
   limits: {
@@ -121,9 +123,19 @@ export function applyEvent(event: AppEvent) {
       return replace({ voice: event.data });
     case "display": {
       const shown = event.data;
-      if (shown.kind === "show") return replace({ display: { ...state.display, main: shown.message } });
+      if (shown.kind === "show") {
+        return replace({ display: { ...state.display, main: shown.message, isSound: false } });
+      }
+      if (shown.kind === "sound") {
+        return replace({ display: { ...state.display, main: shown.message, isSound: true } });
+      }
+      if (shown.kind === "silent") {
+        return state.display.isSound
+          ? replace({ display: { ...state.display, main: "Ready", isSound: false } })
+          : undefined;
+      }
       if (shown.kind === "error") {
-        return replace({ display: { ...state.display, main: "Error", status: shown.message } });
+        return replace({ display: { ...state.display, main: "Error", isSound: false, status: shown.message } });
       }
       return replace({ display: { ...state.display, status: shown.status, hint: shown.hint } });
     }

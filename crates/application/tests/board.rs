@@ -1,11 +1,13 @@
 mod support;
 
+use instantpad_application::events::DisplayEvent;
 use instantpad_application::hotkeys::HotkeyCommand;
+use instantpad_application::message::Message;
 use instantpad_application::ports::{PlaybackTag, SoundFileStore};
 use instantpad_domain::board::InterfaceLayout;
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
 use instantpad_domain::sounds::SoundSource;
-use support::{World, shown};
+use support::World;
 
 fn layout(name: &str) -> InterfaceLayout {
     InterfaceLayout {
@@ -37,7 +39,12 @@ async fn a_hotkey_plays_the_active_interface_without_any_interface_code() {
         .await;
 
     assert_eq!(*world.player.played.lock().unwrap(), ["first.mp3"]);
-    assert_eq!(world.last_display(), Some(shown("01 first")));
+    assert_eq!(
+        world.last_display(),
+        Some(DisplayEvent::Sound {
+            message: Message::plain("01 first")
+        })
+    );
 }
 
 #[tokio::test]
@@ -405,4 +412,32 @@ async fn deleting_an_interface_deletes_the_files_only_it_used() {
 
     assert!(world.files.exists("shared.mp3"));
     assert!(!world.files.exists("only.mp3"));
+}
+
+#[tokio::test]
+async fn the_display_is_told_when_the_last_sound_ends() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    world.board.press_pad(0).await;
+    assert!(world.board.now_playing().is_some());
+
+    world.player.playing.lock().unwrap().clear();
+    world.board.now_playing();
+
+    assert_eq!(world.last_display(), Some(DisplayEvent::Silent));
+}
+
+#[tokio::test]
+async fn the_display_hears_only_once_that_the_sound_ended() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    world.board.press_pad(0).await;
+    world.board.now_playing();
+    world.player.playing.lock().unwrap().clear();
+    world.board.now_playing();
+    world.events.0.lock().unwrap().clear();
+
+    world.board.now_playing();
+
+    assert_eq!(world.last_display(), None);
 }

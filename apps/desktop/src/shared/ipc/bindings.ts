@@ -84,7 +84,11 @@ export type BoardView = {
 };
 
 /**  The LCD at the top of the device. */
-export type DisplayEvent = { kind: "show"; message: Message } | { kind: "error"; message: Message } | { kind: "routing"; status: Message; hint: Message };
+export type DisplayEvent = { kind: "show"; message: Message } | 
+/**  What is playing, which stays only until the sound ends. */
+{ kind: "sound"; message: Message } | 
+/**  Nothing is playing anymore. */
+{ kind: "silent" } | { kind: "error"; message: Message } | { kind: "routing"; status: Message; hint: Message };
 
 export type EffectView = {
 	effect: VoiceEffect,

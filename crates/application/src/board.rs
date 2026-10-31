@@ -1,10 +1,11 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use instantpad_domain::board::{InterfaceLayout, PadBoard, Sound};
 use instantpad_domain::hotkeys::{Hotkey, NumericLayout};
 use instantpad_domain::palette;
 
-use crate::events::{AppEvent, BoardView, InterfaceTab, PadView, SoundView};
+use crate::events::{AppEvent, BoardView, DisplayEvent, InterfaceTab, PadView, SoundView};
 use crate::favorites::Favorites;
 use crate::hotkeys::{HotkeyCommand, HotkeyService, resolve};
 use crate::message::{Failure, Message, TextKey};
@@ -38,6 +39,7 @@ pub struct BoardSession {
     hotkeys: Arc<HotkeyService>,
     settings: Arc<Settings>,
     events: Arc<dyn EventSink>,
+    was_playing: AtomicBool,
 }
 
 pub fn pad_label(slot: u32) -> String {
@@ -72,6 +74,7 @@ impl BoardSession {
             hotkeys,
             settings,
             events,
+            was_playing: AtomicBool::new(false),
         }
     }
 
@@ -152,8 +155,14 @@ impl BoardSession {
             .collect()
     }
 
+    /// Called on every frame, which is also how the display learns that the sound has ended.
     pub fn now_playing(&self) -> Option<NowPlaying> {
-        self.player.now_playing()
+        let playing = self.player.now_playing();
+        let was_playing = self.was_playing.swap(playing.is_some(), Ordering::Relaxed);
+        if was_playing && playing.is_none() {
+            self.events.emit(AppEvent::Display(DisplayEvent::Silent));
+        }
+        playing
     }
 
     pub fn apply_hotkeys(&self) {
@@ -511,11 +520,11 @@ impl BoardSession {
             .play(&sound.path, sound.volume as f32, sound_tag(sound))
             .await;
         match played {
-            Ok(()) => self.show(Message::plain(format!(
+            Ok(()) => self.events.emit(AppEvent::sound(Message::plain(format!(
                 "{} {}",
                 pad_label(sound.slot),
                 sound.name
-            ))),
+            )))),
             Err(Failure(reason)) => self.events.emit(AppEvent::error(Message::with(
                 TextKey::FailedSound,
                 [Message::plain(sound.name.clone()), reason],

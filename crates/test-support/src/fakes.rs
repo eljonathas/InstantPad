@@ -79,7 +79,12 @@ impl SoundPlayer for FakePlayer {
     }
 
     fn now_playing(&self) -> Option<NowPlaying> {
-        None
+        let is_silent = self.playing.lock().unwrap().is_empty();
+        (!is_silent).then(|| NowPlaying {
+            position: 0.0,
+            duration: 1.0,
+            peaks: Vec::new(),
+        })
     }
 }
 

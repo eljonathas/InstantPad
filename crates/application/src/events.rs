@@ -150,9 +150,22 @@ pub struct UpdateView {
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum DisplayEvent {
-    Show { message: Message },
-    Error { message: Message },
-    Routing { status: Message, hint: Message },
+    Show {
+        message: Message,
+    },
+    /// What is playing, which stays only until the sound ends.
+    Sound {
+        message: Message,
+    },
+    /// Nothing is playing anymore.
+    Silent,
+    Error {
+        message: Message,
+    },
+    Routing {
+        status: Message,
+        hint: Message,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
@@ -170,6 +183,10 @@ pub enum AppEvent {
 impl AppEvent {
     pub fn show(message: Message) -> Self {
         Self::Display(DisplayEvent::Show { message })
+    }
+
+    pub fn sound(message: Message) -> Self {
+        Self::Display(DisplayEvent::Sound { message })
     }
 
     pub fn error(message: Message) -> Self {

@@ -178,6 +178,13 @@ test("a name too long for the display rolls past, and a short one stays still", 
   await expect(page.locator(".scrolling-track")).toHaveAttribute("data-rolls", "");
 });
 
+test("the display goes back to Ready when the sound ends", async ({ page }) => {
+  await pad(page, "01 Vine boom").click();
+  await expect(lcd(page)).toHaveText("01 Vine boom");
+
+  await expect(lcd(page)).toHaveText("Ready");
+});
+
 test("a small movement on a row drags nothing", async ({ page }) => {
   const name = row(page, "Airhorn").locator(".sound-name");
   const box = (await name.boundingBox())!;

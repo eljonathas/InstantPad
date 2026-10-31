@@ -1,0 +1,12 @@
+{
+  "name": "instantpad",
+  "private": true,
+  "packageManager": "pnpm@12.5.1",
+  "scripts": {
+    "dev": "pnpm --filter @instantpad/desktop tauri dev",
+    "build": "pnpm --filter @instantpad/desktop tauri build",
+    "check": "pnpm -r check",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test"
+  }
+}

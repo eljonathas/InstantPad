@@ -5,3 +5,8 @@ dist/
 .vs/
 .vscode/
 TestResults/
+target/
+node_modules/
+playwright-report/
+test-results/
+apps/desktop/src-tauri/gen/

@@ -76,7 +76,7 @@ No Discord, use o **Input Profile** **Studio**. O Voice Isolation remove tudo qu
 | Mudar atalho, volume, cor ou nome de um pad | Botão direito no pad |
 | Reorganizar os pads | Segure Ctrl e arraste |
 | Parar tudo | **Parar** |
-| Girar um knob | Arraste para cima ou para baixo, ou use a roda do mouse. Clique duplo volta ao padrão. O valor exato aparece no meio do knob enquanto você segura |
+| Girar um knob | Arraste para cima ou para baixo, ou use a roda do mouse. Clique duplo volta ao padrão. O valor exato aparece abaixo do knob enquanto você segura |
 
 Os knobs ajustam a sua voz no jogo (**Mic**), os sons no jogo (**Jogo**) e os sons que você ouve (**Fones**).
 

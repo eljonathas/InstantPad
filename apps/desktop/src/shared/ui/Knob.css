@@ -18,19 +18,22 @@
   filter: drop-shadow(0 0 var(--knob-glow-size) var(--color-accent));
 }
 
-/* The exact value while the knob is held, over the middle of the cap. */
+/* The exact value while the knob is held, floating over the label under it. */
 .knob-readout {
   position: absolute;
-  top: 50%;
+  top: 100%;
   left: 50%;
-  padding: var(--knob-readout-padding);
+  z-index: var(--z-ghost);
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--color-accent);
   border-radius: var(--radius-key);
-  background: var(--knob-readout-back);
+  background: var(--color-screen-back);
+  box-shadow: var(--shadow-cap-cast);
   color: var(--color-lcd);
   font-size: var(--font-status);
   font-weight: var(--weight-bold);
   white-space: nowrap;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   pointer-events: none;
 }
 

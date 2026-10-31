@@ -123,7 +123,7 @@
   "SoundHasNoAudio": "O arquivo não contém áudio.",
   "SoundOpenFailed": "Não foi possível abrir o som: {0}",
   "SoundSaveFailed": "Não foi possível salvar o arquivo: {0}",
-  "StopAll": "■  Parar",
+  "StopAll": "Parar",
   "StopShortcut": "Atalho para parar tudo",
   "Stopped": "Parado",
   "SystemOutputOnCable": "O sistema está mandando todo o som do PC para o cabo. Isso mistura os outros apps no seu mic e você para de ouvi-los. Escolha seus fones como dispositivo de saída nas configurações de som do sistema.",

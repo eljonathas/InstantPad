@@ -56,21 +56,24 @@ export function InterfaceBar({ actions }: InterfaceBarProps) {
           ▶
         </button>
         <button
-          className="key key-bare key-accent key-add-interface interface-plus"
+          className="key key-bare key-accent interface-plus"
           title={t("NewInterfaceTitle")}
+          aria-label={t("NewInterfaceTitle")}
           onClick={() => void actions.addInterface()}
         >
-          +
+          <i className="icon icon-plus" />
         </button>
         <button
           className="key key-bare interface-plus"
           title={t("ConfigureThisInterface")}
+          aria-label={t("ConfigureThisInterface")}
           disabled={!active}
           onClick={() => active && void actions.configureInterface(active)}
         >
-          ⚙
+          <i className="icon icon-cog" />
         </button>
         <button className="key key-bare key-stop interface-stop" onClick={() => commands.stopAll()}>
+          <i className="icon icon-stop" />
           {t("StopAll")}
         </button>
       </div>

@@ -102,8 +102,27 @@
   color: var(--color-white);
 }
 
-.key-add-interface {
-  font-size: var(--font-add-interface);
+/* A drawn icon in the color of its key */
+.icon {
+  flex: none;
+  display: block;
+  width: var(--key-icon-size);
+  height: var(--key-icon-size);
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+
+.icon-plus {
+  --icon: var(--icon-plus);
+}
+
+.icon-cog {
+  --icon: var(--icon-cog);
+}
+
+.icon-stop {
+  --icon: var(--icon-stop);
 }
 
 /* Key with a LED strip (HwToggle): tabs, panel tabs and the mic switch */

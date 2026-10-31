@@ -123,7 +123,7 @@
   "SoundHasNoAudio": "The file has no audio.",
   "SoundOpenFailed": "Could not open the sound: {0}",
   "SoundSaveFailed": "Could not save the file: {0}",
-  "StopAll": "■  Stop",
+  "StopAll": "Stop",
   "StopShortcut": "Shortcut to stop everything",
   "Stopped": "Stopped",
   "SystemOutputOnCable": "Your system is sending all PC sound into the cable. That mixes every app into your mic and you stop hearing them. Set your headphones as the output device in the system sound settings.",

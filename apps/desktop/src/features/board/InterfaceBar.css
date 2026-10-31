@@ -8,7 +8,9 @@
   flex: 1;
   display: flex;
   min-width: 0;
-  /* Room for the height and shadow of the keys, which the scrolling box would cut off. */
+  /* Room for the height and shadow of the keys, which the scrolling box would cut off. The
+     margin takes it back, so the tabs stay as tall as the keys beside them. */
+  margin-bottom: calc(-1 * var(--space-3));
   padding-bottom: var(--space-3);
   overflow-x: auto;
   scrollbar-width: none;
@@ -43,5 +45,6 @@
 }
 
 .interface-stop {
+  gap: var(--space-3);
   width: var(--key-stop-width);
 }

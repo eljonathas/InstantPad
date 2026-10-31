@@ -10,4 +10,13 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+async-trait.workspace = true
+html-escape = "0.2"
 instantpad-application.workspace = true
+instantpad-domain.workspace = true
+regex = "1"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "query"] }
+tokio = { workspace = true, features = ["fs", "io-util"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

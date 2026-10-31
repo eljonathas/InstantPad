@@ -13,3 +13,6 @@ mod playback;
 mod role;
 
 pub use engine::AudioEngine;
+
+#[cfg(test)]
+mod allocation_tests;

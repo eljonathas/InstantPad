@@ -8,7 +8,9 @@ use crate::events::{AppEvent, BoardView, InterfaceTab, PadView, SoundView};
 use crate::favorites::Favorites;
 use crate::hotkeys::{HotkeyCommand, HotkeyService, resolve};
 use crate::message::{Failure, Message, TextKey};
-use crate::ports::{BoardRepository, EventSink, PlaybackTag, SoundFileStore, SoundPlayer};
+use crate::ports::{
+    BoardRepository, EventSink, NowPlaying, PlaybackTag, SoundFileStore, SoundPlayer,
+};
 use crate::settings::Settings;
 
 /// A pad of one interface, so an action that takes a while still lands where it was aimed.
@@ -148,6 +150,10 @@ impl BoardSession {
             .filter(|sound| self.player.is_playing(sound_tag(sound)))
             .map(|sound| sound.slot)
             .collect()
+    }
+
+    pub fn now_playing(&self) -> Option<NowPlaying> {
+        self.player.now_playing()
     }
 
     pub fn apply_hotkeys(&self) {

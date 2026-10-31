@@ -3,7 +3,7 @@ import type { MeterFrame } from "../ipc";
 
 // Frames arrive about 30 times per second, so they live outside React state: the LED meters
 // paint straight into the DOM and each pad only re-renders when its own lit flag flips.
-let frame: MeterFrame = { micLevel: 0, outputLevel: 0, playingSlots: [] };
+let frame: MeterFrame = { micLevel: 0, outputLevel: 0, playingSlots: [], nowPlaying: null };
 const listeners = new Set<() => void>();
 
 export const meter = {

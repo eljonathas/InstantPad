@@ -150,6 +150,7 @@ export type MeterFrame = {
 	micLevel: number,
 	outputLevel: number,
 	playingSlots: number[],
+	nowPlaying: NowPlaying | null,
 };
 
 export type MixerView = {
@@ -157,6 +158,16 @@ export type MixerView = {
 	gameVolume: number,
 	monitorVolume: number,
 	micEnabled: boolean,
+};
+
+/**  The sound the display follows. */
+export type NowPlaying = {
+	/**  How far the sound has played, in seconds. */
+	position: number,
+	/**  How long the sound lasts, in seconds. */
+	duration: number,
+	/**  The loudest moment of each stretch of the sound, from 0 to 1. */
+	peaks: number[],
 };
 
 export type NumericScheme = "numpad" | "ctrlNumpad" | "altDigits" | "off";

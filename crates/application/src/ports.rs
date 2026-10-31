@@ -32,6 +32,21 @@ impl PlaybackTag {
     }
 }
 
+/// The sound the display follows.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct NowPlaying {
+    /// How far the sound has played, in seconds.
+    #[specta(type = u32)]
+    pub position: f32,
+    /// How long the sound lasts, in seconds.
+    #[specta(type = u32)]
+    pub duration: f32,
+    /// The loudest moment of each stretch of the sound, from 0 to 1.
+    #[specta(type = Vec<u32>)]
+    pub peaks: Vec<f32>,
+}
+
 /// Plays sounds.
 #[async_trait]
 pub trait SoundPlayer: Send + Sync {
@@ -52,6 +67,9 @@ pub trait SoundPlayer: Send + Sync {
     fn stop_all(&self);
 
     fn is_playing(&self, tag: PlaybackTag) -> bool;
+
+    /// The sound started last among the ones still playing.
+    fn now_playing(&self) -> Option<NowPlaying>;
 }
 
 /// Chooses which physical devices the audio flows through.

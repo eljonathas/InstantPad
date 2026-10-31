@@ -7,8 +7,8 @@ use instantpad_application::hotkeys::HotkeyCommand;
 use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{
     AppUpdater, AudioDevice, AudioMix, AudioRouter, BoardRepository, CatalogPage, EventSink,
-    FavoritesRepository, HotkeyHost, PlaybackTag, SettingsRepository, SoundCatalog, SoundFileStore,
-    SoundPlayer, SystemAudio, VirtualCable, VoiceChanger,
+    FavoritesRepository, HotkeyHost, NowPlaying, PlaybackTag, SettingsRepository, SoundCatalog,
+    SoundFileStore, SoundPlayer, SystemAudio, VirtualCable, VoiceChanger,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
@@ -76,6 +76,10 @@ impl SoundPlayer for FakePlayer {
 
     fn is_playing(&self, tag: PlaybackTag) -> bool {
         self.playing.lock().unwrap().contains(&tag)
+    }
+
+    fn now_playing(&self) -> Option<NowPlaying> {
+        None
     }
 }
 

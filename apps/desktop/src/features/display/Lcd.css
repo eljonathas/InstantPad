@@ -15,7 +15,15 @@
   line-height: 1;
 }
 
+.lcd-top {
+  display: flex;
+  align-items: center;
+  gap: var(--now-playing-gap);
+}
+
 .lcd-main {
+  flex: 1;
+  min-width: 0;
   font-size: var(--font-lcd-main);
   font-weight: var(--weight-bold);
 }
@@ -26,4 +34,43 @@
 
 .lcd-hint {
   color: var(--color-lcd-dim);
+}
+
+/* The sound playing: its peaks, lit up to where it has reached, and its time. */
+.now-playing {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--now-playing-gap);
+}
+
+.now-playing[hidden] {
+  display: none;
+}
+
+.now-playing-bars {
+  display: flex;
+  align-items: center;
+  gap: var(--now-playing-bar-gap);
+  height: var(--now-playing-height);
+}
+
+.now-playing-bars i {
+  width: var(--now-playing-bar-width);
+  min-height: var(--now-playing-bar-min);
+  border-radius: var(--radius-led-strip);
+  background: var(--color-lcd-dim);
+  opacity: var(--now-playing-unplayed);
+}
+
+.now-playing-bars i[data-played] {
+  background: var(--color-lcd);
+  opacity: 1;
+}
+
+.now-playing-time {
+  color: var(--color-lcd);
+  font-size: var(--font-screen);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-bold);
 }

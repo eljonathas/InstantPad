@@ -41,6 +41,8 @@ const VOICE_KEYS: Record<NumericScheme, string[]> = {
   off: [],
 };
 
+const MOCK_PEAKS = Array.from({ length: 44 }, (_, index) => 0.25 + 0.75 * Math.abs(Math.sin(index * 0.7)));
+
 function seedVoice(): VoiceView {
   const param = (param: VoiceParam, label: "ParamIntensity" | "ParamFormant" | "ParamTime" | "ParamHigh" | "ParamLow") => ({
     param,
@@ -233,6 +235,7 @@ export function installMock() {
   let backend = seed();
   let playing = new Set<string>();
   let counter = 0;
+  let startedAt = 0;
   const loading = new Set<number>();
 
   /** Shows `slot` as loading for a moment, like a sound that has to download. */
@@ -327,6 +330,7 @@ export function installMock() {
     const sound = soundAt(slot);
     if (!sound) return;
     playing.add(sound.id);
+    startedAt = Date.now();
     setTimeout(() => playing.delete(sound.id), PLAY_MS);
     show(plain(`${label(slot)} ${sound.name}`));
   }
@@ -587,6 +591,9 @@ export function installMock() {
       playingSlots: backend.sounds
         .filter((item) => item.interfaceId === backend.activeId && playing.has(item.id))
         .map((item) => item.slot),
+      nowPlaying: playing.size
+        ? { position: (Date.now() - startedAt) / 1000, duration: PLAY_MS / 1000, peaks: MOCK_PEAKS }
+        : null,
     };
     void emit("meter-event", frame);
   }, METER_INTERVAL_MS);

@@ -1,0 +1,25 @@
+.scrolling {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.scrolling-track {
+  display: inline-flex;
+  gap: var(--scrolling-gap);
+}
+
+.scrolling-track[data-rolls] {
+  animation: scrolling var(--scrolling-seconds) linear infinite;
+}
+
+/* Rests at the start of each pass, so the beginning of the text can be read. */
+@keyframes scrolling {
+  0%,
+  15% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(calc(-1 * (var(--scrolling-width) + var(--scrolling-gap))));
+  }
+}

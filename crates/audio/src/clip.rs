@@ -17,18 +17,32 @@ use crate::format::{CHANNELS, SAMPLE_RATE};
 /// Frames the resampler works on at a time.
 const RESAMPLE_CHUNK: usize = 1024;
 
+/// How many bars the display draws for a sound.
+const PEAK_BARS: usize = 44;
+
 pub(crate) struct SoundClip {
     samples: Vec<f32>,
+    peaks: Vec<f32>,
 }
 
 impl SoundClip {
     pub(crate) fn new(samples: Vec<f32>) -> Self {
-        Self { samples }
+        let peaks = peaks_of(&samples);
+        Self { samples, peaks }
     }
 
     /// Interleaved stereo at the engine rate.
     pub(crate) fn samples(&self) -> &[f32] {
         &self.samples
+    }
+
+    /// The loudest moment of each stretch of the sound, from 0 to 1.
+    pub(crate) fn peaks(&self) -> &[f32] {
+        &self.peaks
+    }
+
+    pub(crate) fn seconds(&self) -> f32 {
+        (self.samples.len() / CHANNELS) as f32 / SAMPLE_RATE as f32
     }
 
     pub(crate) fn load(path: &str) -> Result<Self, Failure> {
@@ -42,6 +56,23 @@ impl SoundClip {
         }
         resample(rate, &stereo).map(Self::new).map_err(open_failed)
     }
+}
+
+/// Scaled to the loudest moment, so a quiet sound still fills the display.
+fn peaks_of(samples: &[f32]) -> Vec<f32> {
+    let stretch = samples.len().div_ceil(PEAK_BARS).max(1);
+    let peaks: Vec<f32> = samples
+        .chunks(stretch)
+        .map(|part| {
+            part.iter()
+                .fold(0.0, |peak: f32, sample| peak.max(sample.abs()))
+        })
+        .collect();
+    let loudest = peaks.iter().copied().fold(0.0, f32::max);
+    if loudest == 0.0 {
+        return peaks;
+    }
+    peaks.iter().map(|peak| peak / loudest).collect()
 }
 
 fn open_failed(detail: impl ToString) -> Failure {
@@ -128,6 +159,33 @@ pub(crate) mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
+
+    #[test]
+    fn the_peaks_follow_the_loud_and_quiet_parts_of_a_sound() {
+        let quiet = vec![0.05; 48_000];
+        let loud = vec![0.5; 48_000];
+        let clip = SoundClip::new([quiet, loud].concat());
+
+        let peaks = clip.peaks();
+
+        assert!(peaks.len() <= PEAK_BARS);
+        assert!((peaks[0] - 0.1).abs() < 0.001);
+        assert_eq!(peaks[peaks.len() - 1], 1.0);
+    }
+
+    #[test]
+    fn silence_has_flat_peaks() {
+        let clip = SoundClip::new(vec![0.0; 1000]);
+
+        assert!(clip.peaks().iter().all(|&peak| peak == 0.0));
+    }
+
+    #[test]
+    fn a_clip_knows_how_long_it_lasts() {
+        let clip = SoundClip::new(vec![0.0; SAMPLE_RATE as usize * CHANNELS / 2]);
+
+        assert_eq!(clip.seconds(), 0.5);
+    }
 
     /// A file in the temporary folder that goes away with the value.
     pub(crate) struct TempFile(PathBuf);

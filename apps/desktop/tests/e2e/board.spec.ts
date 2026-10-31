@@ -150,6 +150,34 @@ test("the right-click menu of a pad saves a copy to the computer", async ({ page
   await expect(lcd(page)).toHaveText("Saved: sound.mp3");
 });
 
+test("the display shows the time and peaks of a sound while it plays", async ({ page }) => {
+  await expect(page.locator(".now-playing")).toBeHidden();
+
+  await pad(page, "01 Vine boom").click();
+
+  await expect(page.locator(".now-playing-time")).toHaveText(/^0:0\d \/ 0:01$/);
+  await expect(page.locator(".now-playing-bars i")).toHaveCount(44);
+  await expect(page.locator(".now-playing-bars i[data-played]").first()).toBeVisible();
+
+  await expect(page.locator(".now-playing")).toBeHidden();
+});
+
+test("a name too long for the display rolls past, and a short one stays still", async ({ page }) => {
+  await pad(page, "01 Vine boom").click();
+  await expect(page.locator(".now-playing")).toBeVisible();
+  await expect(page.locator(".scrolling-copy")).toHaveCount(0);
+
+  await pad(page, "01 Vine boom").click({ button: "right" });
+  await page.getByText("Rename...").click();
+  const name = "A very long name that cannot fit next to the bars and the timer of the display";
+  await page.getByRole("textbox").last().fill(name);
+  await page.keyboard.press("Enter");
+  await pad(page, `01 ${name}`).click();
+
+  await expect(page.locator(".scrolling-copy")).toHaveCount(1);
+  await expect(page.locator(".scrolling-track")).toHaveAttribute("data-rolls", "");
+});
+
 test("a small movement on a row drags nothing", async ({ page }) => {
   const name = row(page, "Airhorn").locator(".sound-name");
   const box = (await name.boundingBox())!;

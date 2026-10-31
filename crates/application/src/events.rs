@@ -6,7 +6,7 @@ use serde::Serialize;
 use specta::Type;
 
 use crate::message::{Message, TextKey};
-use crate::ports::AudioDevice;
+use crate::ports::{AudioDevice, NowPlaying};
 use crate::settings::AppSettings;
 
 // `#[specta(type = u32)]` exports a float as a plain `number`. Specta adds `| null` for NaN,
@@ -186,6 +186,7 @@ pub struct MeterFrame {
     #[specta(type = u32)]
     pub output_level: f32,
     pub playing_slots: Vec<u32>,
+    pub now_playing: Option<NowPlaying>,
 }
 
 /// What the rules allow, so the interface offers only that.

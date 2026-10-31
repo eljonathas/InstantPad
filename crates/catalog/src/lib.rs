@@ -2,6 +2,7 @@
 
 mod parser;
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -10,6 +11,8 @@ use instantpad_application::ports::{CatalogPage, SoundCatalog};
 use reqwest::{Client, StatusCode};
 use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
+
+static NEXT_DOWNLOAD: AtomicU64 = AtomicU64::new(0);
 
 const BASE_URL: &str = "https://www.myinstants.com";
 const BROWSER_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
@@ -98,7 +101,11 @@ impl SoundCatalog for MyInstantsCatalog {
     }
 
     async fn download(&self, sound_url: &str, destination: &str) -> Result<(), Failure> {
-        let partial = format!("{destination}.part");
+        // Each download has its own file, so two of the same sound cannot corrupt each other.
+        let partial = format!(
+            "{destination}.{}.part",
+            NEXT_DOWNLOAD.fetch_add(1, Ordering::Relaxed)
+        );
         self.save(sound_url, &partial)
             .await
             .map_err(|error| Failure::because(TextKey::SoundDownloadFailed, error))?;
@@ -196,7 +203,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(std::fs::read(&destination).unwrap(), b"audio bytes");
-        assert!(!folder.join("sound.mp3.part").exists());
+        assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
         std::fs::remove_dir_all(&folder).unwrap();
     }
 

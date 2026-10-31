@@ -297,14 +297,24 @@ async fn a_downloaded_version_waits_for_the_user() {
 }
 
 #[tokio::test]
-async fn restarting_and_closing_apply_the_version_differently() {
+async fn restarting_applies_the_version_once_even_though_it_also_exits() {
     let (updater, _, session) = updates(true, Some("2.0.0"));
     session.check_and_download().await;
 
     session.restart_now();
     session.apply_on_exit();
 
-    assert_eq!(*updater.applied.lock().unwrap(), [true, false]);
+    assert_eq!(*updater.applied.lock().unwrap(), [true]);
+}
+
+#[tokio::test]
+async fn closing_installs_the_version_without_opening_the_app_again() {
+    let (updater, _, session) = updates(true, Some("2.0.0"));
+    session.check_and_download().await;
+
+    session.apply_on_exit();
+
+    assert_eq!(*updater.applied.lock().unwrap(), [false]);
 }
 
 #[tokio::test]

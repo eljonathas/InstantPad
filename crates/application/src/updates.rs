@@ -73,7 +73,8 @@ impl UpdateSession {
     }
 
     fn apply(&self, restart: bool) {
-        if !self.is_ready.load(Ordering::Relaxed) {
+        // Restarting exits the app too, and a version must only be applied once.
+        if !self.is_ready.swap(false, Ordering::Relaxed) {
             return;
         }
         if let Err(Failure(reason)) = self.updater.apply(restart) {

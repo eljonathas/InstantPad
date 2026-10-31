@@ -28,10 +28,12 @@ instantpad-domain.workspace = true
 instantpad-platform.workspace = true
 instantpad-storage.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 specta.workspace = true
 tauri = { workspace = true, features = ["macos-private-api", "specta"] }
 tauri-plugin-dialog.workspace = true
 tauri-plugin-global-shortcut.workspace = true
 tauri-plugin-single-instance.workspace = true
+tauri-plugin-updater.workspace = true
 tauri-specta.workspace = true
 tokio = { workspace = true, features = ["macros"] }

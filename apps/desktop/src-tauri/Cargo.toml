@@ -13,6 +13,9 @@ crate-type = ["lib", "staticlib", "cdylib"]
 [lints]
 workspace = true
 
+[dev-dependencies]
+specta-typescript.workspace = true
+
 [build-dependencies]
 tauri-build.workspace = true
 
@@ -23,7 +26,6 @@ instantpad-domain.workspace = true
 instantpad-test-support.workspace = true
 serde.workspace = true
 specta.workspace = true
-specta-typescript.workspace = true
 tauri = { workspace = true, features = ["macos-private-api", "specta"] }
 tauri-plugin-dialog.workspace = true
 tauri-specta.workspace = true

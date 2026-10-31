@@ -74,9 +74,9 @@ pub fn run() {
         .expect("run the app");
 }
 
-// A unit test, because only the library's test binary gets the Windows manifest that Tauri
-// needs to load.
-#[cfg(test)]
+// Not on Windows: a test binary that links Tauri needs an app manifest to load there, and the
+// bindings come out the same on every system.
+#[cfg(all(test, not(windows)))]
 mod tests {
     use std::path::{Path, PathBuf};
     use std::{env, fs};

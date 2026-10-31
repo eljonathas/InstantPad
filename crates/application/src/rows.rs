@@ -40,6 +40,7 @@ impl SoundRows {
     pub async fn preview(&self, source: SoundSource) {
         let result = async {
             self.downloading(&source).await?;
+            self.board.stop_others();
             let tag = PlaybackTag::of(&source.path);
             self.player.preview(&source.path, FULL_VOLUME, tag).await
         };
@@ -49,6 +50,7 @@ impl SoundRows {
     pub async fn play_in_game(&self, source: SoundSource) {
         let result = async {
             self.downloading(&source).await?;
+            self.board.stop_others();
             let tag = PlaybackTag::of(&source.path);
             self.player.play(&source.path, FULL_VOLUME, tag).await
         };
@@ -73,7 +75,7 @@ impl SoundRows {
                 .place(&target, &source.name, &source.path, &source.color)
                 .await
         };
-        if let Err(failure) = result.await {
+        if let Err(failure) = self.board.while_loading(&target, result).await {
             self.show_failure(&source, failure);
         }
     }

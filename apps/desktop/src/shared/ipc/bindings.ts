@@ -45,6 +45,7 @@ export const commands = {
 	chooseMonitorOutput: (id: string | null) => typedError<null, null>(__TAURI_INVOKE("choose_monitor_output", { id })),
 	setNumericScheme: (scheme: NumericScheme) => __TAURI_INVOKE<void>("set_numeric_scheme", { scheme }),
 	setStopHotkey: (hotkey: Hotkey) => __TAURI_INVOKE<void>("set_stop_hotkey", { hotkey }),
+	setOneSoundAtATime: (enabled: boolean) => __TAURI_INVOKE<void>("set_one_sound_at_a_time", { enabled }),
 	setLanguage: (language: string | null) => __TAURI_INVOKE<void>("set_language", { language }),
 	installDriver: () => typedError<null, null>(__TAURI_INVOKE("install_driver")),
 	openSoundSettings: () => __TAURI_INVOKE<void>("open_sound_settings"),
@@ -154,6 +155,8 @@ export type PadView = {
 	label: string,
 	shortcut: string,
 	isFavorite: boolean,
+	/**  A sound is on its way to this pad. */
+	isLoading: boolean,
 	sound: SoundView | null,
 };
 
@@ -172,6 +175,7 @@ export type SetupView = {
 	/**  First pad, last pad, next, previous and stop keys of the scheme. Empty when it is off. */
 	numericHintKeys: string[],
 	stopHotkey: Hotkey | null,
+	oneSoundAtATime: boolean,
 };
 
 export type SoundPage = {

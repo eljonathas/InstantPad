@@ -75,6 +75,60 @@ async fn a_row_goes_to_the_pad_the_user_picked() {
     assert!(world.board.view().pads[3].sound.is_some());
 }
 
+fn loading_seen(world: &World, slot: usize) -> Vec<bool> {
+    let events = world.events.0.lock().unwrap();
+    events
+        .iter()
+        .filter_map(|event| match event {
+            AppEvent::Board(view) => Some(view.pads[slot].is_loading),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn a_pad_shows_it_is_loading_until_its_sound_arrives() {
+    let world = World::new();
+
+    rows(&world).add_to_pad(online(), Some(2)).await;
+
+    let seen = loading_seen(&world, 2);
+    assert_eq!(seen.first(), Some(&true));
+    assert_eq!(seen.last(), Some(&false));
+    assert!(world.board.view().pads[2].sound.is_some());
+}
+
+#[tokio::test]
+async fn a_download_that_fails_leaves_no_pad_loading() {
+    let world = World::new();
+    let gone = SoundSource {
+        sound_url: None,
+        ..online()
+    };
+
+    rows(&world).add_to_pad(gone, Some(2)).await;
+
+    assert_eq!(loading_seen(&world, 2).last(), Some(&false));
+    assert!(world.board.view().pads[2].sound.is_none());
+}
+
+#[tokio::test]
+async fn one_sound_at_a_time_also_covers_the_rows() {
+    let world = World::new();
+    let target = world.board.pad_on_screen(0);
+    world
+        .board
+        .place(&target, "a", "a.mp3", "#ff0000")
+        .await
+        .unwrap();
+    world.board.press_pad(0).await;
+    world.settings.lock().one_sound_at_a_time = true;
+
+    rows(&world).play_in_game(online()).await;
+
+    assert!(world.board.playing_slots().is_empty());
+}
+
 #[tokio::test]
 async fn favoriting_a_row_lights_the_mark_on_its_pad() {
     let world = World::new();
@@ -223,6 +277,16 @@ async fn choosing_a_device_is_remembered() {
         Some("other")
     );
     assert_eq!(*setup.router.opened.lock().unwrap(), ["monitor:other"]);
+}
+
+#[tokio::test]
+async fn one_sound_at_a_time_is_remembered_and_shown() {
+    let setup = setup();
+
+    setup.session.set_one_sound_at_a_time(true);
+
+    assert!(setup.session.view().one_sound_at_a_time);
+    assert!(setup.world.settings.lock().one_sound_at_a_time);
 }
 
 #[tokio::test]

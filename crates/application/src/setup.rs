@@ -74,6 +74,7 @@ impl SetupSession {
             numeric_scheme: settings.numeric_scheme,
             numeric_hint_keys: numeric_hint_keys(settings.numeric_scheme),
             stop_hotkey: settings.stop_hotkey.clone(),
+            one_sound_at_a_time: settings.one_sound_at_a_time,
         }
     }
 
@@ -120,6 +121,12 @@ impl SetupSession {
     pub fn set_stop_hotkey(&self, hotkey: Hotkey) {
         self.settings.lock().stop_hotkey = Some(hotkey);
         self.after_hotkey_change();
+    }
+
+    pub fn set_one_sound_at_a_time(&self, enabled: bool) {
+        self.settings.lock().one_sound_at_a_time = enabled;
+        self.save();
+        self.publish();
     }
 
     pub fn set_language(&self, language: Option<String>) {

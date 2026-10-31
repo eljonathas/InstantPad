@@ -22,6 +22,8 @@ struct State {
     board: PadBoard,
     active_id: String,
     target_slot: Option<u32>,
+    /// Pads with a sound on its way. A pad appears once per sound.
+    loading: Vec<PadTarget>,
 }
 
 /// The pads on screen, the interface tabs and what happens when they are used.
@@ -59,6 +61,7 @@ impl BoardSession {
                 board: repository.load(),
                 active_id: String::new(),
                 target_slot: None,
+                loading: Vec::new(),
             }),
             repository,
             player,
@@ -169,6 +172,13 @@ impl BoardSession {
             HotkeyCommand::NextInterface => self.step_interface(1),
             HotkeyCommand::PreviousInterface => self.step_interface(-1),
             HotkeyCommand::StopAll => self.stop_all(),
+        }
+    }
+
+    /// Makes way for a sound about to play, if the user wants one at a time.
+    pub fn stop_others(&self) {
+        if self.settings.lock().one_sound_at_a_time {
+            self.player.stop_all();
         }
     }
 
@@ -294,6 +304,22 @@ impl BoardSession {
         })
     }
 
+    /// Lights the loading state of a pad while `work` runs, however it ends.
+    pub async fn while_loading<T>(&self, target: &PadTarget, work: impl Future<Output = T>) -> T {
+        self.lock().loading.push(target.clone());
+        self.publish();
+
+        let result = work.await;
+
+        let mut state = self.lock();
+        if let Some(index) = state.loading.iter().position(|item| item == target) {
+            state.loading.remove(index);
+        }
+        drop(state);
+        self.publish();
+        result
+    }
+
     pub async fn place(
         &self,
         target: &PadTarget,
@@ -334,7 +360,7 @@ impl BoardSession {
             self.place(&target, &name, &path, palette::pad_color_for(slot))
                 .await
         };
-        if let Err(Failure(reason)) = placed.await {
+        if let Err(Failure(reason)) = self.while_loading(&target, placed).await {
             self.events.emit(AppEvent::error(reason));
         }
     }
@@ -443,6 +469,7 @@ impl BoardSession {
     }
 
     async fn trigger(&self, sound: &Sound) {
+        self.stop_others();
         let played = self
             .player
             .play(&sound.path, sound.volume as f32, sound_tag(sound))
@@ -477,6 +504,10 @@ impl BoardSession {
                     label: pad_label(slot),
                     shortcut: shortcut.map(Hotkey::to_string).unwrap_or_default(),
                     is_favorite: sound.is_some_and(|sound| self.favorites.is_favorite(&sound.path)),
+                    is_loading: state
+                        .loading
+                        .iter()
+                        .any(|item| item.interface_id == state.active_id && item.slot == slot),
                     sound: sound.map(|sound| SoundView {
                         id: sound.id.clone(),
                         name: sound.name.clone(),

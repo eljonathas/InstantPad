@@ -32,6 +32,8 @@ pub struct PadView {
     pub label: String,
     pub shortcut: String,
     pub is_favorite: bool,
+    /// A sound is on its way to this pad.
+    pub is_loading: bool,
     pub sound: Option<SoundView>,
 }
 
@@ -77,6 +79,7 @@ pub struct SetupView {
     /// First pad, last pad, next, previous and stop keys of the scheme. Empty when it is off.
     pub numeric_hint_keys: Vec<String>,
     pub stop_hotkey: Option<Hotkey>,
+    pub one_sound_at_a_time: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]

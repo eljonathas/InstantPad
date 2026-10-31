@@ -116,55 +116,104 @@ body[data-dragging] .pad:not([data-drop]) .pad-body {
   opacity: var(--drag-source-opacity);
 }
 
-.pad[data-drop] .pad-body {
-  border-color: var(--color-accent);
+/* The ring goes on the well, because the body of the cap would cover its lower edge. */
+.pad[data-drop] {
+  z-index: 1;
   box-shadow:
-    0 var(--cap-height) 0 var(--cap-edge),
+    var(--shadow-well),
     0 0 0 var(--drop-ring) var(--color-accent),
     var(--drop-glow);
+}
+
+.pad[data-drop] .pad-body {
   transform: translateY(var(--drop-lift));
   transition-duration: var(--drop-time);
 }
 
+/* What the drop will do: fill the pad, replace its sound or swap the two. */
 .pad-drop-mark {
+  --drop-icon: var(--icon-plus);
   position: absolute;
   inset: 0;
   display: none;
-  place-items: center;
-}
-
-.pad[data-drop] .pad-drop-mark {
-  display: grid;
-}
-
-/* What the drop will do: fill the pad, replace its sound or swap the two. */
-.pad-drop-mark::before {
-  content: "+";
-  display: grid;
-  place-items: center;
   width: var(--drop-mark-size);
   height: var(--drop-mark-size);
+  margin: auto;
   border-radius: 50%;
   background: var(--color-accent);
   box-shadow: var(--shadow-cap-cast);
-  color: var(--gray-4);
-  font-size: var(--font-drop-mark);
-  font-weight: var(--weight-bold);
+}
+
+.pad[data-drop] .pad-drop-mark {
+  display: block;
   animation: drop-mark-in var(--drop-time) var(--ease-spring);
 }
 
-.pad[data-loaded] .pad-drop-mark::before {
-  content: "↻";
+.pad[data-loaded] .pad-drop-mark {
+  --drop-icon: var(--icon-replace);
 }
 
-body[data-dragging="swap"] .pad-drop-mark::before {
-  content: "⇄";
+body[data-dragging="swap"] .pad-drop-mark {
+  --drop-icon: var(--icon-swap);
+}
+
+.pad-drop-mark::before {
+  content: "";
+  position: absolute;
+  inset: var(--drop-icon-inset);
+  background: var(--gray-4);
+  -webkit-mask: var(--drop-icon) center / contain no-repeat;
+  mask: var(--drop-icon) center / contain no-repeat;
 }
 
 @keyframes drop-mark-in {
   from {
     opacity: 0;
     transform: scale(0.4);
+  }
+}
+
+/* A sound on its way: the well breathes around a spinner until it arrives. */
+.pad[data-loading] {
+  animation: pad-waiting var(--loader-pulse-time) ease-in-out infinite alternate;
+}
+
+.pad[data-loading] .pad-name,
+.pad[data-loading] .pad-star {
+  opacity: var(--loader-dim);
+}
+
+.pad-loader {
+  position: absolute;
+  inset: 0;
+  width: var(--loader-size);
+  height: var(--loader-size);
+  margin: auto;
+  border: var(--loader-width) solid var(--loader-track);
+  border-top-color: var(--color-white);
+  border-radius: 50%;
+  background: var(--loader-back);
+  animation: pad-spin var(--loader-spin-time) linear infinite;
+}
+
+@keyframes pad-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes pad-waiting {
+  from {
+    box-shadow:
+      var(--shadow-well),
+      0 0 0 var(--drop-ring) transparent;
+  }
+
+  to {
+    box-shadow:
+      var(--shadow-well),
+      0 0 0 var(--drop-ring) var(--color-accent),
+      var(--drop-glow);
   }
 }
 
@@ -178,7 +227,7 @@ body[data-dragging="swap"] .pad-drop-mark::before {
   position: absolute;
   inset: 0;
   border: var(--drop-ring) solid var(--color-accent);
-  border-radius: var(--radius-pad-inner);
+  border-radius: var(--radius-well);
   animation: pad-ring var(--land-time) ease-out forwards;
   pointer-events: none;
 }

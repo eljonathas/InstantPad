@@ -3,6 +3,7 @@ import { commands, type AudioDevice, type NumericScheme } from "../../shared/ipc
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { useAskHotkey } from "../../shared/ui/HotkeyDialog";
+import { ToggleKey } from "../../shared/ui/ToggleKey";
 import { describeNumericKeys } from "./numericHint";
 import "./Settings.css";
 
@@ -138,6 +139,16 @@ export function Settings({ children }: { children: ReactNode }) {
       <p className="screen-text setting-note setting-spaced">
         {describeNumericKeys(setup.numericScheme, setup.numericHintKeys, t)}
       </p>
+
+      <h3 className="setting-title screen-text">{t("Playback")}</h3>
+      <ToggleKey
+        kind="switch"
+        className="setting-toggle"
+        label={t("OneSoundAtATime")}
+        on={setup.oneSoundAtATime}
+        onClick={() => commands.setOneSoundAtATime(!setup.oneSoundAtATime)}
+      />
+      <p className="screen-text setting-note setting-spaced">{t("OneSoundAtATimeHint")}</p>
 
       <h3 className="setting-title screen-text">{t("StopShortcut")}</h3>
       <button className="key setting-key setting-spaced" onClick={() => void chooseStopHotkey()}>

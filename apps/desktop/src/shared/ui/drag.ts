@@ -25,7 +25,7 @@ export function markDropPad(slot: number | null) {
   next?.setAttribute("data-drop", "");
 }
 
-/** Plays the thud of something landing on a pad. */
+/** Plays the thud of something arriving on a pad. */
 export function landOnPad(slot: number) {
   const pad = padElement(slot);
   if (!pad) return;
@@ -86,9 +86,7 @@ export function beginDrag(from: { x: number; y: number }, item: DragItem, onDrop
     markDropPad(null);
 
     const slot = event.type === "pointerup" ? padSlotAt(event.clientX, event.clientY) : null;
-    if (slot === null || String(slot) === item.source.dataset.slot) return;
-    landOnPad(slot);
-    onDrop(slot);
+    if (slot !== null && String(slot) !== item.source.dataset.slot) onDrop(slot);
   };
 
   window.addEventListener("pointermove", move);

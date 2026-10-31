@@ -114,11 +114,21 @@
 
   /* Dragging onto pads */
   --drop-time: 120ms;
-  --drop-lift: -3px;
+  --drop-lift: -2px;
   --drop-ring: 2px;
   --drop-glow: 0 0 20px color-mix(in srgb, var(--color-accent) 55%, transparent);
   --drop-mark-size: 36px;
-  --font-drop-mark: 20px;
+  --drop-icon-inset: 8px;
+  --icon-plus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 4v16M4 12h16'/%3E%3C/svg%3E");
+  --icon-replace: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12a8 8 0 1 1-2.5-5.8L20 8.5M20 3v5.5h-5.5'/%3E%3C/svg%3E");
+  --icon-swap: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8h17M16 4l4 4-4 4M21 16H4M8 12l-4 4 4 4'/%3E%3C/svg%3E");
+  --loader-size: 36px;
+  --loader-width: 3px;
+  --loader-track: rgb(255 255 255 / 18%);
+  --loader-spin-time: 800ms;
+  --loader-pulse-time: 700ms;
+  --loader-back: rgb(0 0 0 / 45%);
+  --loader-dim: 0.15;
   --drag-dim-brightness: 0.7;
   --drag-source-opacity: 0.4;
   --land-time: 360ms;

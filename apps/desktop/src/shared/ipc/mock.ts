@@ -16,6 +16,7 @@ import type {
   StartView,
 } from "./bindings";
 
+const DOWNLOAD_MS = 400;
 const PAD_COLORS = ["#ff3b5c", "#ff8a1f", "#ffd21f", "#35f27a", "#1fd6ff", "#4f7dff", "#b45cff", "#ff5cc8"];
 const ACCENT_COLORS = ["#ffb03a", "#35f27a", "#1fd6ff", "#4f7dff", "#b45cff", "#ff5cc8", "#ff3b5c", "#e8e8ea"];
 
@@ -170,6 +171,7 @@ function seed() {
       numericScheme: "numpad",
       numericHintKeys: NUMERIC_HINT_KEYS.numpad,
       stopHotkey: null,
+      oneSoundAtATime: false,
     } as SetupView,
     mixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
   };
@@ -179,6 +181,17 @@ export function installMock() {
   let backend = seed();
   let playing = new Set<string>();
   let counter = 0;
+  const loading = new Set<number>();
+
+  /** Shows `slot` as loading for a moment, like a sound that has to download. */
+  function arrive(slot: number, place: () => void) {
+    loading.add(slot);
+    publish();
+    setTimeout(() => {
+      loading.delete(slot);
+      place();
+    }, DOWNLOAD_MS);
+  }
 
   const active = () => backend.interfaces.find((item) => item.id === backend.activeId)!;
   const soundAt = (slot: number) =>
@@ -212,6 +225,7 @@ export function installMock() {
           label: label(slot),
           shortcut: shortcut ? hotkeyLabel(shortcut) : "",
           isFavorite: !!sound && isFavorite(sound.path),
+          isLoading: loading.has(slot),
           sound: sound
             ? {
                 id: sound.id,
@@ -249,7 +263,7 @@ export function installMock() {
         ? { kind: "text", key: "SystemOutputOnCableHint", args: [] }
         : { kind: "text", key: "GameMicrophoneHint", args: [plain(setup.gameMicrophoneName)] };
     send({ kind: "display", data: { kind: "routing", status, hint } });
-    send({ kind: "setup", data: setup });
+    send({ kind: "setup", data: { ...setup } });
   }
 
   function activate(id: string) {
@@ -364,7 +378,8 @@ export function installMock() {
         .split(/[/\\]/)
         .pop()!
         .replace(/\.[^.]+$/, "");
-      place(slot as number, stem, path as string, PAD_COLORS[(slot as number) % PAD_COLORS.length]);
+      const color = PAD_COLORS[(slot as number) % PAD_COLORS.length];
+      arrive(slot as number, () => place(slot as number, stem, path as string, color));
     },
     swap_pads: ({ fromSlot, toSlot }) => {
       const [from, to] = [soundAt(fromSlot as number), soundAt(toSlot as number)];
@@ -425,7 +440,7 @@ export function installMock() {
       const target = (slot as number | null) ?? backend.targetSlot ?? free;
       if (target === undefined) return fail({ kind: "text", key: "InterfaceFullHint", args: [] });
       const { name, path, color } = source as SoundSource;
-      place(target, name, path, color);
+      arrive(target, () => place(target, name, path, color));
     },
     toggle_favorite: ({ source }) => {
       const sound = source as SoundSource;
@@ -448,6 +463,10 @@ export function installMock() {
     choose_microphone: ({ id }) => ((backend.setup.microphoneId = id as string | null), publishSetup()),
     choose_game_output: ({ id }) => ((backend.setup.gameOutputId = id as string | null), publishSetup()),
     choose_monitor_output: ({ id }) => ((backend.setup.monitorOutputId = id as string | null), publishSetup()),
+    set_one_sound_at_a_time: ({ enabled }) => {
+      backend.setup.oneSoundAtATime = enabled as boolean;
+      publishSetup();
+    },
     set_numeric_scheme: ({ scheme }) => {
       backend.setup.numericScheme = scheme as NumericScheme;
       backend.setup.numericHintKeys = NUMERIC_HINT_KEYS[scheme as NumericScheme];

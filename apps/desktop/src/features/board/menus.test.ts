@@ -17,8 +17,8 @@ const sound: SoundView = {
   hasHotkey: false,
   isLight: false,
 };
-const loaded: PadView = { slot: 1, label: "02", shortcut: "Num2", isFavorite: false, sound };
-const empty: PadView = { slot: 2, label: "03", shortcut: "Num3", isFavorite: false, sound: null };
+const loaded: PadView = { slot: 1, label: "02", shortcut: "Num2", isFavorite: false, isLoading: false, sound };
+const empty: PadView = { slot: 2, label: "03", shortcut: "Num3", isFavorite: false, isLoading: false, sound: null };
 const memes: InterfaceTab = { id: "memes", name: "Memes", rows: 2, columns: 4, accent: "#35f27a", soundCount: 0 };
 
 type Item = Exclude<MenuEntry, "separator">;

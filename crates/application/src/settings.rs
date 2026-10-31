@@ -22,6 +22,8 @@ pub struct AppSettings {
     pub numeric_scheme: NumericScheme,
     /// Overrides the stop key of the numeric scheme when set.
     pub stop_hotkey: Option<Hotkey>,
+    /// Playing a sound stops whatever was playing.
+    pub one_sound_at_a_time: bool,
 }
 
 impl Default for AppSettings {
@@ -38,6 +40,7 @@ impl Default for AppSettings {
             language: None,
             numeric_scheme: NumericScheme::Numpad,
             stop_hotkey: None,
+            one_sound_at_a_time: false,
         }
     }
 }

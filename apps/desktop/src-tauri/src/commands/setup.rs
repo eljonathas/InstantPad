@@ -45,6 +45,12 @@ pub fn set_stop_hotkey(core: State<'_, Core>, hotkey: Hotkey) {
 
 #[tauri::command]
 #[specta::specta]
+pub fn set_one_sound_at_a_time(core: State<'_, Core>, enabled: bool) {
+    core.setup.set_one_sound_at_a_time(enabled);
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn set_language(core: State<'_, Core>, language: Option<String>) {
     core.setup.set_language(language);
 }

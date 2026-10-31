@@ -15,6 +15,11 @@
   font-weight: var(--weight-bold);
 }
 
+.setting-toggle {
+  width: 100%;
+  height: var(--panel-tabs-height);
+}
+
 .setting-note {
   margin: var(--space-2) 0 var(--space-3);
   color: var(--color-lcd-dim);

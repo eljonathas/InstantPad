@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect } from "react";
 import { commands } from "../shared/ipc";
-import { landOnPad, markDropPad, padSlotAt } from "../shared/ui/drag";
+import { markDropPad, padSlotAt } from "../shared/ui/drag";
 
 // Only WebView2 reports physical pixels. The other webviews already report what the page uses.
 const pixelsPerPoint = () => (navigator.userAgent.includes("Windows") ? window.devicePixelRatio : 1);
@@ -31,9 +31,7 @@ export function useFileDrop() {
         if (payload.type !== "drop" || payload.paths.length === 0) return;
 
         const slot = padAt(payload.position);
-        if (slot === null) return;
-        landOnPad(slot);
-        void commands.importFile(payload.paths[0], slot);
+        if (slot !== null) void commands.importFile(payload.paths[0], slot);
       })
       .then((unlisten) => (leaving ? unlisten() : (stop = unlisten)));
 

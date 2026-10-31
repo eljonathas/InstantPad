@@ -291,3 +291,28 @@ async fn resizing_the_interface_forgets_the_pad_that_was_waiting_for_a_sound() {
 
     assert_eq!(world.board.view().target_slot, None);
 }
+
+#[tokio::test]
+async fn with_one_sound_at_a_time_a_new_sound_stops_the_last_one() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    fill(&world, 1, "b").await;
+    world.settings.lock().one_sound_at_a_time = true;
+
+    world.board.press_pad(0).await;
+    world.board.press_pad(1).await;
+
+    assert_eq!(world.board.playing_slots(), [1]);
+}
+
+#[tokio::test]
+async fn sounds_overlap_unless_the_user_asks_otherwise() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    fill(&world, 1, "b").await;
+
+    world.board.press_pad(0).await;
+    world.board.press_pad(1).await;
+
+    assert_eq!(world.board.playing_slots().len(), 2);
+}

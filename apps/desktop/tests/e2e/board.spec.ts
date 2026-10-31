@@ -131,6 +131,15 @@ test("the pad under a dragged row is marked until the row lands on it", async ({
 
   await expect(page.locator("[data-drop]")).toHaveCount(0);
   await expect(page.locator("[data-drag-source]")).toHaveCount(0);
+});
+
+test("a dropped sound shows a loader on its pad and lands when it arrives", async ({ page }) => {
+  await drag(page, row(page, "Airhorn").locator(".sound-name"), emptyPad(page, "06"));
+
+  await expect(page.locator(".pad-loader")).toHaveCount(1);
+
+  await expect(pad(page, "06 Airhorn")).toBeVisible();
+  await expect(page.locator(".pad-loader")).toHaveCount(0);
   await expect(page.locator("[data-landed]")).toHaveCount(0);
 });
 

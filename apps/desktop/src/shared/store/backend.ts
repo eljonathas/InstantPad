@@ -42,6 +42,7 @@ let state: BackendState = {
     numericScheme: "numpad",
     numericHintKeys: [],
     stopHotkey: null,
+    oneSoundAtATime: false,
   },
   favorites: [],
   display: { main: "Ready", status: null, hint: null },

@@ -25,6 +25,8 @@ pub struct AppSettings {
     pub stop_hotkey: Option<Hotkey>,
     /// Playing a sound stops whatever was playing.
     pub one_sound_at_a_time: bool,
+    /// Pressing a pad that is playing stops it instead of starting it over.
+    pub press_again_to_stop: bool,
     pub voice: VoiceSettings,
 }
 
@@ -42,7 +44,8 @@ impl Default for AppSettings {
             language: None,
             numeric_scheme: NumericScheme::Numpad,
             stop_hotkey: None,
-            one_sound_at_a_time: false,
+            one_sound_at_a_time: true,
+            press_again_to_stop: false,
             voice: VoiceSettings::default(),
         }
     }

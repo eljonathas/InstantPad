@@ -224,7 +224,8 @@ function seed() {
       numericHintKeys: NUMERIC_HINT_KEYS.numpad,
       voiceKeys: VOICE_KEYS.numpad,
       stopHotkey: null,
-      oneSoundAtATime: false,
+      oneSoundAtATime: true,
+      pressAgainToStop: false,
     } as SetupView,
     mixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
     voice: seedVoice(),
@@ -330,6 +331,12 @@ export function installMock() {
   function play(slot: number) {
     const sound = soundAt(slot);
     if (!sound) return;
+    if (backend.setup.pressAgainToStop && playing.has(sound.id)) {
+      playing.delete(sound.id);
+      if (playing.size === 0) send({ kind: "display", data: { kind: "silent" } });
+      return;
+    }
+    if (backend.setup.oneSoundAtATime) playing.clear();
     playing.add(sound.id);
     startedAt = Date.now();
     setTimeout(() => {
@@ -548,6 +555,10 @@ export function installMock() {
     },
     set_one_sound_at_a_time: ({ enabled }) => {
       backend.setup.oneSoundAtATime = enabled as boolean;
+      publishSetup();
+    },
+    set_press_again_to_stop: ({ enabled }) => {
+      backend.setup.pressAgainToStop = enabled as boolean;
       publishSetup();
     },
     set_numeric_scheme: ({ scheme }) => {

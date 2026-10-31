@@ -115,6 +115,8 @@
   "ParamTime": "Tempo",
   "PlayInGame": "Tocar no jogo agora",
   "Playback": "Reprodução",
+  "PressAgainToStop": "Clicar de novo para parar",
+  "PressAgainToStopHint": "Pressionar um pad que está tocando para o som em vez de recomeçar.",
   "PreviewOnHeadphones": "Ouvir só nos fones",
   "PreviousInterface": "Interface anterior",
   "RefreshDevices": "Atualizar dispositivos",

@@ -109,9 +109,14 @@ Ligue **Ouvir minha voz** para testar um efeito nos fones. Use fones nesse teste
 
 Um efeito atrasa sua voz em cerca de 40 ms. **Natural** não acrescenta atraso.
 
-### Um som por vez
+### Opções de reprodução
 
-Em **Ajustes** há a opção **Um som por vez**. Com ela ligada, um som novo para o que estava tocando.
+Em **Ajustes** há duas opções de reprodução:
+
+- **Um som por vez**, ligada por padrão: um som novo para o que estava tocando.
+- **Clicar de novo para parar**, desligada por padrão: pressionar um pad que está tocando para o som em vez de recomeçar. Vale também para o atalho do pad.
+
+Cada pad com som mostra o volume no canto inferior esquerdo. Clique com o botão direito no pad e escolha **Volume** para mudar. Em grades densas o pad omite o `%`, e os pads com som cedem a linha do número e do atalho para o nome.
 
 ### Atalhos numéricos
 

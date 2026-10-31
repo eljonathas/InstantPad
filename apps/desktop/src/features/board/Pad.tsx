@@ -5,6 +5,9 @@ import { useIsPlaying } from "../../shared/store/meter";
 import { beginDrag, landOnPad } from "../../shared/ui/drag";
 import "./Pad.css";
 
+/** At or below this the speaker shows one wave instead of two. */
+const LOW_VOLUME = 0.5;
+
 interface PadProps {
   pad: PadView;
   isTarget: boolean;
@@ -68,6 +71,14 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
         <span className="pad-slot">{pad.label}</span>
         <span className="pad-shortcut">{pad.shortcut}</span>
         {pad.isFavorite && <span className="pad-star">★</span>}
+        {sound && (
+          <span className="pad-volume" data-level={sound.volume <= LOW_VOLUME ? "low" : undefined}>
+            <span>
+              {Math.round(sound.volume * 100)}
+              <span className="pad-volume-unit">%</span>
+            </span>
+          </span>
+        )}
         <span className="pad-name">{sound?.name}</span>
         <i className="pad-drop-mark" />
         {isLoading && <i className="pad-loader" />}

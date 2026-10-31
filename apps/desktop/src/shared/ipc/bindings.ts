@@ -46,6 +46,7 @@ export const commands = {
 	setNumericScheme: (scheme: NumericScheme) => __TAURI_INVOKE<void>("set_numeric_scheme", { scheme }),
 	setStopHotkey: (hotkey: Hotkey) => __TAURI_INVOKE<void>("set_stop_hotkey", { hotkey }),
 	setOneSoundAtATime: (enabled: boolean) => __TAURI_INVOKE<void>("set_one_sound_at_a_time", { enabled }),
+	setPressAgainToStop: (enabled: boolean) => __TAURI_INVOKE<void>("set_press_again_to_stop", { enabled }),
 	setLanguage: (language: string | null) => __TAURI_INVOKE<void>("set_language", { language }),
 	installDriver: () => typedError<null, null>(__TAURI_INVOKE("install_driver")),
 	openSoundSettings: () => __TAURI_INVOKE<void>("open_sound_settings"),
@@ -215,6 +216,7 @@ export type SetupView = {
 	voiceKeys: string[],
 	stopHotkey: Hotkey | null,
 	oneSoundAtATime: boolean,
+	pressAgainToStop: boolean,
 };
 
 export type SoundPage = {

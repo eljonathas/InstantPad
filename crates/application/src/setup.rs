@@ -77,6 +77,7 @@ impl SetupSession {
             voice_keys: voice_keys(settings.numeric_scheme),
             stop_hotkey: settings.stop_hotkey.clone(),
             one_sound_at_a_time: settings.one_sound_at_a_time,
+            press_again_to_stop: settings.press_again_to_stop,
         }
     }
 
@@ -127,6 +128,12 @@ impl SetupSession {
 
     pub fn set_one_sound_at_a_time(&self, enabled: bool) {
         self.settings.lock().one_sound_at_a_time = enabled;
+        self.save();
+        self.publish();
+    }
+
+    pub fn set_press_again_to_stop(&self, enabled: bool) {
+        self.settings.lock().press_again_to_stop = enabled;
         self.save();
         self.publish();
     }

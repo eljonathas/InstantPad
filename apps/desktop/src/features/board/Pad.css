@@ -32,6 +32,8 @@
   inset: var(--well-gap) var(--well-gap) calc(var(--well-gap) + var(--cap-travel-pad));
   overflow: hidden;
   border-radius: var(--radius-pad-inner);
+  /* The sizes of the text inside follow the size of the cap. */
+  container-type: size;
   /* The text of a loaded pad: the labels dim, the name white. */
   --pad-label: var(--color-pad-label);
   --pad-shortcut: var(--color-pad-label);
@@ -47,6 +49,7 @@
 .pad-slot,
 .pad-shortcut,
 .pad-star,
+.pad-volume,
 .pad-name {
   position: absolute;
 }
@@ -61,8 +64,41 @@
 .pad-shortcut {
   top: var(--pad-label-top);
   right: var(--pad-label-side);
+  /* A long shortcut gives way before it runs into the number of the pad. */
+  max-width: calc(100% - 2 * var(--pad-label-side) - 1.6 * var(--font-pad-label));
+  overflow: hidden;
   color: var(--pad-shortcut);
   font-size: var(--font-pad-shortcut);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The volume of the sound, in the corner opposite the star. */
+.pad-volume {
+  --volume-icon: var(--icon-volume-high);
+  bottom: var(--pad-label-top);
+  left: var(--pad-label-side);
+  display: flex;
+  align-items: center;
+  gap: var(--pad-volume-gap);
+  color: var(--pad-label);
+  font-size: var(--font-pad-label);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pad-volume[data-level="low"] {
+  --volume-icon: var(--icon-volume-low);
+}
+
+.pad-volume::before {
+  content: "";
+  flex: none;
+  width: var(--pad-volume-icon-size);
+  height: var(--pad-volume-icon-size);
+  background: currentcolor;
+  -webkit-mask: var(--volume-icon) center / contain no-repeat;
+  mask: var(--volume-icon) center / contain no-repeat;
 }
 
 .pad-star {
@@ -105,6 +141,26 @@
 
 .pad[data-playing] .pad-name {
   text-shadow: none;
+}
+
+/* A dense grid keeps the name and the volume of a loaded pad readable: the number and the
+   shortcut of the pad give their row to the name, and the volume drops its unit. */
+@container (width < 64px) or (height < 64px) {
+  .pad[data-loaded] :is(.pad-slot, .pad-shortcut),
+  .pad-volume-unit {
+    display: none;
+  }
+
+  .pad[data-loaded] .pad-name {
+    top: var(--pad-label-top);
+  }
+}
+
+@container (width < 48px) {
+  .pad-shortcut,
+  .pad-star {
+    display: none;
+  }
 }
 
 /* While something is dragged the board steps back, so the pad it would land on stands out. */
@@ -179,6 +235,7 @@ body[data-dragging="swap"] .pad-drop-mark {
 }
 
 .pad[data-loading] .pad-name,
+.pad[data-loading] .pad-volume,
 .pad[data-loading] .pad-star {
   opacity: var(--loader-dim);
 }

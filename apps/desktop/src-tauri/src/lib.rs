@@ -61,6 +61,7 @@ fn specta_builder() -> Builder<Wry> {
             commands::setup::set_numeric_scheme,
             commands::setup::set_stop_hotkey,
             commands::setup::set_one_sound_at_a_time,
+            commands::setup::set_press_again_to_stop,
             commands::setup::set_language,
             commands::setup::install_driver,
             commands::setup::open_sound_settings,

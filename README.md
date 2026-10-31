@@ -109,9 +109,14 @@ Turn on **Hear my voice** to try an effect on your headphones. Use headphones fo
 
 An effect delays your voice by about 40 ms. **Natural** adds no delay.
 
-### One sound at a time
+### Playback options
 
-**Settings** has a **One sound at a time** option. When it is on, a new sound stops the one that was playing.
+**Settings** has two playback options:
+
+- **One sound at a time**, on by default: a new sound stops the one that was playing.
+- **Press again to stop**, off by default: pressing a pad that is playing stops it instead of starting it over. This also applies to its shortcut.
+
+Each pad with a sound shows its volume in the bottom left corner. Right-click the pad and choose **Volume** to change it. On dense grids the pad drops the `%`, and loaded pads give the row of their number and shortcut to the name.
 
 ### Numeric shortcuts
 

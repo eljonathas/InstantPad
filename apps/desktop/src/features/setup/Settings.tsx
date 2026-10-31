@@ -148,7 +148,15 @@ export function Settings({ children }: { children: ReactNode }) {
         on={setup.oneSoundAtATime}
         onClick={() => commands.setOneSoundAtATime(!setup.oneSoundAtATime)}
       />
-      <p className="screen-text setting-note setting-spaced">{t("OneSoundAtATimeHint")}</p>
+      <p className="screen-text setting-note">{t("OneSoundAtATimeHint")}</p>
+      <ToggleKey
+        kind="switch"
+        className="setting-toggle"
+        label={t("PressAgainToStop")}
+        on={setup.pressAgainToStop}
+        onClick={() => commands.setPressAgainToStop(!setup.pressAgainToStop)}
+      />
+      <p className="screen-text setting-note setting-spaced">{t("PressAgainToStopHint")}</p>
 
       <h3 className="setting-title screen-text">{t("StopShortcut")}</h3>
       <button className="key setting-key setting-spaced" onClick={() => void chooseStopHotkey()}>

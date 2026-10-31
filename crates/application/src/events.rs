@@ -1,10 +1,12 @@
 use instantpad_domain::hotkeys::{Hotkey, NumericScheme};
 use instantpad_domain::sounds::SoundSource;
+use instantpad_domain::{board, palette};
 use serde::Serialize;
 use specta::Type;
 
 use crate::message::Message;
 use crate::ports::AudioDevice;
+use crate::settings::AppSettings;
 
 // `#[specta(type = u32)]` exports a float as a plain `number`. Specta adds `| null` for NaN,
 // which these values never are.
@@ -54,6 +56,8 @@ pub struct BoardView {
     pub target_slot: Option<u32>,
     /// Text of the stop key, or `None` when there is none.
     pub stop_shortcut: Option<String>,
+    /// The color a new interface starts with.
+    pub next_accent: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
@@ -70,6 +74,8 @@ pub struct SetupView {
     pub game_microphone_name: String,
     pub language: Option<String>,
     pub numeric_scheme: NumericScheme,
+    /// First pad, last pad, next, previous and stop keys of the scheme. Empty when it is off.
+    pub numeric_hint_keys: Vec<String>,
     pub stop_hotkey: Option<Hotkey>,
 }
 
@@ -133,6 +139,40 @@ pub struct MeterFrame {
     pub playing_slots: Vec<u32>,
 }
 
+/// What the rules allow, so the interface offers only that.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Limits {
+    pub pad_colors: Vec<String>,
+    pub accent_colors: Vec<String>,
+    pub max_rows: u32,
+    pub max_columns: u32,
+    pub default_rows: u32,
+    pub default_columns: u32,
+    /// Where a double click puts each knob.
+    pub default_mixer: MixerView,
+}
+
+impl Limits {
+    pub fn current() -> Self {
+        let defaults = AppSettings::default();
+        Self {
+            pad_colors: palette::PADS.map(str::to_owned).to_vec(),
+            accent_colors: palette::ACCENTS.map(str::to_owned).to_vec(),
+            max_rows: board::MAX_ROWS,
+            max_columns: board::MAX_COLUMNS,
+            default_rows: board::DEFAULT_ROWS,
+            default_columns: board::DEFAULT_COLUMNS,
+            default_mixer: MixerView {
+                mic_volume: defaults.mic_volume,
+                game_volume: defaults.game_volume,
+                monitor_volume: defaults.monitor_volume,
+                mic_enabled: defaults.mic_enabled,
+            },
+        }
+    }
+}
+
 /// Everything the interface needs to draw its first frame.
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -141,4 +181,5 @@ pub struct StartView {
     pub mixer: MixerView,
     pub setup: SetupView,
     pub favorites: Vec<SoundSource>,
+    pub limits: Limits,
 }

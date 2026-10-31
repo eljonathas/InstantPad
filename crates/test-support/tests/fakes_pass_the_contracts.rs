@@ -1,8 +1,8 @@
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
 use instantpad_test_support::contract;
 use instantpad_test_support::fakes::{
-    FakeCable, FakeHotkeyHost, FakePlayer, InMemoryBoard, InMemoryFavorites, InMemorySettings,
-    device,
+    FakeCable, FakeFileStore, FakeHotkeyHost, FakePlayer, InMemoryBoard, InMemoryFavorites,
+    InMemorySettings, device,
 };
 
 #[tokio::test]
@@ -21,6 +21,11 @@ fn the_in_memory_repositories() {
     contract::board_repository(&InMemoryBoard::default());
     contract::favorites_repository(&InMemoryFavorites::default());
     contract::settings_repository(&InMemorySettings::default());
+}
+
+#[test]
+fn the_fake_file_store() {
+    contract::sound_file_store(&FakeFileStore::default(), "outside/a.mp3", "chosen/a.mp3");
 }
 
 #[test]

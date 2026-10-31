@@ -11,6 +11,13 @@ use crate::message::{Failure, Message, TextKey};
 use crate::ports::{BoardRepository, EventSink, PlaybackTag, SoundFileStore, SoundPlayer};
 use crate::settings::Settings;
 
+/// A pad of one interface, so an action that takes a while still lands where it was aimed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PadTarget {
+    pub interface_id: String,
+    pub slot: u32,
+}
+
 struct State {
     board: PadBoard,
     active_id: String,
@@ -124,6 +131,7 @@ impl BoardSession {
             active_id: state.active_id.clone(),
             pads: self.pads(&state, &layout),
             target_slot: state.target_slot,
+            next_accent: palette::accent_for(state.board.interfaces().len()).to_owned(),
             stop_shortcut: stop.map(Hotkey::to_string),
         }
     }
@@ -218,9 +226,16 @@ impl BoardSession {
     }
 
     pub fn configure_interface(&self, id: &str, layout: InterfaceLayout) {
-        if self.lock().board.reconfigure(id, layout).is_ok() {
-            self.after_board_edit();
+        {
+            let mut state = self.lock();
+            if state.board.reconfigure(id, layout).is_err() {
+                return;
+            }
+            if state.active_id == id {
+                state.target_slot = None;
+            }
         }
+        self.after_board_edit();
     }
 
     pub fn move_interface(&self, id: &str, offset: i32) {
@@ -260,17 +275,28 @@ impl BoardSession {
         }
     }
 
+    pub fn pad_on_screen(&self, slot: u32) -> PadTarget {
+        PadTarget {
+            interface_id: self.lock().active_id.clone(),
+            slot,
+        }
+    }
+
     /// The pad a new sound goes to: the one the user picked, or else the first free one.
-    pub fn pad_for_new_sound(&self) -> Option<u32> {
+    pub fn pad_for_new_sound(&self) -> Option<PadTarget> {
         let state = self.lock();
-        state
+        let slot = state
             .target_slot
-            .or_else(|| state.board.first_free_slot(&state.active_id))
+            .or_else(|| state.board.first_free_slot(&state.active_id))?;
+        Some(PadTarget {
+            interface_id: state.active_id.clone(),
+            slot,
+        })
     }
 
     pub async fn place(
         &self,
-        slot: u32,
+        target: &PadTarget,
         name: &str,
         path: &str,
         color: &str,
@@ -280,20 +306,32 @@ impl BoardSession {
 
         {
             let mut state = self.lock();
-            let active = state.active_id.clone();
-            state.board.place(&active, slot, name, path, color);
-            state.target_slot = None;
+            let PadTarget { interface_id, slot } = target;
+            // The interface may have been deleted or made smaller while the sound was loading.
+            let fits = state
+                .board
+                .interface(interface_id)
+                .is_some_and(|item| *slot < item.layout.capacity());
+            if !fits {
+                return Ok(());
+            }
+
+            state.board.place(interface_id, *slot, name, path, color);
+            if state.active_id == *interface_id {
+                state.target_slot = None;
+            }
         }
         self.after_board_edit();
-        self.show(Message::plain(format!("{} {name}", pad_label(slot))));
+        self.show(Message::plain(format!("{} {name}", pad_label(target.slot))));
         Ok(())
     }
 
     pub async fn import_file(&self, source_path: &str, slot: u32) {
+        let target = self.pad_on_screen(slot);
         let placed = async {
             let path = self.files.import(source_path)?;
             let name = file_stem(source_path);
-            self.place(slot, &name, &path, palette::pad_color_for(slot))
+            self.place(&target, &name, &path, palette::pad_color_for(slot))
                 .await
         };
         if let Err(Failure(reason)) = placed.await {
@@ -306,6 +344,7 @@ impl BoardSession {
             let mut state = self.lock();
             let active = state.active_id.clone();
             state.board.swap(&active, from_slot, to_slot);
+            state.target_slot = None;
         }
         self.after_board_edit();
     }

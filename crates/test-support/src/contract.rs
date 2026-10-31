@@ -3,7 +3,7 @@
 use instantpad_application::hotkeys::HotkeyCommand;
 use instantpad_application::ports::{
     AudioDevice, BoardRepository, FavoritesRepository, HotkeyHost, PlaybackTag, SettingsRepository,
-    SoundPlayer, VirtualCable,
+    SoundFileStore, SoundPlayer, VirtualCable,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
@@ -98,4 +98,23 @@ pub fn virtual_cable(
     assert_eq!(found.as_ref(), Some(render));
     assert_eq!(cable.find_game_output(std::slice::from_ref(real)), None);
     assert!(!cable.game_microphone_name(Some(render)).is_empty());
+}
+
+/// `outside` must be an existing file, and `destination` a place that can be written.
+pub fn sound_file_store(store: &dyn SoundFileStore, outside: &str, destination: &str) {
+    let stored = store.import(outside).expect("import a file");
+    assert!(store.exists(&stored));
+    assert_eq!(
+        store.import(&stored).as_ref(),
+        Ok(&stored),
+        "already stored"
+    );
+
+    store
+        .export(&stored, destination)
+        .expect("export a stored file");
+
+    let target = store.path_for_download("https://site/media/sounds/som.mp3");
+    assert!(target.ends_with("som.mp3"));
+    assert!(!store.exists("this file does not exist.mp3"));
 }

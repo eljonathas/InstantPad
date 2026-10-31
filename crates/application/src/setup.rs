@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use instantpad_domain::hotkeys::{Hotkey, NumericScheme};
+use instantpad_domain::hotkeys::{Hotkey, NumericLayout, NumericScheme};
 
 use crate::board::BoardSession;
 use crate::events::{AppEvent, DisplayEvent, SetupView};
@@ -72,6 +72,7 @@ impl SetupSession {
             game_microphone_name: cable.game_microphone_name(game_output),
             language: settings.language.clone(),
             numeric_scheme: settings.numeric_scheme,
+            numeric_hint_keys: numeric_hint_keys(settings.numeric_scheme),
             stop_hotkey: settings.stop_hotkey.clone(),
         }
     }
@@ -201,6 +202,21 @@ impl SetupSession {
             self.events.emit(AppEvent::error(reason));
         }
     }
+}
+
+fn numeric_hint_keys(scheme: NumericScheme) -> Vec<String> {
+    let layout = NumericLayout::for_scheme(scheme);
+    [
+        layout.pads.first(),
+        layout.pads.last(),
+        layout.next_interface.as_ref(),
+        layout.previous_interface.as_ref(),
+        layout.stop_all.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    .map(Hotkey::to_string)
+    .collect()
 }
 
 fn id_of(device: &Option<AudioDevice>) -> Option<&str> {

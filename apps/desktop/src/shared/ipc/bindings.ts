@@ -75,6 +75,8 @@ export type BoardView = {
 	targetSlot: number | null,
 	/**  Text of the stop key, or `None` when there is none. */
 	stopShortcut: string | null,
+	/**  The color a new interface starts with. */
+	nextAccent: string,
 };
 
 /**  The LCD at the top of the device. */
@@ -111,6 +113,18 @@ export type InterfaceTab = {
 	columns: number,
 	accent: string,
 	soundCount: number,
+};
+
+/**  What the rules allow, so the interface offers only that. */
+export type Limits = {
+	padColors: string[],
+	accentColors: string[],
+	maxRows: number,
+	maxColumns: number,
+	defaultRows: number,
+	defaultColumns: number,
+	/**  Where a double click puts each knob. */
+	defaultMixer: MixerView,
 };
 
 /**  Text for the user. The frontend renders it, so it follows a language change. */
@@ -155,6 +169,8 @@ export type SetupView = {
 	gameMicrophoneName: string,
 	language: string | null,
 	numericScheme: NumericScheme,
+	/**  First pad, last pad, next, previous and stop keys of the scheme. Empty when it is off. */
+	numericHintKeys: string[],
 	stopHotkey: Hotkey | null,
 };
 
@@ -190,6 +206,7 @@ export type StartView = {
 	mixer: MixerView,
 	setup: SetupView,
 	favorites: SoundSource[],
+	limits: Limits,
 };
 
 /**

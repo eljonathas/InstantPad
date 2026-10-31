@@ -17,9 +17,10 @@ fn layout(name: &str) -> InterfaceLayout {
 
 async fn fill(world: &World, slot: u32, name: &str) {
     let path = format!("{name}.mp3");
+    let target = world.board.pad_on_screen(slot);
     world
         .board
-        .place(slot, name, &path, "#ff0000")
+        .place(&target, name, &path, "#ff0000")
         .await
         .unwrap();
 }
@@ -79,11 +80,11 @@ async fn pressing_an_empty_pad_waits_for_a_sound_and_placing_clears_it() {
 
     world.board.press_pad(4).await;
     assert_eq!(world.board.view().target_slot, Some(4));
-    assert_eq!(world.board.pad_for_new_sound(), Some(4));
+    assert_eq!(world.board.pad_for_new_sound().unwrap().slot, 4);
 
     fill(&world, 4, "a").await;
     assert_eq!(world.board.view().target_slot, None);
-    assert_eq!(world.board.pad_for_new_sound(), Some(0));
+    assert_eq!(world.board.pad_for_new_sound().unwrap().slot, 0);
 }
 
 #[tokio::test]
@@ -224,4 +225,69 @@ async fn stop_keys_stop_everything() {
             .contains(&PlaybackTag(0))
     );
     assert!(world.player.playing.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_sound_lands_on_the_interface_it_was_aimed_at_even_if_the_user_moved_on() {
+    let world = World::new();
+    let main = world.board.pad_on_screen(5);
+    world.board.add_interface(layout("Memes"));
+    let memes = world.board.view().active_id;
+    assert_ne!(main.interface_id, memes);
+
+    world
+        .board
+        .place(&main, "a", "a.mp3", "#ff0000")
+        .await
+        .unwrap();
+
+    assert!(
+        world
+            .board
+            .view()
+            .pads
+            .iter()
+            .all(|pad| pad.sound.is_none())
+    );
+    world.board.select_interface(&main.interface_id);
+    assert!(world.board.view().pads[5].sound.is_some());
+}
+
+#[tokio::test]
+async fn a_pad_that_stopped_existing_while_loading_takes_nothing() {
+    let world = World::new();
+    let far = world.board.pad_on_screen(20);
+    let id = far.interface_id.clone();
+    world.board.configure_interface(&id, layout("Small"));
+
+    world
+        .board
+        .place(&far, "a", "a.mp3", "#ff0000")
+        .await
+        .unwrap();
+
+    assert_eq!(world.board.view().interfaces[0].sound_count, 0);
+}
+
+#[tokio::test]
+async fn swapping_pads_forgets_the_pad_that_was_waiting_for_a_sound() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    world.board.press_pad(1).await;
+
+    world.board.swap_pads(0, 1);
+
+    assert_eq!(world.board.view().target_slot, None);
+    assert_eq!(world.board.pad_for_new_sound().unwrap().slot, 0);
+}
+
+#[tokio::test]
+async fn resizing_the_interface_forgets_the_pad_that_was_waiting_for_a_sound() {
+    let world = World::new();
+    world.board.press_pad(20).await;
+    let id = world.board.view().active_id;
+
+    world.board.configure_interface(&id, layout("Small"));
+
+    assert_eq!(world.board.view().target_slot, None);
 }

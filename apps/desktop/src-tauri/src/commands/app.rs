@@ -1,4 +1,4 @@
-use instantpad_application::events::StartView;
+use instantpad_application::events::{Limits, StartView};
 use tauri::{AppHandle, Manager, State};
 
 use crate::composition::Core;
@@ -24,5 +24,6 @@ pub fn start(app: AppHandle, core: State<'_, Core>, default_interface_name: Stri
         mixer: core.mixer.view(),
         setup: core.setup.view(),
         favorites: core.favorites.list(),
+        limits: Limits::current(),
     }
 }

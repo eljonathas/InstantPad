@@ -11,8 +11,8 @@ use crate::palette;
 pub const MAX_ROWS: u32 = 8;
 pub const MAX_COLUMNS: u32 = 10;
 
-const DEFAULT_ROWS: u32 = 4;
-const DEFAULT_COLUMNS: u32 = 6;
+pub const DEFAULT_ROWS: u32 = 4;
+pub const DEFAULT_COLUMNS: u32 = 6;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum BoardError {

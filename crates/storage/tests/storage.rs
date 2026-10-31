@@ -45,6 +45,20 @@ fn the_repositories_keep_what_they_save() {
 }
 
 #[test]
+fn the_store_keeps_the_contract_of_a_file_store() {
+    let (dir, folder) = folder();
+    let outside = dir.path().join("outside.mp3");
+    fs::write(&outside, b"audio").unwrap();
+    let chosen = dir.path().join("chosen.mp3");
+
+    contract::sound_file_store(
+        &FolderSoundStore::new(&folder),
+        outside.to_str().unwrap(),
+        chosen.to_str().unwrap(),
+    );
+}
+
+#[test]
 fn a_missing_file_gives_the_default() {
     let (_dir, folder) = folder();
 

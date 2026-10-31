@@ -57,7 +57,11 @@ impl SoundRows {
 
     /// Without a `slot`, the sound goes to the pad the user picked or to the first free one.
     pub async fn add_to_pad(&self, source: SoundSource, slot: Option<u32>) {
-        let Some(slot) = slot.or_else(|| self.board.pad_for_new_sound()) else {
+        let target = match slot {
+            Some(slot) => Some(self.board.pad_on_screen(slot)),
+            None => self.board.pad_for_new_sound(),
+        };
+        let Some(target) = target else {
             let hint = Message::text(TextKey::InterfaceFullHint);
             self.events.emit(AppEvent::error(hint));
             return;
@@ -66,7 +70,7 @@ impl SoundRows {
         let result = async {
             self.downloading(&source).await?;
             self.board
-                .place(slot, &source.name, &source.path, &source.color)
+                .place(&target, &source.name, &source.path, &source.color)
                 .await
         };
         if let Err(failure) = result.await {

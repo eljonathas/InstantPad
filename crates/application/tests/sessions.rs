@@ -22,7 +22,7 @@ fn online() -> SoundSource {
     SoundSource {
         name: "a".to_owned(),
         color: "#ffffff".to_owned(),
-        path: "previews/a.mp3".to_owned(),
+        path: "store/a.mp3".to_owned(),
         sound_url: Some("https://site/a.mp3".to_owned()),
     }
 }

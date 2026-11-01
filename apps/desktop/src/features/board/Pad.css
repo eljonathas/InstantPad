@@ -161,11 +161,13 @@
   }
 }
 
-@container (width < 64px) or (height < 64px) {
+@container (height < 64px) {
   .pad-name {
     --pad-name-lines: 1;
   }
+}
 
+@container (width < 64px) or (height < 64px) {
   .pad-volume-unit {
     display: none;
   }
@@ -178,8 +180,14 @@
   }
 
   .pad[data-loaded] .pad-name {
-    --pad-name-lines: 2;
     top: var(--pad-label-top);
+  }
+}
+
+/* A cap both narrow and short gets back the line the freed row made room for. */
+@container (width < 64px) and (height < 64px) {
+  .pad[data-loaded] .pad-name {
+    --pad-name-lines: 2;
   }
 }
 

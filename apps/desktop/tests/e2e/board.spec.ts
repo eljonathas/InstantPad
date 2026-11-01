@@ -12,6 +12,63 @@ test("a pad fires on press and lights up", async ({ page }) => {
   await expect(page.getByRole("meter", { name: "Output" }).locator("[data-lit]").first()).toBeVisible();
 });
 
+test("a second press starts a playing pad over by default", async ({ page }) => {
+  const vine = pad(page, "01 Vine boom");
+  await vine.dispatchEvent("pointerdown", { button: 0 });
+  await expect(vine).toHaveAttribute("data-playing", "");
+
+  await vine.dispatchEvent("pointerdown", { button: 0 });
+
+  await expect(vine).toHaveAttribute("data-playing", "");
+  await expect(lcd(page)).toHaveText("01 Vine boom");
+});
+
+test("with press again to stop, a second press stops the pad", async ({ page }) => {
+  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Press again to stop" }).click();
+  const vine = pad(page, "01 Vine boom");
+
+  await vine.dispatchEvent("pointerdown", { button: 0 });
+  await expect(vine).toHaveAttribute("data-playing", "");
+  await vine.dispatchEvent("pointerdown", { button: 0 });
+
+  await expect(vine).not.toHaveAttribute("data-playing", "");
+  await expect(lcd(page)).toHaveText("No audio playing");
+});
+
+test("a dense grid keeps the name and the volume, and the tooltip keeps the rest", async ({ page }) => {
+  await page.getByTitle("Configure this interface").click();
+  const dialog = page.getByRole("dialog", { name: "Configure interface" });
+  await dialog.getByLabel("Rows").selectOption("8");
+  await dialog.getByLabel("Columns").selectOption("10");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(page.locator(".pad")).toHaveCount(80);
+
+  const vine = pad(page, "01 Vine boom");
+  await expect(vine.locator(".pad-name")).toBeVisible();
+  await expect(vine.locator(".pad-volume")).toBeVisible();
+  await expect(vine.locator(".pad-volume-unit")).toBeHidden();
+  await expect(vine.locator(".pad-shortcut")).toBeHidden();
+  await expect(vine.locator(".pad-name")).toHaveCSS("font-size", "13px");
+  await expect(vine).toHaveAttribute("title", "01 Vine boom · Num1 · Volume 100%");
+  // An empty pad still shows its number, so it can be picked.
+  await expect(emptyPad(page, "04").locator(".pad-slot")).toBeVisible();
+  await expect(emptyPad(page, "04")).toHaveAttribute("title", "04 · Num4");
+});
+
+test("a pad shows the volume of its sound and follows the menu", async ({ page }) => {
+  const vine = pad(page, "01 Vine boom");
+  await expect(vine.locator(".pad-volume")).toHaveText("100%");
+  await expect(emptyPad(page, "04").locator(".pad-volume")).toHaveCount(0);
+
+  await vine.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Volume" }).hover();
+  await page.getByRole("menuitemradio", { name: "50%", exact: true }).click();
+
+  await expect(vine.locator(".pad-volume")).toHaveText("50%");
+  await expect(vine.locator(".pad-volume")).toHaveAttribute("data-level", "low");
+});
+
 test("a press on an empty pad targets it and leaves the settings", async ({ page }) => {
   await page.getByRole("tab", { name: "Settings" }).click();
   await emptyPad(page, "04").click();

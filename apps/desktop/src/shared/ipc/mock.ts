@@ -224,7 +224,8 @@ function seed() {
       numericHintKeys: NUMERIC_HINT_KEYS.numpad,
       voiceKeys: VOICE_KEYS.numpad,
       stopHotkey: null,
-      oneSoundAtATime: false,
+      oneSoundAtATime: true,
+      pressAgainToStop: false,
     } as SetupView,
     mixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
     voice: seedVoice(),
@@ -234,6 +235,8 @@ function seed() {
 export function installMock() {
   let backend = seed();
   let playing = new Set<string>();
+  // The latest start of each sound: a sound started over ends PLAY_MS after its last start.
+  const latestStart = new Map<string, number>();
   let counter = 0;
   let startedAt = 0;
   let isFullscreen = false;
@@ -330,9 +333,18 @@ export function installMock() {
   function play(slot: number) {
     const sound = soundAt(slot);
     if (!sound) return;
+    if (backend.setup.pressAgainToStop && playing.has(sound.id)) {
+      playing.delete(sound.id);
+      if (playing.size === 0) send({ kind: "display", data: { kind: "silent" } });
+      return;
+    }
+    if (backend.setup.oneSoundAtATime) playing.clear();
     playing.add(sound.id);
     startedAt = Date.now();
+    const start = startedAt;
+    latestStart.set(sound.id, start);
     setTimeout(() => {
+      if (latestStart.get(sound.id) !== start) return;
       playing.delete(sound.id);
       if (playing.size === 0) send({ kind: "display", data: { kind: "silent" } });
     }, PLAY_MS);
@@ -548,6 +560,10 @@ export function installMock() {
     },
     set_one_sound_at_a_time: ({ enabled }) => {
       backend.setup.oneSoundAtATime = enabled as boolean;
+      publishSetup();
+    },
+    set_press_again_to_stop: ({ enabled }) => {
+      backend.setup.pressAgainToStop = enabled as boolean;
       publishSetup();
     },
     set_numeric_scheme: ({ scheme }) => {

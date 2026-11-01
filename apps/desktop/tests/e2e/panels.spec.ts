@@ -71,9 +71,19 @@ test("a sound row has no button to save it to the computer", async ({ page }) =>
   await expect(row(page, "Vine boom").getByRole("button", { name: "↓" })).toHaveCount(0);
 });
 
-test("one sound at a time switches on in the settings", async ({ page }) => {
+test("one sound at a time starts on and switches off in the settings", async ({ page }) => {
   await page.getByRole("tab", { name: "Settings" }).click();
   const toggle = page.getByRole("button", { name: "One sound at a time" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+  await toggle.click();
+
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+});
+
+test("press again to stop starts off and switches on in the settings", async ({ page }) => {
+  await page.getByRole("tab", { name: "Settings" }).click();
+  const toggle = page.getByRole("button", { name: "Press again to stop" });
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
 
   await toggle.click();

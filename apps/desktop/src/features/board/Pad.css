@@ -32,6 +32,8 @@
   inset: var(--well-gap) var(--well-gap) calc(var(--well-gap) + var(--cap-travel-pad));
   overflow: hidden;
   border-radius: var(--radius-pad-inner);
+  /* The sizes of the text inside follow the size of the cap. */
+  container-type: size;
   /* The text of a loaded pad: the labels dim, the name white. */
   --pad-label: var(--color-pad-label);
   --pad-shortcut: var(--color-pad-label);
@@ -47,6 +49,7 @@
 .pad-slot,
 .pad-shortcut,
 .pad-star,
+.pad-volume,
 .pad-name {
   position: absolute;
 }
@@ -61,8 +64,41 @@
 .pad-shortcut {
   top: var(--pad-label-top);
   right: var(--pad-label-side);
+  /* A long shortcut gives way before it runs into the number of the pad. */
+  max-width: calc(100% - 2 * var(--pad-label-side) - 1.6 * var(--font-pad-label));
+  overflow: hidden;
   color: var(--pad-shortcut);
   font-size: var(--font-pad-shortcut);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The volume of the sound, in the corner opposite the star. */
+.pad-volume {
+  --volume-icon: var(--icon-volume-high);
+  bottom: var(--pad-label-top);
+  left: var(--pad-label-side);
+  display: flex;
+  align-items: center;
+  gap: var(--pad-volume-gap);
+  color: var(--pad-label);
+  font-size: var(--font-pad-label);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pad-volume[data-level="low"] {
+  --volume-icon: var(--icon-volume-low);
+}
+
+.pad-volume::before {
+  content: "";
+  flex: none;
+  width: var(--pad-volume-icon-size);
+  height: var(--pad-volume-icon-size);
+  background: currentcolor;
+  -webkit-mask: var(--volume-icon) center / contain no-repeat;
+  mask: var(--volume-icon) center / contain no-repeat;
 }
 
 .pad-star {
@@ -86,6 +122,15 @@
   overflow-wrap: anywhere;
 }
 
+/* The name takes the lines that fit in its cap and ends in an ellipsis past them. */
+.pad-name-text {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: var(--pad-name-line-height);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--pad-name-lines);
+}
+
 .pad[data-loaded] .pad-body {
   --cap-face: color-mix(in srgb, var(--pad-color) var(--pad-face-mix), var(--color-pad-face));
   --pad-label: var(--color-pad-label-lit);
@@ -105,6 +150,45 @@
 
 .pad[data-playing] .pad-name {
   text-shadow: none;
+}
+
+/* A dense grid keeps the name and the volume of a loaded pad readable. A short cap drops the unit
+   of the volume and gives the name fewer lines; a narrow one hides the shortcut, and a loaded one
+   also gives the row of its number to the name. The tooltip of the pad keeps what is hidden. */
+@container (height < 100px) {
+  .pad-name {
+    --pad-name-lines: 2;
+  }
+}
+
+@container (height < 64px) {
+  .pad-name {
+    --pad-name-lines: 1;
+  }
+}
+
+@container (width < 64px) or (height < 64px) {
+  .pad-volume-unit {
+    display: none;
+  }
+}
+
+@container (width < 64px) {
+  .pad-shortcut,
+  .pad[data-loaded] .pad-slot {
+    display: none;
+  }
+
+  .pad[data-loaded] .pad-name {
+    top: var(--pad-label-top);
+  }
+}
+
+/* A cap both narrow and short gets back the line the freed row made room for. */
+@container (width < 64px) and (height < 64px) {
+  .pad[data-loaded] .pad-name {
+    --pad-name-lines: 2;
+  }
 }
 
 /* While something is dragged the board steps back, so the pad it would land on stands out. */
@@ -179,6 +263,7 @@ body[data-dragging="swap"] .pad-drop-mark {
 }
 
 .pad[data-loading] .pad-name,
+.pad[data-loading] .pad-volume,
 .pad[data-loading] .pad-star {
   opacity: var(--loader-dim);
 }

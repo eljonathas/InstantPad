@@ -2,8 +2,12 @@ import { memo, useEffect, useRef, type CSSProperties, type MouseEvent } from "re
 import { commands, type PadView } from "../../shared/ipc";
 import { requestSources } from "../../shared/store/backend";
 import { useIsPlaying } from "../../shared/store/meter";
+import { useText } from "../../shared/store/text";
 import { beginDrag, landOnPad } from "../../shared/ui/drag";
 import "./Pad.css";
+
+/** At or below this the speaker shows one wave instead of two. */
+const LOW_VOLUME = 0.5;
 
 interface PadProps {
   pad: PadView;
@@ -13,6 +17,7 @@ interface PadProps {
 
 /** A backlit rubber pad. It fires on press, not on release. */
 export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
+  const { t } = useText();
   const lit = useIsPlaying(pad.slot);
   const { sound, slot, isLoading } = pad;
   const hasSound = sound !== null;
@@ -23,6 +28,16 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
     if (wasLoading.current && !isLoading && hasSound) landOnPad(slot);
     wasLoading.current = isLoading;
   }, [isLoading, hasSound, slot]);
+
+  const volume = sound ? Math.round(sound.volume * 100) : 0;
+  // A dense grid hides the shortcut and the unit of the volume, so the tooltip keeps them.
+  const title = [
+    sound ? `${pad.label} ${sound.name}` : pad.label,
+    pad.shortcut,
+    sound ? `${t("Volume")} ${volume}%` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const style = sound
     ? ({
@@ -42,6 +57,7 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
       data-loading={isLoading ? "" : undefined}
       data-target={isTarget ? "" : undefined}
       aria-label={sound ? `${pad.label} ${sound.name}` : pad.label}
+      title={title}
       onContextMenu={(event) => {
         // macOS turns Ctrl+click into a context menu, but Ctrl+press is the drag.
         if (event.button === 0 && event.ctrlKey) return event.preventDefault();
@@ -68,7 +84,15 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
         <span className="pad-slot">{pad.label}</span>
         <span className="pad-shortcut">{pad.shortcut}</span>
         {pad.isFavorite && <span className="pad-star">★</span>}
-        <span className="pad-name">{sound?.name}</span>
+        {sound && (
+          <span className="pad-volume" data-level={sound.volume <= LOW_VOLUME ? "low" : undefined}>
+            <span>
+              {volume}
+              <span className="pad-volume-unit">%</span>
+            </span>
+          </span>
+        )}
+        <span className="pad-name">{sound && <span className="pad-name-text">{sound.name}</span>}</span>
         <i className="pad-drop-mark" />
         {isLoading && <i className="pad-loader" />}
       </span>

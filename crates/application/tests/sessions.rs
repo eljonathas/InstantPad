@@ -373,10 +373,21 @@ async fn choosing_a_device_is_remembered() {
 async fn one_sound_at_a_time_is_remembered_and_shown() {
     let setup = setup();
 
-    setup.session.set_one_sound_at_a_time(true);
+    setup.session.set_one_sound_at_a_time(false);
 
-    assert!(setup.session.view().one_sound_at_a_time);
-    assert!(setup.world.settings.lock().one_sound_at_a_time);
+    assert!(!setup.session.view().one_sound_at_a_time);
+    assert!(!setup.world.settings.lock().one_sound_at_a_time);
+}
+
+#[tokio::test]
+async fn press_again_to_stop_starts_off_and_is_remembered() {
+    let setup = setup();
+    assert!(!setup.session.view().press_again_to_stop);
+
+    setup.session.set_press_again_to_stop(true);
+
+    assert!(setup.session.view().press_again_to_stop);
+    assert!(setup.world.settings.lock().press_again_to_stop);
 }
 
 #[tokio::test]

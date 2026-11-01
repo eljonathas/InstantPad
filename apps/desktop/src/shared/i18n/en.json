@@ -115,6 +115,8 @@
   "ParamTime": "Time",
   "PlayInGame": "Play in the game now",
   "Playback": "Playback",
+  "PressAgainToStop": "Press again to stop",
+  "PressAgainToStopHint": "Pressing a pad that is playing stops it instead of starting it over. Its shortcut does the same.",
   "PreviewOnHeadphones": "Listen on your headphones only",
   "PreviousInterface": "Previous interface",
   "RefreshDevices": "Refresh devices",

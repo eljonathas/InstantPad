@@ -84,6 +84,7 @@ pub struct SetupView {
     pub voice_keys: Vec<String>,
     pub stop_hotkey: Option<Hotkey>,
     pub one_sound_at_a_time: bool,
+    pub press_again_to_stop: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]

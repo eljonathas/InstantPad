@@ -314,7 +314,7 @@ async fn with_one_sound_at_a_time_a_new_sound_stops_the_last_one() {
 }
 
 #[tokio::test]
-async fn sounds_overlap_unless_the_user_asks_otherwise() {
+async fn one_sound_at_a_time_is_the_default() {
     let world = World::new();
     fill(&world, 0, "a").await;
     fill(&world, 1, "b").await;
@@ -322,7 +322,113 @@ async fn sounds_overlap_unless_the_user_asks_otherwise() {
     world.board.press_pad(0).await;
     world.board.press_pad(1).await;
 
+    assert_eq!(world.board.playing_slots(), [1]);
+}
+
+#[tokio::test]
+async fn sounds_overlap_when_the_user_turns_one_at_a_time_off() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    fill(&world, 1, "b").await;
+    world.settings.lock().one_sound_at_a_time = false;
+
+    world.board.press_pad(0).await;
+    world.board.press_pad(1).await;
+
     assert_eq!(world.board.playing_slots().len(), 2);
+}
+
+#[tokio::test]
+async fn pressing_a_playing_pad_starts_it_over_by_default() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+
+    world.board.press_pad(0).await;
+    world.board.press_pad(0).await;
+
+    assert_eq!(world.board.playing_slots(), [0]);
+}
+
+#[tokio::test]
+async fn with_press_again_to_stop_a_second_press_stops_the_pad() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    world.settings.lock().press_again_to_stop = true;
+
+    world.board.press_pad(0).await;
+    world.board.press_pad(0).await;
+
+    assert!(world.board.playing_slots().is_empty());
+}
+
+#[tokio::test]
+async fn press_again_to_stop_leaves_the_other_pads_playing() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    fill(&world, 1, "b").await;
+    {
+        let mut settings = world.settings.lock();
+        settings.one_sound_at_a_time = false;
+        settings.press_again_to_stop = true;
+    }
+
+    world.board.press_pad(0).await;
+    world.board.press_pad(1).await;
+    world.board.press_pad(1).await;
+
+    assert_eq!(world.board.playing_slots(), [0]);
+}
+
+#[tokio::test]
+async fn press_again_to_stop_also_covers_the_numeric_keys() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    world.settings.lock().press_again_to_stop = true;
+
+    world
+        .board
+        .on_hotkey(HotkeyCommand::PlayPad { index: 0 })
+        .await;
+    world
+        .board
+        .on_hotkey(HotkeyCommand::PlayPad { index: 0 })
+        .await;
+
+    assert!(world.board.playing_slots().is_empty());
+}
+
+#[tokio::test]
+async fn press_again_to_stop_also_covers_the_shortcut_of_a_sound() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    world.settings.lock().press_again_to_stop = true;
+    let sound_id = world.board.view().pads[0].sound.clone().unwrap().id;
+
+    for _ in 0..2 {
+        world
+            .board
+            .on_hotkey(HotkeyCommand::PlaySound {
+                sound_id: sound_id.clone(),
+            })
+            .await;
+    }
+
+    assert!(world.board.playing_slots().is_empty());
+}
+
+#[tokio::test]
+async fn with_both_options_a_new_pad_takes_over_and_a_second_press_stops_it() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    fill(&world, 1, "b").await;
+    world.settings.lock().press_again_to_stop = true;
+
+    world.board.press_pad(0).await;
+    world.board.press_pad(1).await;
+    assert_eq!(world.board.playing_slots(), [1]);
+
+    world.board.press_pad(1).await;
+    assert!(world.board.playing_slots().is_empty());
 }
 
 fn stored(world: &World, name: &str) {

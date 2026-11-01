@@ -514,6 +514,11 @@ impl BoardSession {
     }
 
     async fn trigger(&self, sound: &Sound) {
+        let tag = sound_tag(sound);
+        if self.settings.lock().press_again_to_stop && self.player.is_playing(tag) {
+            self.player.stop(tag);
+            return;
+        }
         self.stop_others();
         let played = self
             .player

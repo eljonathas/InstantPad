@@ -34,19 +34,19 @@
   --weight-black: 900;
   --font-logo: 24px;
   --font-lcd-main: 24px;
-  /* The text of a pad follows the size of its cap (cqmin), but never below what stays readable
-     once the whole device is scaled down to a small window. */
+  /* A large pad grows its name with its cap (cqmin). A dense grid never shrinks it below the
+     size it always had: the pad hides other text to make room instead. */
   --font-star: clamp(11px, 14cqmin, 14px);
   --font-input: 14px;
   --font-screen: 13px;
-  --font-pad-name: clamp(10px, 13cqmin, 18px);
+  --font-pad-name: clamp(13px, 13cqmin, 18px);
   --font-key: 12px;
   --font-status: 12px;
   --font-silk: 11px;
-  --font-pad-label: clamp(10px, 11cqmin, 11px);
+  --font-pad-label: 11px;
   --font-dialog-label: 11px;
   --font-meter-label: 10px;
-  --font-pad-shortcut: clamp(9px, 10cqmin, 10px);
+  --font-pad-shortcut: 10px;
   --font-tagline: 9px;
   --font-hotkey-prompt: 15px;
   --font-menu: 12px;
@@ -274,6 +274,8 @@
   /* The name keeps clear of the label row on top and the volume row below. */
   --pad-text-row: calc(var(--pad-label-top) + var(--font-pad-label) * 1.4);
   --pad-name-inset: var(--pad-text-row) clamp(2px, 6cqw, 8px);
+  --pad-name-lines: 4;
+  --pad-name-line-height: 1.15;
   --pad-volume-gap: 0.2em;
   --pad-volume-icon-size: 1.15em;
   --radius-swatch: 2px;

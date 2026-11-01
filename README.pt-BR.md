@@ -113,10 +113,10 @@ Um efeito atrasa sua voz em cerca de 40 ms. **Natural** não acrescenta atraso.
 
 Em **Ajustes** há duas opções de reprodução:
 
-- **Um som por vez**, ligada por padrão: um som novo para o que estava tocando.
-- **Clicar de novo para parar**, desligada por padrão: pressionar um pad que está tocando para o som em vez de recomeçar. Vale também para o atalho do pad.
+- **Um som por vez**: um som novo interrompe o que estava tocando. Vem ligada em instalações novas. Uma atualização mantém a escolha que você já tinha.
+- **Pressionar de novo para parar**, desligada por padrão: pressionar um pad que está tocando interrompe o som em vez de recomeçá-lo. O atalho do pad faz o mesmo.
 
-Cada pad com som mostra o volume no canto inferior esquerdo. Clique com o botão direito no pad e escolha **Volume** para mudar. Em grades densas o pad omite o `%`, e os pads com som cedem a linha do número e do atalho para o nome.
+Cada pad com som mostra o volume no canto inferior esquerdo. Clique com o botão direito no pad e escolha **Volume** para mudar. Em grades densas o pad omite o `%`. Em pads estreitos, o número e o atalho cedem a linha para o nome. Passe o mouse sobre o pad para ver o atalho e o volume completos.
 
 ### Atalhos numéricos
 

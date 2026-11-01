@@ -397,6 +397,40 @@ async fn press_again_to_stop_also_covers_the_numeric_keys() {
     assert!(world.board.playing_slots().is_empty());
 }
 
+#[tokio::test]
+async fn press_again_to_stop_also_covers_the_shortcut_of_a_sound() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    world.settings.lock().press_again_to_stop = true;
+    let sound_id = world.board.view().pads[0].sound.clone().unwrap().id;
+
+    for _ in 0..2 {
+        world
+            .board
+            .on_hotkey(HotkeyCommand::PlaySound {
+                sound_id: sound_id.clone(),
+            })
+            .await;
+    }
+
+    assert!(world.board.playing_slots().is_empty());
+}
+
+#[tokio::test]
+async fn with_both_options_a_new_pad_takes_over_and_a_second_press_stops_it() {
+    let world = World::new();
+    fill(&world, 0, "a").await;
+    fill(&world, 1, "b").await;
+    world.settings.lock().press_again_to_stop = true;
+
+    world.board.press_pad(0).await;
+    world.board.press_pad(1).await;
+    assert_eq!(world.board.playing_slots(), [1]);
+
+    world.board.press_pad(1).await;
+    assert!(world.board.playing_slots().is_empty());
+}
+
 fn stored(world: &World, name: &str) {
     let path = format!("{name}.mp3");
     world.files.files.lock().unwrap().insert(path);

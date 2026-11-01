@@ -126,6 +126,31 @@ fn settings_with_absent_fields_take_their_defaults() {
 }
 
 #[test]
+fn settings_from_before_the_playback_options_take_their_defaults() {
+    let (dir, folder) = folder();
+    fs::write(dir.path().join("settings.json"), r#"{ "micVolume": 0.5 }"#).unwrap();
+
+    let settings = JsonSettingsRepository::new(&folder).load();
+
+    assert!(settings.one_sound_at_a_time);
+    assert!(!settings.press_again_to_stop);
+}
+
+#[test]
+fn a_saved_choice_of_one_sound_at_a_time_is_kept() {
+    let (dir, folder) = folder();
+    fs::write(
+        dir.path().join("settings.json"),
+        r#"{ "oneSoundAtATime": false }"#,
+    )
+    .unwrap();
+
+    let settings = JsonSettingsRepository::new(&folder).load();
+
+    assert!(!settings.one_sound_at_a_time);
+}
+
+#[test]
 fn a_save_that_cannot_be_written_is_reported() {
     let (dir, folder) = folder();
     let repository = JsonSettingsRepository::new(&folder);

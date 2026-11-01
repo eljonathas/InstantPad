@@ -235,6 +235,8 @@ function seed() {
 export function installMock() {
   let backend = seed();
   let playing = new Set<string>();
+  // The latest start of each sound: a sound started over ends PLAY_MS after its last start.
+  const latestStart = new Map<string, number>();
   let counter = 0;
   let startedAt = 0;
   let isFullscreen = false;
@@ -339,7 +341,10 @@ export function installMock() {
     if (backend.setup.oneSoundAtATime) playing.clear();
     playing.add(sound.id);
     startedAt = Date.now();
+    const start = startedAt;
+    latestStart.set(sound.id, start);
     setTimeout(() => {
+      if (latestStart.get(sound.id) !== start) return;
       playing.delete(sound.id);
       if (playing.size === 0) send({ kind: "display", data: { kind: "silent" } });
     }, PLAY_MS);

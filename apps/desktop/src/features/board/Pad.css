@@ -122,6 +122,15 @@
   overflow-wrap: anywhere;
 }
 
+/* The name takes the lines that fit in its cap and ends in an ellipsis past them. */
+.pad-name-text {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: var(--pad-name-line-height);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--pad-name-lines);
+}
+
 .pad[data-loaded] .pad-body {
   --cap-face: color-mix(in srgb, var(--pad-color) var(--pad-face-mix), var(--color-pad-face));
   --pad-label: var(--color-pad-label-lit);
@@ -143,23 +152,34 @@
   text-shadow: none;
 }
 
-/* A dense grid keeps the name and the volume of a loaded pad readable: the number and the
-   shortcut of the pad give their row to the name, and the volume drops its unit. */
+/* A dense grid keeps the name and the volume of a loaded pad readable. A short cap drops the unit
+   of the volume and gives the name fewer lines; a narrow one hides the shortcut, and a loaded one
+   also gives the row of its number to the name. The tooltip of the pad keeps what is hidden. */
+@container (height < 100px) {
+  .pad-name {
+    --pad-name-lines: 2;
+  }
+}
+
 @container (width < 64px) or (height < 64px) {
-  .pad[data-loaded] :is(.pad-slot, .pad-shortcut),
+  .pad-name {
+    --pad-name-lines: 1;
+  }
+
   .pad-volume-unit {
+    display: none;
+  }
+}
+
+@container (width < 64px) {
+  .pad-shortcut,
+  .pad[data-loaded] .pad-slot {
     display: none;
   }
 
   .pad[data-loaded] .pad-name {
+    --pad-name-lines: 2;
     top: var(--pad-label-top);
-  }
-}
-
-@container (width < 48px) {
-  .pad-shortcut,
-  .pad-star {
-    display: none;
   }
 }
 

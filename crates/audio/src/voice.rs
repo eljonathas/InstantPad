@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use instantpad_domain::voice::{PitchShape, VoiceChain};
 use signalsmith_stretch::Stretch;
 
+use crate::color::{Color, ColorControls};
 use crate::controls::AtomicF32;
 use crate::format::{CHANNELS, SAMPLE_RATE};
 
@@ -24,6 +25,7 @@ pub(crate) struct VoiceControls {
     high: AtomicF32,
     seconds: AtomicF32,
     formant: AtomicF32,
+    color: Arc<ColorControls>,
 }
 
 impl VoiceControls {
@@ -34,11 +36,17 @@ impl VoiceControls {
             high: AtomicF32::new(0.0),
             seconds: AtomicF32::new(1.0),
             formant: AtomicF32::new(0.0),
+            color: Arc::new(ColorControls::new()),
         }
     }
 
     pub(crate) fn set(&self, chain: Option<VoiceChain>) {
-        let Some(VoiceChain { pitch, formant, .. }) = chain else {
+        let Some(VoiceChain {
+            pitch,
+            formant,
+            color,
+        }) = chain
+        else {
             self.is_on.store(false, Ordering::Relaxed);
             return;
         };
@@ -52,6 +60,7 @@ impl VoiceControls {
         self.high.store(high);
         self.seconds.store(seconds);
         self.formant.store(formant);
+        self.color.set(color);
         self.is_on.store(true, Ordering::Relaxed);
     }
 }
@@ -59,6 +68,7 @@ impl VoiceControls {
 pub(crate) struct VoiceProcessor {
     controls: Arc<VoiceControls>,
     stretch: Stretch,
+    color: Color,
     was_on: bool,
     /// Position inside the pitch cycle, from 0 to 1.
     phase: f32,
@@ -72,6 +82,7 @@ impl VoiceProcessor {
     pub(crate) fn new(controls: Arc<VoiceControls>) -> Self {
         let frames_per_ms = SAMPLE_RATE as usize / 1000;
         Self {
+            color: Color::new(controls.color.clone()),
             controls,
             stretch: Stretch::new(1, WINDOW_MS * frames_per_ms, INTERVAL_MS * frames_per_ms),
             was_on: false,
@@ -94,6 +105,7 @@ impl VoiceProcessor {
         if !self.was_on {
             self.was_on = true;
             self.stretch.reset();
+            self.color.reset();
             self.filled = 0;
             self.phase = 0.0;
         }
@@ -119,6 +131,7 @@ impl VoiceProcessor {
         self.stretch
             .set_formant_factor_semitones(self.controls.formant.load(), true);
         self.stretch.process(self.mono, &mut self.changed);
+        self.color.process(&mut self.changed);
 
         for (frame, sample) in self
             .stereo
@@ -248,5 +261,60 @@ mod tests {
         let mut output = Vec::new();
         voice.process(&input, |samples| output.extend_from_slice(samples));
         assert_eq!(output, input);
+    }
+
+    fn colored(color: VoiceColor) -> Option<VoiceChain> {
+        Some(VoiceChain {
+            pitch: PitchShape::Fixed { semitones: 3.0 },
+            formant: 0.0,
+            color,
+        })
+    }
+
+    #[test]
+    fn color_changes_the_voice_after_the_pitch() {
+        let input = tone(220.0, SAMPLE_RATE as usize / 2);
+        let plain = run(colored(VoiceColor::default()), &input);
+
+        let growled = run(
+            colored(VoiceColor {
+                growl: 1.0,
+                ..VoiceColor::default()
+            }),
+            &input,
+        );
+
+        assert_eq!(growled.len(), plain.len());
+        assert_ne!(growled, plain);
+    }
+
+    #[test]
+    fn taking_the_color_away_returns_to_the_pitch_alone_at_once() {
+        let input = tone(220.0, BLOCK_FRAMES * 40);
+        let controls = Arc::new(VoiceControls::new());
+        controls.set(colored(VoiceColor::default()));
+        let mut plain = VoiceProcessor::new(controls);
+        let controls = Arc::new(VoiceControls::new());
+        controls.set(colored(VoiceColor {
+            whisper: 1.0,
+            echo: 1.0,
+            tremolo: 1.0,
+            growl: 1.0,
+            brightness: 1.0,
+        }));
+        let mut colored_voice = VoiceProcessor::new(controls.clone());
+        let (mut expected, mut heard) = (Vec::new(), Vec::new());
+
+        for (index, block) in input.chunks(BLOCK_FRAMES * CHANNELS).enumerate() {
+            if index == 20 {
+                controls.set(colored(VoiceColor::default()));
+            }
+            plain.process(block, |samples| expected.extend_from_slice(samples));
+            colored_voice.process(block, |samples| heard.extend_from_slice(samples));
+        }
+
+        let from = 20 * BLOCK_FRAMES * CHANNELS;
+        assert_ne!(heard[..from], expected[..from]);
+        assert_eq!(heard[from..], expected[from..]);
     }
 }

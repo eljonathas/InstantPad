@@ -7,8 +7,10 @@ use rtrb::Producer;
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler, ResamplerConstructionError};
 
+use crate::ai::AiStage;
 use crate::controls::AtomicF32;
 use crate::format::{CHANNELS, SAMPLE_RATE};
+use crate::recording::RecordTap;
 use crate::voice::{VoiceControls, VoiceProcessor};
 
 /// Frames written to the ring at a time when no resampling is needed.
@@ -21,7 +23,10 @@ pub(crate) struct CaptureProcessor {
     block: Vec<f32>,
     filled: usize,
     resampled: Vec<f32>,
+    /// Keeps the microphone as it is while the user records.
+    tap: RecordTap,
     voice: VoiceProcessor,
+    ai: AiStage,
     /// Where the voice goes: the game, and the headphones for hearing yourself.
     rings: [Producer<f32>; 2],
     level: Arc<AtomicF32>,
@@ -34,6 +39,8 @@ impl CaptureProcessor {
         rings: [Producer<f32>; 2],
         level: Arc<AtomicF32>,
         voice: Arc<VoiceControls>,
+        tap: RecordTap,
+        ai: AiStage,
     ) -> Result<Self, ResamplerConstructionError> {
         let resampler = (rate != SAMPLE_RATE)
             .then(|| {
@@ -57,7 +64,9 @@ impl CaptureProcessor {
             block: vec![0.0; block_frames * CHANNELS],
             filled: 0,
             resampled: vec![0.0; resampled_frames * CHANNELS],
+            tap,
             voice: VoiceProcessor::new(voice),
+            ai,
             rings,
             level,
         })
@@ -105,12 +114,15 @@ impl CaptureProcessor {
             None => &self.block[..],
         };
 
-        let rings = &mut self.rings;
+        self.tap.push(ready);
+        let (ai, rings) = (&mut self.ai, &mut self.rings);
         self.voice.process(ready, |voice| {
-            // When nobody reads, because an output is closed, the newest audio is dropped.
-            for ring in rings.iter_mut() {
-                let _ = ring.push_partial_slice(voice);
-            }
+            ai.process(voice, |voice| {
+                // When nobody reads, because an output is closed, the newest audio is dropped.
+                for ring in rings.iter_mut() {
+                    let _ = ring.push_partial_slice(voice);
+                }
+            });
         });
         self.filled = 0;
     }
@@ -118,20 +130,66 @@ impl CaptureProcessor {
 
 #[cfg(test)]
 mod tests {
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use instantpad_domain::voice::{PitchShape, VoiceChain, VoiceColor};
+    use instantpad_test_support::fakes::{FakeConverter, RecordingEvents};
     use rtrb::Consumer;
     use rtrb::RingBuffer;
 
     use super::*;
+    use crate::ai::AiBridge;
+    use crate::ai::tests::conversion;
+    use crate::recording::Recorder;
 
-    fn processor(channels: usize, rate: u32) -> (CaptureProcessor, Consumer<f32>, Arc<AtomicF32>) {
-        let (writer, reader) = RingBuffer::new(48_000 * CHANNELS);
+    /// A processor with everything around it that a test may want to reach.
+    struct Rig {
+        processor: CaptureProcessor,
+        game: Consumer<f32>,
+        level: Arc<AtomicF32>,
+        voice: Arc<VoiceControls>,
+        recorder: Recorder,
+        ai: AiBridge,
+    }
+
+    fn rig(channels: usize, rate: u32) -> Rig {
+        let (writer, game) = RingBuffer::new(48_000 * CHANNELS);
         let (headphones, _) = RingBuffer::new(CHANNELS);
         let level = Arc::new(AtomicF32::new(0.0));
         let voice = Arc::new(VoiceControls::new());
-        let processor =
-            CaptureProcessor::new(channels, rate, [writer, headphones], level.clone(), voice)
-                .unwrap();
-        (processor, reader, level)
+        let recorder = Recorder::new();
+        let (tap, recording) = recorder.tap();
+        recorder.attach(Some(recording));
+        let ai = AiBridge::new(
+            Arc::new(FakeConverter::default()),
+            Arc::new(RecordingEvents::default()),
+        );
+        let (stage, converting) = ai.rings();
+        ai.attach(Some(converting));
+        let processor = CaptureProcessor::new(
+            channels,
+            rate,
+            [writer, headphones],
+            level.clone(),
+            voice.clone(),
+            tap,
+            stage,
+        )
+        .unwrap();
+        Rig {
+            processor,
+            game,
+            level,
+            voice,
+            recorder,
+            ai,
+        }
+    }
+
+    fn processor(channels: usize, rate: u32) -> (CaptureProcessor, Consumer<f32>, Arc<AtomicF32>) {
+        let rig = rig(channels, rate);
+        (rig.processor, rig.game, rig.level)
     }
 
     fn drain(reader: &mut Consumer<f32>) -> Vec<f32> {
@@ -204,5 +262,81 @@ mod tests {
             frames.abs_diff(24_000) <= BLOCK_FRAMES * 2,
             "{frames} frames"
         );
+    }
+
+    /// A voice whose every sample is different and none is zero, as stereo.
+    fn ramp(from: usize, frames: usize) -> Vec<f32> {
+        (from..from + frames)
+            .flat_map(|index| [(index + 1) as f32 * 1e-5; CHANNELS])
+            .collect()
+    }
+
+    #[test]
+    fn the_recording_keeps_the_raw_voice_even_with_an_effect_on() {
+        let mut rig = rig(2, SAMPLE_RATE);
+        rig.voice.set(Some(VoiceChain {
+            pitch: PitchShape::Fixed { semitones: 7.0 },
+            formant: 2.0,
+            color: VoiceColor {
+                growl: 1.0,
+                echo: 0.5,
+                ..VoiceColor::default()
+            },
+        }));
+        let voice = ramp(0, BLOCK_FRAMES * 20);
+        rig.recorder.start();
+
+        rig.processor.push(&voice);
+
+        let recorded = rig.recorder.stop();
+        assert_eq!(
+            recorded,
+            voice.iter().step_by(CHANNELS).copied().collect::<Vec<_>>()
+        );
+        assert_ne!(drain(&mut rig.game), voice);
+    }
+
+    #[test]
+    fn the_recording_is_mono_at_the_engine_rate_whatever_the_device_gives() {
+        let mut rig = rig(1, 44_100);
+        rig.recorder.start();
+
+        for _ in 0..50 {
+            rig.processor.push(&[0.5_f32; 441]);
+        }
+
+        let seconds = rig.recorder.stop().len() as f32 / SAMPLE_RATE as f32;
+        assert!((seconds - 0.5).abs() < 0.03, "{seconds}");
+    }
+
+    #[test]
+    fn the_converted_voice_reaches_the_game_after_priming() {
+        let mut rig = rig(2, SAMPLE_RATE);
+        rig.ai.route(Some(&conversion()));
+        let mut heard = Vec::new();
+
+        // The thread of the converter runs on its own time, so the voice goes in until it is out.
+        let started = Instant::now();
+        let mut sent = 0;
+        while heard.iter().filter(|&&sample| sample != 0.0).count() < 4800 {
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "no converted voice"
+            );
+            rig.processor.push(&ramp(sent * BLOCK_FRAMES, BLOCK_FRAMES));
+            sent += 1;
+            thread::sleep(Duration::from_millis(1));
+            heard.extend(drain(&mut rig.game));
+        }
+
+        let left: Vec<f32> = heard.iter().step_by(CHANNELS).copied().collect();
+        let first = left.iter().position(|&sample| sample != 0.0).unwrap();
+        let converted: Vec<f32> = left.into_iter().filter(|&sample| sample != 0.0).collect();
+        let voice: Vec<f32> = ramp(0, converted.len())
+            .into_iter()
+            .step_by(CHANNELS)
+            .collect();
+        assert!(first >= 48 * 160, "{first}");
+        assert_eq!(converted, voice);
     }
 }

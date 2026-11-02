@@ -12,10 +12,14 @@ use symphonia::core::formats::TrackType;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::io::MediaSourceStream;
 
-use crate::format::{CHANNELS, SAMPLE_RATE};
+use crate::format::{CHANNELS, SAMPLE_RATE, downmix};
 
 /// Frames the resampler works on at a time.
 const RESAMPLE_CHUNK: usize = 1024;
+
+/// The longest file the voice can be learned from. Longer ones are refused while decoding, so a
+/// whole podcast never fills the memory.
+const MAX_SPEECH_SECONDS: u32 = 600;
 
 /// How many bars the display draws for a sound.
 const PEAK_BARS: usize = 44;
@@ -46,16 +50,27 @@ impl SoundClip {
     }
 
     pub(crate) fn load(path: &str) -> Result<Self, Failure> {
-        let (rate, stereo) = decode(path)?;
-        if stereo.is_empty() {
-            return Err(Failure::text(TextKey::SoundHasNoAudio));
-        }
-
-        if rate == SAMPLE_RATE {
-            return Ok(Self::new(stereo));
-        }
-        resample(rate, &stereo).map(Self::new).map_err(open_failed)
+        load_stereo(path, None).map(Self::new)
     }
+}
+
+/// A file of speech for the AI to learn from, as mono at the engine rate.
+pub(crate) fn load_speech(path: &str) -> Result<Vec<f32>, Failure> {
+    let stereo = load_stereo(path, Some(MAX_SPEECH_SECONDS))?;
+    Ok(downmix(&stereo).collect())
+}
+
+/// The audio of a file as stereo at the engine rate. `max_seconds` refuses a longer file.
+fn load_stereo(path: &str, max_seconds: Option<u32>) -> Result<Vec<f32>, Failure> {
+    let (rate, stereo) = decode(path, max_seconds)?;
+    if stereo.is_empty() {
+        return Err(Failure::text(TextKey::SoundHasNoAudio));
+    }
+
+    if rate == SAMPLE_RATE {
+        return Ok(stereo);
+    }
+    resample(rate, &stereo).map_err(open_failed)
 }
 
 /// Scaled to the loudest moment, so a quiet sound still fills the display.
@@ -79,8 +94,9 @@ fn open_failed(detail: impl ToString) -> Failure {
     Failure::because(TextKey::SoundOpenFailed, detail)
 }
 
-/// Returns the sample rate of the file and its audio as interleaved stereo.
-fn decode(path: &str) -> Result<(u32, Vec<f32>), Failure> {
+/// Returns the sample rate of the file and its audio as interleaved stereo. A file that lasts
+/// longer than `max_seconds` is refused as soon as that is clear.
+fn decode(path: &str, max_seconds: Option<u32>) -> Result<(u32, Vec<f32>), Failure> {
     let file = File::open(path).map_err(open_failed)?;
     let mut hint = Hint::new();
     if let Some(extension) = Path::new(path).extension().and_then(|name| name.to_str()) {
@@ -119,6 +135,10 @@ fn decode(path: &str) -> Result<(u32, Vec<f32>), Failure> {
                 decoded.resize(buffer.samples_interleaved(), 0.0);
                 buffer.copy_to_slice_interleaved(&mut decoded);
                 append_as_stereo(&decoded, buffer.spec().channels().count(), &mut stereo);
+                let frames = stereo.len() / CHANNELS;
+                if max_seconds.is_some_and(|seconds| frames > seconds as usize * rate as usize) {
+                    return Err(Failure::text(TextKey::SampleTooLong));
+                }
             }
             // One bad packet costs a click, not the whole sound.
             Err(Error::DecodeError(_)) => {}
@@ -283,6 +303,29 @@ pub(crate) mod tests {
         assert!(frames.abs_diff(24_000) <= RESAMPLE_CHUNK, "{frames} frames");
         // The middle of a constant signal is still that constant after resampling.
         assert!((clip.samples()[frames] - level(8192)).abs() < 0.01);
+    }
+
+    #[test]
+    fn speech_is_mono_at_the_engine_rate() {
+        let file = wav(24_000, &[8192, 0], 12_000);
+
+        let speech = load_speech(file.path()).unwrap();
+
+        assert!(
+            speech.len().abs_diff(24_000) <= RESAMPLE_CHUNK,
+            "{}",
+            speech.len()
+        );
+        assert!((speech[speech.len() / 2] - level(4096)).abs() < 0.01);
+    }
+
+    #[test]
+    fn speech_longer_than_ten_minutes_is_refused() {
+        let file = wav(8000, &[1000], 8000 * 601);
+
+        let failure = load_speech(file.path()).err().unwrap();
+
+        assert_eq!(failure, Failure::text(TextKey::SampleTooLong));
     }
 
     #[test]

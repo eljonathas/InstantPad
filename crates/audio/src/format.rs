@@ -7,3 +7,12 @@ pub(crate) const CHANNELS: usize = 2;
 pub(crate) const fn samples_for(milliseconds: usize) -> usize {
     SAMPLE_RATE as usize * CHANNELS * milliseconds / 1000
 }
+
+/// The two channels of each frame averaged into one.
+pub(crate) fn downmix(stereo: &[f32]) -> impl Iterator<Item = f32> + '_ {
+    stereo
+        .as_chunks::<CHANNELS>()
+        .0
+        .iter()
+        .map(|[left, right]| (left + right) / 2.0)
+}

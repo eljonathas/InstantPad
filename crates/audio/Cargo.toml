@@ -14,6 +14,7 @@ async-trait.workspace = true
 cpal = "0.18"
 instantpad-application.workspace = true
 instantpad-domain.workspace = true
+realfft = "3.5"
 rtrb = "0.4"
 rubato = "5.0"
 signalsmith-stretch = "0.1.3"

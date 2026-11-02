@@ -13,11 +13,13 @@ use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{AudioDevice, EventSink};
 use rtrb::Producer;
 
+use crate::ai::AiStage;
 use crate::capture::CaptureProcessor;
 use crate::controls::AtomicF32;
 use crate::format::{CHANNELS, SAMPLE_RATE};
 use crate::mixer::Mixer;
 use crate::playback::{Conversion, Playback};
+use crate::recording::RecordTap;
 use crate::voice::VoiceControls;
 
 const OUTPUT_BUFFER_MS: u32 = 30;
@@ -125,6 +127,8 @@ pub(crate) fn open_capture(
     rings: [Producer<f32>; 2],
     level: Arc<AtomicF32>,
     voice: Arc<VoiceControls>,
+    tap: RecordTap,
+    ai: AiStage,
     events: Arc<dyn EventSink>,
 ) -> Result<Stream, Failure> {
     let device = find(id)?;
@@ -145,6 +149,8 @@ pub(crate) fn open_capture(
         rings,
         level,
         voice,
+        tap,
+        ai,
     )
     .map_err(unavailable)?;
     let on_error = report(events, TextKey::MicStopped);

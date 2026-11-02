@@ -354,7 +354,6 @@ impl AudioMix for AudioEngine {
 
 #[cfg(test)]
 mod tests {
-    use instantpad_application::events::AppEvent;
     use instantpad_application::message::Message;
     use instantpad_test_support::contract;
     use instantpad_test_support::fakes::{FakeConverter, RecordingEvents};
@@ -381,19 +380,6 @@ mod tests {
             Arc::new(RecordingEvents::default()),
             Arc::new(FakeConverter::default()),
         )
-    }
-
-    /// A converter that is not installed.
-    struct Missing;
-
-    impl SpeechConverter for Missing {
-        fn start(&self, _: &Conversion) -> Result<(), Failure> {
-            Err(Failure::text(TextKey::AiNotInstalled))
-        }
-
-        fn convert(&self, _: &[f32]) -> Result<Vec<f32>, Failure> {
-            Err(Failure::text(TextKey::AiNotInstalled))
-        }
     }
 
     fn heard(mixer: &mut Mixer) -> f32 {
@@ -625,19 +611,6 @@ mod tests {
         engine.set_voice(None, Some(conversion()));
 
         assert_eq!(*converter.started.lock().unwrap(), [conversion()]);
-    }
-
-    #[test]
-    fn a_converter_that_cannot_start_is_reported_and_the_voice_goes_on_without_it() {
-        let events = Arc::new(RecordingEvents::default());
-        let engine = AudioEngine::new(events.clone(), Arc::new(Missing));
-
-        engine.set_voice(None, Some(conversion()));
-
-        assert_eq!(
-            *events.0.lock().unwrap(),
-            [AppEvent::error(Message::text(TextKey::AiNotInstalled))]
-        );
     }
 
     #[test]

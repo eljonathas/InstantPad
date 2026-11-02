@@ -9,7 +9,7 @@ use signalsmith_stretch::Stretch;
 
 use crate::color::{Color, ColorControls};
 use crate::controls::AtomicF32;
-use crate::format::{CHANNELS, SAMPLE_RATE};
+use crate::format::{CHANNELS, SAMPLE_RATE, downmix};
 
 /// The delay the effect adds. A shorter window hurts low voices.
 const WINDOW_MS: usize = 40;
@@ -25,7 +25,7 @@ pub(crate) struct VoiceControls {
     high: AtomicF32,
     seconds: AtomicF32,
     formant: AtomicF32,
-    color: Arc<ColorControls>,
+    color: ColorControls,
 }
 
 impl VoiceControls {
@@ -36,7 +36,7 @@ impl VoiceControls {
             high: AtomicF32::new(0.0),
             seconds: AtomicF32::new(1.0),
             formant: AtomicF32::new(0.0),
-            color: Arc::new(ColorControls::new()),
+            color: ColorControls::new(),
         }
     }
 
@@ -82,7 +82,7 @@ impl VoiceProcessor {
     pub(crate) fn new(controls: Arc<VoiceControls>) -> Self {
         let frames_per_ms = SAMPLE_RATE as usize / 1000;
         Self {
-            color: Color::new(controls.color.clone()),
+            color: Color::new(),
             controls,
             stretch: Stretch::new(1, WINDOW_MS * frames_per_ms, INTERVAL_MS * frames_per_ms),
             was_on: false,
@@ -110,8 +110,8 @@ impl VoiceProcessor {
             self.phase = 0.0;
         }
 
-        for [left, right] in stereo.as_chunks::<CHANNELS>().0 {
-            self.mono[self.filled] = (left + right) / 2.0;
+        for sample in downmix(stereo) {
+            self.mono[self.filled] = sample;
             self.filled += 1;
             if self.filled == BLOCK_FRAMES {
                 self.filled = 0;
@@ -131,7 +131,8 @@ impl VoiceProcessor {
         self.stretch
             .set_formant_factor_semitones(self.controls.formant.load(), true);
         self.stretch.process(self.mono, &mut self.changed);
-        self.color.process(&mut self.changed);
+        self.color
+            .process(&mut self.changed, self.controls.color.load());
 
         for (frame, sample) in self
             .stereo
@@ -161,9 +162,9 @@ mod tests {
             .collect()
     }
 
-    fn run(shift: Option<VoiceChain>, input: &[f32]) -> Vec<f32> {
+    fn run(chain: Option<VoiceChain>, input: &[f32]) -> Vec<f32> {
         let controls = Arc::new(VoiceControls::new());
-        controls.set(shift);
+        controls.set(chain);
         let mut voice = VoiceProcessor::new(controls);
         let mut output = Vec::new();
         for block in input.chunks(BLOCK_FRAMES) {
@@ -229,7 +230,7 @@ mod tests {
     #[test]
     fn a_pitch_cycle_goes_both_above_and_below_the_voice() {
         let frames = SAMPLE_RATE as usize * 2;
-        let shift = Some(VoiceChain {
+        let chain = Some(VoiceChain {
             pitch: PitchShape::Cycle {
                 low: -7.0,
                 high: 7.0,
@@ -239,7 +240,7 @@ mod tests {
             color: VoiceColor::default(),
         });
 
-        let output = run(shift, &tone(330.0, frames));
+        let output = run(chain, &tone(330.0, frames));
 
         let quarter = frames / 4 * CHANNELS;
         let rising = frequency_of(&output[quarter / 2..quarter * 3 / 2]);

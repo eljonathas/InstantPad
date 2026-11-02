@@ -139,8 +139,8 @@ mod tests {
     use rtrb::RingBuffer;
 
     use super::*;
-    use crate::ai::AiBridge;
-    use crate::ai::tests::conversion;
+    use crate::ai::tests::{conversion, ramp};
+    use crate::ai::{AiBridge, PRIME};
     use crate::recording::Recorder;
 
     /// A processor with everything around it that a test may want to reach.
@@ -264,13 +264,6 @@ mod tests {
         );
     }
 
-    /// A voice whose every sample is different and none is zero, as stereo.
-    fn ramp(from: usize, frames: usize) -> Vec<f32> {
-        (from..from + frames)
-            .flat_map(|index| [(index + 1) as f32 * 1e-5; CHANNELS])
-            .collect()
-    }
-
     #[test]
     fn the_recording_keeps_the_raw_voice_even_with_an_effect_on() {
         let mut rig = rig(2, SAMPLE_RATE);
@@ -336,7 +329,7 @@ mod tests {
             .into_iter()
             .step_by(CHANNELS)
             .collect();
-        assert!(first >= 48 * 160, "{first}");
+        assert!(first >= PRIME, "{first}");
         assert_eq!(converted, voice);
     }
 }

@@ -12,20 +12,15 @@ use instantpad_application::ports::{EventSink, SpeechConverter};
 use instantpad_domain::voice::Conversion;
 use rtrb::{Consumer, Producer, RingBuffer};
 
-use crate::format::{CHANNELS, SAMPLE_RATE, downmix};
+use crate::format::{CHANNELS, downmix, frames_for};
 use crate::worker::Worker;
 
-/// How many mono samples `milliseconds` of the voice take.
-const fn samples_for(milliseconds: usize) -> usize {
-    SAMPLE_RATE as usize * milliseconds / 1000
-}
-
-const CAPACITY: usize = samples_for(2000);
+const CAPACITY: usize = frames_for(2000);
 /// The converter answers late and in pieces, so the output waits until this much has come,
 /// which is about one piece, and it can then bridge the gaps between pieces.
-const PRIME: usize = samples_for(160);
+pub(crate) const PRIME: usize = frames_for(160);
 /// Waiting longer than this means the converter is slower than the voice.
-const MAX_BACKLOG: usize = samples_for(1000);
+const MAX_BACKLOG: usize = frames_for(1000);
 const POLL: Duration = Duration::from_millis(10);
 /// Frames the callback handles at a time, so that no buffer depends on the size of a callback.
 const PIECE: usize = 480;
@@ -38,12 +33,6 @@ pub(crate) struct AiShared {
     generation: AtomicU64,
 }
 
-/// The ends of the rings that the callback keeps.
-struct CallbackEnds {
-    to_ai: Producer<f32>,
-    from_ai: Consumer<f32>,
-}
-
 /// The ends of the rings that the thread keeps.
 pub(crate) struct WorkerEnds {
     heard: Consumer<f32>,
@@ -52,13 +41,16 @@ pub(crate) struct WorkerEnds {
 
 /// Where the thread finds the rings of the open microphone. It is empty while no microphone
 /// is open. The thread locks it for a moment at a time and never while it converts.
-type Ends = Arc<Mutex<Option<WorkerEnds>>>;
+type Slot = Mutex<Option<WorkerEnds>>;
 
 /// The callback's half: it hands the voice over and plays what comes back.
 pub(crate) struct AiStage {
     shared: Arc<AiShared>,
-    ends: CallbackEnds,
+    to_ai: Producer<f32>,
+    from_ai: Consumer<f32>,
     was_routing: bool,
+    /// The conversion that the output is playing.
+    generation: u64,
     /// Whether the output has been waiting for enough converted voice and has begun.
     is_primed: bool,
     stereo: [f32; PIECE * CHANNELS],
@@ -72,12 +64,14 @@ impl AiStage {
             emit(stereo);
             return;
         }
-        if !self.was_routing {
+        let generation = self.shared.generation.load(Ordering::Relaxed);
+        if !self.was_routing || generation != self.generation {
             // What the last conversion left must not play before the new voice.
             self.was_routing = true;
+            self.generation = generation;
             self.is_primed = false;
-            let waiting = self.ends.from_ai.slots();
-            if let Ok(chunk) = self.ends.from_ai.read_chunk(waiting) {
+            let waiting = self.from_ai.slots();
+            if let Ok(chunk) = self.from_ai.read_chunk(waiting) {
                 chunk.commit_all();
             }
         }
@@ -85,16 +79,16 @@ impl AiStage {
         for piece in stereo.chunks(PIECE * CHANNELS) {
             // A full ring means the converter is not taking the voice, which the thread notices.
             for sample in downmix(piece) {
-                let _ = self.ends.to_ai.push(sample);
+                let _ = self.to_ai.push(sample);
             }
-            if !self.is_primed && self.ends.from_ai.slots() >= PRIME {
+            if !self.is_primed && self.from_ai.slots() >= PRIME {
                 self.is_primed = true;
             }
 
             let frames = piece.len() / CHANNELS;
             for frame in &mut self.stereo.as_chunks_mut::<CHANNELS>().0[..frames] {
                 let sample = if self.is_primed {
-                    self.ends.from_ai.pop().unwrap_or_else(|_| {
+                    self.from_ai.pop().unwrap_or_else(|_| {
                         // Ran dry: wait for the next piece instead of crackling sample by sample.
                         self.is_primed = false;
                         0.0
@@ -114,7 +108,9 @@ pub(crate) struct AiBridge {
     converter: Arc<dyn SpeechConverter>,
     events: Arc<dyn EventSink>,
     shared: Arc<AiShared>,
-    ends: Ends,
+    /// What the thread is converting for, to leave it alone when nothing changed.
+    active: Mutex<Option<Conversion>>,
+    ends: Arc<Slot>,
     // Last, so that the thread finds `ends` gone when it is woken to end.
     worker: Worker,
 }
@@ -128,7 +124,8 @@ impl AiBridge {
                 is_routing: AtomicBool::new(false),
                 generation: AtomicU64::new(0),
             }),
-            ends: Ends::default(),
+            active: Mutex::new(None),
+            ends: Arc::default(),
             worker: Worker::new(),
         }
     }
@@ -140,8 +137,10 @@ impl AiBridge {
         let (converted, from_ai) = RingBuffer::new(CAPACITY);
         let stage = AiStage {
             shared: self.shared.clone(),
-            ends: CallbackEnds { to_ai, from_ai },
+            to_ai,
+            from_ai,
             was_routing: false,
+            generation: 0,
             is_primed: false,
             stereo: [0.0; PIECE * CHANNELS],
         };
@@ -153,18 +152,30 @@ impl AiBridge {
     }
 
     /// Sends the voice through the converter for `conversion`, or back to the DSP chain alone.
+    /// The same conversion again changes nothing, because a knob that moves asks for it on every
+    /// step, and starting over would drop the voice that is being converted.
     pub(crate) fn route(&self, conversion: Option<&Conversion>) {
+        let mut active = self.active.lock().unwrap();
         let Some(conversion) = conversion else {
+            *active = None;
             self.shared.is_routing.store(false, Ordering::Relaxed);
             return;
         };
+        if active.as_ref() == Some(conversion) && self.shared.is_routing.load(Ordering::Relaxed) {
+            return;
+        }
+
+        // The new generation comes first, so that nothing the old speakers made is delivered
+        // or fed to the converter once it has started over.
+        self.shared.generation.fetch_add(1, Ordering::Relaxed);
         if let Err(Failure(reason)) = self.converter.start(conversion) {
+            *active = None;
             self.shared.is_routing.store(false, Ordering::Relaxed);
             self.events.emit(AppEvent::error(reason));
             return;
         }
 
-        self.shared.generation.fetch_add(1, Ordering::Relaxed);
+        *active = Some(conversion.clone());
         self.shared.is_routing.store(true, Ordering::Relaxed);
         let converter = Converting {
             ends: Arc::downgrade(&self.ends),
@@ -179,7 +190,7 @@ impl AiBridge {
 
 /// What the thread of the conversion works with.
 struct Converting {
-    ends: Weak<Mutex<Option<WorkerEnds>>>,
+    ends: Weak<Slot>,
     shared: Arc<AiShared>,
     converter: Arc<dyn SpeechConverter>,
     events: Arc<dyn EventSink>,
@@ -233,7 +244,7 @@ impl Converting {
 }
 
 /// Takes what the callback sent. The voice that waited for an earlier conversion is dropped.
-fn hear(ends: &Mutex<Option<WorkerEnds>>, is_new: bool, speech: &mut [f32]) -> Heard {
+fn hear(ends: &Slot, is_new: bool, speech: &mut [f32]) -> Heard {
     let mut ends = ends.lock().unwrap();
     let Some(ends) = ends.as_mut() else {
         return Heard::Nothing;
@@ -255,12 +266,7 @@ fn hear(ends: &Mutex<Option<WorkerEnds>>, is_new: bool, speech: &mut [f32]) -> H
     }
 }
 
-fn deliver(
-    ends: &Mutex<Option<WorkerEnds>>,
-    shared: &AiShared,
-    generation: u64,
-    converted: &[f32],
-) {
+fn deliver(ends: &Slot, shared: &AiShared, generation: u64, converted: &[f32]) {
     if shared.generation.load(Ordering::Relaxed) != generation {
         return;
     }
@@ -288,7 +294,7 @@ pub(crate) mod tests {
     }
 
     /// Waits for something that another thread does, for as long as a slow machine needs.
-    fn eventually(what: &str, mut is_done: impl FnMut() -> bool) {
+    pub(crate) fn eventually(what: &str, mut is_done: impl FnMut() -> bool) {
         let started = Instant::now();
         while !is_done() {
             assert!(started.elapsed() < Duration::from_secs(10), "{what}");
@@ -339,13 +345,13 @@ pub(crate) mod tests {
         /// Waits until the thread has converted everything the callback handed over.
         fn settle(&self, sent: usize, played: usize) {
             eventually("the converted voice did not come back", || {
-                self.stage.ends.from_ai.slots() == sent - played
+                self.stage.from_ai.slots() == sent - played
             });
         }
     }
 
     /// A voice whose every sample is different, left and right the same.
-    fn ramp(from: usize, frames: usize) -> Vec<f32> {
+    pub(crate) fn ramp(from: usize, frames: usize) -> Vec<f32> {
         (from..from + frames)
             .flat_map(|index| [(index + 1) as f32 * 1e-5; CHANNELS])
             .collect()
@@ -372,7 +378,7 @@ pub(crate) mod tests {
 
     /// Never answers until it is told to, and says when it was asked.
     struct Gate {
-        asked: Mutex<mpsc::Sender<()>>,
+        asked: mpsc::Sender<()>,
         open: Mutex<mpsc::Receiver<()>>,
     }
 
@@ -382,15 +388,15 @@ pub(crate) mod tests {
         }
 
         fn convert(&self, _: &[f32]) -> Result<Vec<f32>, Failure> {
-            self.asked.lock().unwrap().send(()).unwrap();
+            self.asked.send(()).unwrap();
             let _ = self.open.lock().unwrap().recv();
             Ok(Vec::new())
         }
     }
 
     /// Fails like a model that cannot run.
-    struct Broken {
-        fails_to_start: bool,
+    pub(crate) struct Broken {
+        pub(crate) fails_to_start: bool,
     }
 
     impl SpeechConverter for Broken {
@@ -404,10 +410,6 @@ pub(crate) mod tests {
         fn convert(&self, _: &[f32]) -> Result<Vec<f32>, Failure> {
             Err(Failure::because(TextKey::AiLoadFailed, "out of memory"))
         }
-    }
-
-    fn error(message: Message) -> AppEvent {
-        AppEvent::error(message)
     }
 
     #[test]
@@ -497,7 +499,10 @@ pub(crate) mod tests {
 
         let voice = ramp(0, 480);
         assert_eq!(rig.process(&voice), voice);
-        assert_eq!(rig.errors(), [error(Message::text(TextKey::AiLoadFailed))]);
+        assert_eq!(
+            rig.errors(),
+            [AppEvent::error(Message::text(TextKey::AiLoadFailed))]
+        );
     }
 
     #[test]
@@ -516,7 +521,7 @@ pub(crate) mod tests {
         assert_eq!(rig.process(&voice), voice);
         assert_eq!(
             rig.errors(),
-            [error(Message::with(
+            [AppEvent::error(Message::with(
                 TextKey::AiLoadFailed,
                 [Message::plain("out of memory")]
             ))]
@@ -528,7 +533,7 @@ pub(crate) mod tests {
         let (asked, was_asked) = mpsc::channel();
         let (release, open) = mpsc::channel();
         let mut rig = Rig::new(Arc::new(Gate {
-            asked: Mutex::new(asked),
+            asked,
             open: Mutex::new(open),
         }));
         rig.bridge.route(Some(&conversion()));
@@ -544,7 +549,10 @@ pub(crate) mod tests {
         eventually("the bypass did not happen", || !rig.errors().is_empty());
         let voice = ramp(0, 700);
         assert_eq!(rig.process(&voice), voice);
-        assert_eq!(rig.errors(), [error(Message::text(TextKey::AiTooSlow))]);
+        assert_eq!(
+            rig.errors(),
+            [AppEvent::error(Message::text(TextKey::AiTooSlow))]
+        );
     }
 
     #[test]
@@ -589,12 +597,64 @@ pub(crate) mod tests {
 
     #[test]
     fn the_thread_ends_when_the_bridge_is_gone() {
-        let rig = Rig::new(Arc::new(FakeConverter::default()));
+        let converter = Arc::new(FakeConverter::default());
+        let held = Arc::downgrade(&converter);
+        let rig = Rig::new(converter);
         rig.bridge.route(Some(&conversion()));
-        let ends = Arc::downgrade(&rig.bridge.ends);
 
         drop(rig);
 
-        eventually("the thread kept the rings", || ends.strong_count() == 0);
+        // Only the thread still holds the converter.
+        eventually("the thread kept running", || held.strong_count() == 0);
+    }
+
+    #[test]
+    fn the_same_conversion_again_does_not_start_over() {
+        let converter = Arc::new(FakeConverter::default());
+        let mut rig = Rig::new(converter.clone());
+        rig.bridge.route(Some(&conversion()));
+        rig.process(&[]);
+        rig.feed(&mono(0, PRIME));
+        let generation = rig.bridge.shared.generation.load(Ordering::Relaxed);
+
+        rig.bridge.route(Some(&conversion()));
+
+        assert_eq!(converter.started.lock().unwrap().len(), 1);
+        assert_eq!(
+            rig.bridge.shared.generation.load(Ordering::Relaxed),
+            generation
+        );
+        // What was converted still plays.
+        assert_ne!(rig.process(&ramp(0, PIECE)), vec![0.0; PIECE * CHANNELS]);
+    }
+
+    #[test]
+    fn a_conversion_that_was_turned_off_starts_again() {
+        let converter = Arc::new(FakeConverter::default());
+        let rig = Rig::new(converter.clone());
+        rig.bridge.route(Some(&conversion()));
+        rig.bridge.route(None);
+
+        rig.bridge.route(Some(&conversion()));
+
+        assert_eq!(converter.started.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn switching_straight_to_other_speakers_does_not_play_what_the_old_ones_left() {
+        let converter = Arc::new(FakeConverter::default());
+        let mut rig = Rig::new(converter.clone());
+        rig.bridge.route(Some(&conversion()));
+        rig.process(&[]);
+        rig.feed(&mono(0, PRIME));
+        let other = Conversion {
+            source: conversion().source,
+            target: Voiceprint::new(vec![0.9]),
+        };
+
+        rig.bridge.route(Some(&other));
+
+        assert_eq!(converter.started.lock().unwrap().len(), 2);
+        assert_eq!(rig.process(&ramp(0, PIECE)), vec![0.0; PIECE * CHANNELS]);
     }
 }

@@ -39,7 +39,7 @@ impl ColorControls {
         self.brightness.store(color.brightness);
     }
 
-    fn load(&self) -> VoiceColor {
+    pub(crate) fn load(&self) -> VoiceColor {
         VoiceColor {
             whisper: self.whisper.load(),
             echo: self.echo.load(),
@@ -53,53 +53,44 @@ impl ColorControls {
 /// The five effects, run in the order that sounds best: the growl works on the voice itself,
 /// and the echo is last so that its tail is not shaken by the wobble.
 pub(crate) struct Color {
-    controls: Arc<ColorControls>,
     growl: Growl,
     whisper: Whisper,
     brightness: Brightness,
     tremolo: Tremolo,
     echo: Echo,
-    /// While nothing is asked of the color the effects do not run, so they hold old audio.
-    is_dormant: bool,
 }
 
 impl Color {
-    pub(crate) fn new(controls: Arc<ColorControls>) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            controls,
             growl: Growl::new(),
             whisper: Whisper::new(),
             brightness: Brightness::new(),
             tremolo: Tremolo::new(),
             echo: Echo::new(),
-            is_dormant: true,
         }
     }
 
     /// Forgets the voice heard so far, so that old audio does not come out of a tail.
     pub(crate) fn reset(&mut self) {
-        self.is_dormant = true;
+        self.whisper.is_idle = true;
+        self.echo.is_idle = true;
     }
 
-    /// Colors a block of the voice, and does nothing at all when every amount is zero.
-    pub(crate) fn process(&mut self, block: &mut [f32]) {
-        let amounts = self.controls.load();
-        if amounts == VoiceColor::default() {
-            self.is_dormant = true;
-            return;
-        }
-        if self.is_dormant {
-            self.is_dormant = false;
-            self.whisper.clear();
-            self.echo.clear();
-        }
-
+    /// Colors a block of the voice. An effect with an amount of zero does nothing at all.
+    pub(crate) fn process(&mut self, block: &mut [f32], amounts: VoiceColor) {
         self.growl.process(block, amounts.growl);
         self.whisper.process(block, amounts.whisper);
         self.brightness.process(block, amounts.brightness);
         self.tremolo.process(block, amounts.tremolo);
         self.echo.process(block, amounts.echo);
     }
+}
+
+/// Zero for a number so small that the processor would slow down to work with it, which a
+/// filter that decays into silence otherwise reaches.
+fn flush(value: f32) -> f32 {
+    if value.abs() < 1e-20 { 0.0 } else { value }
 }
 
 /// A filter with a single pole, which smooths whatever goes through it.
@@ -117,7 +108,7 @@ impl OnePole {
     }
 
     fn process(&mut self, sample: f32) -> f32 {
-        self.state += self.coefficient * (sample - self.state);
+        self.state = flush(self.state + self.coefficient * (sample - self.state));
         self.state
     }
 }
@@ -168,7 +159,7 @@ impl Growl {
             } else {
                 ENVELOPE_RELEASE
             };
-            self.envelope += rate * (low.abs() - self.envelope);
+            self.envelope = flush(self.envelope + rate * (low.abs() - self.envelope));
 
             // Noise around zero must not flip it, so crossing needs a margin.
             let margin = self.envelope * 0.2 + 1e-4;
@@ -205,6 +196,8 @@ struct Whisper {
     spectrum: Vec<Complex32>,
     scratch: Vec<Complex32>,
     random: u32,
+    /// Whether it has been off, so that it holds old audio.
+    is_idle: bool,
     /// Makes the overlapped frames as loud as the voice, and undoes the unscaled inverse.
     gain: f32,
 }
@@ -237,6 +230,7 @@ impl Whisper {
             position: 0,
             frame: vec![0.0; WHISPER_FRAME],
             random: 0x9E37_79B9,
+            is_idle: true,
             gain,
         }
     }
@@ -247,6 +241,14 @@ impl Whisper {
     }
 
     fn process(&mut self, block: &mut [f32], amount: f32) {
+        if amount <= 0.0 {
+            self.is_idle = true;
+            return;
+        }
+        if self.is_idle {
+            self.is_idle = false;
+            self.clear();
+        }
         for sample in block {
             let (voice, breath) = self.push(*sample);
             *sample = voice + (breath - voice) * amount;
@@ -331,8 +333,8 @@ impl Brightness {
         }
         for sample in block {
             let output = self.b[0] * *sample + self.state[0];
-            self.state[0] = self.b[1] * *sample - self.a[0] * output + self.state[1];
-            self.state[1] = self.b[2] * *sample - self.a[1] * output;
+            self.state[0] = flush(self.b[1] * *sample - self.a[0] * output + self.state[1]);
+            self.state[1] = flush(self.b[2] * *sample - self.a[1] * output);
             *sample = output;
         }
     }
@@ -412,7 +414,7 @@ impl Comb {
 
     fn process(&mut self, input: f32) -> f32 {
         let output = self.buffer[self.index];
-        self.damped = output * (1.0 - COMB_DAMPING) + self.damped * COMB_DAMPING;
+        self.damped = flush(output * (1.0 - COMB_DAMPING) + self.damped * COMB_DAMPING);
         self.buffer[self.index] = input + self.damped * COMB_FEEDBACK;
         self.index = (self.index + 1) % self.buffer.len();
         output
@@ -434,7 +436,7 @@ impl Allpass {
 
     fn process(&mut self, input: f32) -> f32 {
         let delayed = self.buffer[self.index];
-        self.buffer[self.index] = input + delayed * ALLPASS_FEEDBACK;
+        self.buffer[self.index] = flush(input + delayed * ALLPASS_FEEDBACK);
         self.index = (self.index + 1) % self.buffer.len();
         delayed - input
     }
@@ -445,6 +447,8 @@ impl Allpass {
 struct Echo {
     combs: [Comb; 8],
     allpasses: [Allpass; 4],
+    /// Whether it has been off, so that it holds old audio.
+    is_idle: bool,
 }
 
 impl Echo {
@@ -452,6 +456,7 @@ impl Echo {
         Self {
             combs: COMB_DELAYS.map(Comb::new),
             allpasses: ALLPASS_DELAYS.map(Allpass::new),
+            is_idle: true,
         }
     }
 
@@ -466,6 +471,14 @@ impl Echo {
     }
 
     fn process(&mut self, block: &mut [f32], amount: f32) {
+        if amount <= 0.0 {
+            self.is_idle = true;
+            return;
+        }
+        if self.is_idle {
+            self.is_idle = false;
+            self.clear();
+        }
         for sample in block {
             let input = *sample * ECHO_INPUT;
             let mut wet: f32 = self.combs.iter_mut().map(|comb| comb.process(input)).sum();
@@ -480,7 +493,6 @@ impl Echo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::format::SAMPLE_RATE;
 
     const BLOCK: usize = 480;
 
@@ -504,12 +516,10 @@ mod tests {
     }
 
     fn run(color: VoiceColor, input: &[f32]) -> Vec<f32> {
-        let controls = Arc::new(ColorControls::new());
-        controls.set(color);
-        let mut processor = Color::new(controls);
+        let mut processor = Color::new();
         let mut output = input.to_vec();
         for block in output.chunks_mut(BLOCK) {
-            processor.process(block);
+            processor.process(block, color);
         }
         output
     }
@@ -626,21 +636,80 @@ mod tests {
 
     #[test]
     fn an_echo_that_was_off_does_not_play_what_it_heard_before() {
-        let controls = Arc::new(ColorControls::new());
-        let mut processor = Color::new(controls.clone());
-        controls.set(only(|color| color.echo = 1.0));
-        let mut loud = voice(BLOCK * 20);
-        for block in loud.chunks_mut(BLOCK) {
-            processor.process(block);
+        let echo = only(|color| color.echo = 1.0);
+        let mut processor = Color::new();
+        for block in voice(BLOCK * 20).chunks_mut(BLOCK) {
+            processor.process(block, echo);
         }
-        controls.set(VoiceColor::default());
-        processor.process(&mut [0.0; BLOCK]);
+        processor.process(&mut [0.0; BLOCK], VoiceColor::default());
 
-        controls.set(only(|color| color.echo = 1.0));
         let mut silence = vec![0.0; BLOCK];
-        processor.process(&mut silence);
+        processor.process(&mut silence, echo);
 
         assert_eq!(power(&silence), 0.0);
+    }
+
+    #[test]
+    fn a_whisper_that_was_off_does_not_play_what_it_heard_before() {
+        let whisper = only(|color| color.whisper = 1.0);
+        let mut processor = Color::new();
+        for block in voice(BLOCK * 20).chunks_mut(BLOCK) {
+            processor.process(block, whisper);
+        }
+        processor.process(&mut [0.0; BLOCK], VoiceColor::default());
+
+        let mut silence = vec![0.0; BLOCK * 4];
+        processor.process(&mut silence, whisper);
+
+        assert_eq!(power(&silence), 0.0);
+    }
+
+    #[test]
+    fn without_whisper_the_voice_is_not_delayed() {
+        let mut impulse = vec![0.0; BLOCK];
+        impulse[0] = 1.0;
+
+        let wobbled = run(only(|color| color.tremolo = 1.0), &impulse);
+
+        assert_eq!(wobbled[0], 0.5);
+    }
+
+    #[test]
+    fn silence_brings_every_filter_to_exactly_zero() {
+        let all = VoiceColor {
+            whisper: 0.5,
+            echo: 1.0,
+            tremolo: 0.5,
+            growl: 1.0,
+            brightness: 1.0,
+        };
+        let mut processor = Color::new();
+        for block in voice(BLOCK * 20).chunks_mut(BLOCK) {
+            processor.process(block, all);
+        }
+
+        // Longer than the tail of the echo takes to fall below what a float can hold.
+        for _ in 0..SAMPLE_RATE as usize * 20 / BLOCK {
+            processor.process(&mut [0.0; BLOCK], all);
+        }
+
+        let growl = &processor.growl;
+        assert_eq!(growl.envelope, 0.0);
+        let poles = growl.low.iter().chain([&growl.smooth]);
+        assert!(poles.into_iter().all(|pole| pole.state == 0.0));
+        assert_eq!(processor.brightness.state, [0.0; 2]);
+        let echo = &processor.echo;
+        assert!(echo.combs.iter().all(|comb| comb.damped == 0.0));
+        assert!(
+            echo.combs
+                .iter()
+                .all(|comb| comb.buffer.iter().all(|&v| v == 0.0))
+        );
+        assert!(
+            echo.allpasses
+                .iter()
+                .all(|a| a.buffer.iter().all(|&v| v == 0.0))
+        );
     }
 
     #[test]
@@ -699,16 +768,13 @@ mod tests {
 
     #[test]
     fn a_shelf_is_stable_when_the_amount_changes_all_the_time() {
-        let controls = Arc::new(ColorControls::new());
-        let mut processor = Color::new(controls.clone());
+        let mut processor = Color::new();
         let mut peak = 0.0_f32;
 
         for round in 0..400 {
-            controls.set(only(|color| {
-                color.brightness = (round % 10) as f32 / 10.0 + 0.1
-            }));
+            let bright = only(|color| color.brightness = (round % 10) as f32 / 10.0 + 0.1);
             let mut block = tone(5000.0, BLOCK);
-            processor.process(&mut block);
+            processor.process(&mut block, bright);
             peak = block
                 .iter()
                 .fold(peak, |peak, sample| peak.max(sample.abs()));

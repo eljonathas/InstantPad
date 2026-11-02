@@ -5,13 +5,17 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::Duration;
 
+use instantpad_domain::cloning::MAX_SAMPLE_SECONDS;
 use rtrb::{Consumer, Producer, RingBuffer};
 
-use crate::format::{SAMPLE_RATE, downmix};
+use crate::format::{downmix, frames_for};
 use crate::worker::Worker;
 
 /// Mono samples the callback can leave before the drain thread has to come, which is a second.
-const CAPACITY: usize = SAMPLE_RATE as usize;
+const CAPACITY: usize = frames_for(1000);
+/// The longest a recording grows, which is a second more than anything the app takes. The
+/// application reports a longer one as too long, so a forgotten recording does not fill the memory.
+const MAX_RECORDED: usize = frames_for(1000 * (MAX_SAMPLE_SECONDS as usize + 1));
 const DRAIN_EVERY: Duration = Duration::from_millis(20);
 
 /// The callback's half: it feeds the ring only while the user records.
@@ -42,11 +46,22 @@ struct Kept {
 }
 
 impl Kept {
+    /// Drops what was recorded and what is still on its way.
+    fn forget(&mut self) {
+        if let Some(ring) = &mut self.ring
+            && let Ok(chunk) = ring.read_chunk(ring.slots())
+        {
+            chunk.commit_all();
+        }
+        self.speech.clear();
+    }
+
     fn collect(&mut self) {
         let Some(ring) = &mut self.ring else {
             return;
         };
-        if let Ok(chunk) = ring.read_chunk(ring.slots()) {
+        let room = MAX_RECORDED.saturating_sub(self.speech.len());
+        if let Ok(chunk) = ring.read_chunk(ring.slots().min(room)) {
             let (first, second) = chunk.as_slices();
             self.speech.extend_from_slice(first);
             self.speech.extend_from_slice(second);
@@ -94,8 +109,7 @@ impl Recorder {
     /// Starts over, dropping anything recorded before.
     pub(crate) fn start(&self) {
         let mut kept = self.kept.lock().unwrap();
-        kept.collect();
-        kept.speech.clear();
+        kept.forget();
         self.is_recording.store(true, Ordering::Relaxed);
         drop(kept);
 
@@ -134,6 +148,8 @@ fn drain(kept: Weak<Mutex<Kept>>, is_recording: Arc<AtomicBool>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::tests::eventually;
+    use crate::format::CHANNELS;
 
     fn recorder() -> (Recorder, RecordTap) {
         let recorder = Recorder::new();
@@ -210,22 +226,47 @@ mod tests {
     fn a_recording_longer_than_the_ring_is_drained_while_it_goes_on() {
         let (recorder, mut tap) = recorder();
         let wait_for = |samples: usize| {
-            for _ in 0..1000 {
-                if recorder.kept.lock().unwrap().speech.len() >= samples {
-                    return;
-                }
-                thread::sleep(Duration::from_millis(5));
-            }
-            panic!("the thread did not drain {samples} samples");
+            eventually("the thread did not drain", || {
+                recorder.kept.lock().unwrap().speech.len() >= samples
+            });
         };
         recorder.start();
 
-        let half_a_ring = vec![0.5; CAPACITY];
-        tap.push(&half_a_ring);
-        wait_for(CAPACITY / 2);
-        tap.push(&half_a_ring);
-        wait_for(CAPACITY);
+        // Together more than the ring holds, so the first part must be gone by the second.
+        let three_quarters = CAPACITY * 3 / 4;
+        tap.push(&vec![0.5; three_quarters * CHANNELS]);
+        wait_for(three_quarters);
+        tap.push(&vec![0.5; three_quarters * CHANNELS]);
+        wait_for(three_quarters * 2);
 
-        assert_eq!(recorder.stop().len(), CAPACITY);
+        assert_eq!(recorder.stop().len(), three_quarters * 2);
+    }
+
+    #[test]
+    fn a_recording_nobody_stops_stops_growing() {
+        let (mut writer, reader) = RingBuffer::new(CAPACITY);
+        let mut kept = Kept {
+            ring: Some(reader),
+            speech: vec![0.0; MAX_RECORDED - 10],
+        };
+        let _ = writer.push_partial_slice(&[0.5; 100]);
+
+        kept.collect();
+
+        assert_eq!(kept.speech.len(), MAX_RECORDED);
+    }
+
+    #[test]
+    fn starting_again_drops_what_a_full_recording_left_on_its_way() {
+        let (recorder, mut tap) = recorder();
+        recorder.start();
+        recorder.kept.lock().unwrap().speech = vec![0.0; MAX_RECORDED];
+        tap.push(&[0.25; 4]);
+        recorder.stop();
+
+        recorder.start();
+        tap.push(&[0.75; 2]);
+
+        assert_eq!(recorder.stop(), [0.75]);
     }
 }

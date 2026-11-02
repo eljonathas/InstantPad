@@ -4,6 +4,7 @@ use std::fs::File;
 use std::path::Path;
 
 use instantpad_application::message::{Failure, TextKey};
+use instantpad_domain::cloning::MAX_SAMPLE_SECONDS;
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 use symphonia::core::codecs::audio::AudioDecoderOptions;
@@ -17,9 +18,10 @@ use crate::format::{CHANNELS, SAMPLE_RATE, downmix};
 /// Frames the resampler works on at a time.
 const RESAMPLE_CHUNK: usize = 1024;
 
-/// The longest file the voice can be learned from. Longer ones are refused while decoding, so a
-/// whole podcast never fills the memory.
-const MAX_SPEECH_SECONDS: u32 = 600;
+/// The longest file the voice can be learned from: what the app takes and a second more, so
+/// that the application reports a file just over the limit. Longer ones are refused while
+/// decoding, so a whole podcast never fills the memory.
+const MAX_SPEECH_SECONDS: u32 = MAX_SAMPLE_SECONDS + 1;
 
 /// How many bars the display draws for a sound.
 const PEAK_BARS: usize = 44;
@@ -320,8 +322,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn speech_longer_than_ten_minutes_is_refused() {
-        let file = wav(8000, &[1000], 8000 * 601);
+    fn speech_longer_than_a_sample_can_be_is_refused() {
+        let file = wav(8000, &[1000], 8000 * (MAX_SPEECH_SECONDS as usize + 1));
 
         let failure = load_speech(file.path()).err().unwrap();
 

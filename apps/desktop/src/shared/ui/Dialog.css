@@ -46,3 +46,13 @@
   width: var(--dialog-button-width);
   height: var(--dialog-button-height);
 }
+
+.dialog-field {
+  margin-bottom: var(--space-7);
+}
+
+.dialog-tip {
+  margin: 0 0 var(--space-7);
+  color: var(--color-dialog-label);
+  font-size: var(--font-status);
+}

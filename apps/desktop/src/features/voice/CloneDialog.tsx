@@ -54,7 +54,7 @@ function Terms({ clauses }: { clauses: TextKey[] }) {
       </ul>
       <DialogLabel>{t("CloneOwnerName")}</DialogLabel>
       <input
-        className="field clone-field"
+        className="field dialog-field"
         aria-label={t("CloneOwnerName")}
         value={ownerName}
         onChange={(event) => setOwnerName(event.target.value)}
@@ -116,7 +116,7 @@ function Phrase({ step }: { step: Step<"phrase"> }) {
     <>
       <p className="clone-text">{t("ClonePhraseIntro", [String(step.maxSeconds)])}</p>
       <p className="clone-digits">{step.digits}</p>
-      <p className="clone-tip">{t("ClonePhraseTip")}</p>
+      <p className="dialog-tip">{t("ClonePhraseTip")}</p>
       <Problem message={step.problem} />
       <div className="clone-actions">
         <RecordKey
@@ -151,7 +151,7 @@ function NameVoice() {
       <p className="clone-text">{t("CloneNameIntro")}</p>
       <DialogLabel>{t("Name")}</DialogLabel>
       <input
-        className="field clone-field"
+        className="field dialog-field"
         aria-label={t("Name")}
         value={name}
         autoFocus

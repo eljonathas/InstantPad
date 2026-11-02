@@ -271,7 +271,7 @@ pub(crate) async fn install(
 
 /// Whether the file is there and is the pinned one. A damaged file is deleted, so nothing
 /// takes it for installed.
-async fn is_intact(folder: &Path, file: &'static Download) -> bool {
+async fn is_intact(folder: &Path, file: &Download) -> bool {
     if !is_kept(folder, file) {
         return false;
     }
@@ -287,14 +287,22 @@ async fn is_intact(folder: &Path, file: &'static Download) -> bool {
 }
 
 fn sha256_of(path: &Path) -> std::io::Result<String> {
-    let mut source = std::fs::File::open(path)?;
+    copy_hashed(&mut std::fs::File::open(path)?, &mut std::io::sink()).map(|(_, hash)| hash)
+}
+
+/// Copies everything and returns how much it was and its SHA-256.
+fn copy_hashed(source: &mut impl Read, target: &mut impl Write) -> std::io::Result<(u64, String)> {
     let mut hasher = Sha256::new();
+    let mut size = 0;
     let mut block = vec![0; BLOCK];
     loop {
-        match source.read(&mut block)? {
-            0 => return Ok(hex(&hasher.finalize())),
-            read => hasher.update(&block[..read]),
+        let read = source.read(&mut block)?;
+        if read == 0 {
+            return Ok((size, hex(&hasher.finalize())));
         }
+        hasher.update(&block[..read]);
+        target.write_all(&block[..read])?;
+        size += read as u64;
     }
 }
 
@@ -405,19 +413,8 @@ fn extract(
     let mut archive = ZipArchive::new(std::fs::File::open(archive)?)?;
     let mut entry = archive.by_name(unpack.entry)?;
     let mut target = std::fs::File::create(partial)?;
-    let mut hasher = Sha256::new();
-    let mut size = 0;
-    let mut block = vec![0; BLOCK];
-    loop {
-        let read = entry.read(&mut block)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&block[..read]);
-        target.write_all(&block[..read])?;
-        size += read as u64;
-    }
-    if size == unpack.size && hex(&hasher.finalize()) == unpack.sha256 {
+    let (size, hash) = copy_hashed(&mut entry, &mut target)?;
+    if size == unpack.size && hash == unpack.sha256 {
         Ok(())
     } else {
         Err(unexpected(unpack.entry).into())
@@ -706,15 +703,15 @@ mod tests {
     #[tokio::test]
     async fn a_damaged_file_of_the_right_size_is_deleted_so_it_downloads_again() {
         let folder = folder("damaged");
-        let file: &'static Download = Box::leak(Box::new(pinned("", b"model bytes", None)));
+        let file = pinned("", b"model bytes", None);
         std::fs::write(folder.join("model.bin"), b"model bytez").unwrap();
-        assert!(is_kept(&folder, file));
+        assert!(is_kept(&folder, &file));
 
-        assert!(!is_intact(&folder, file).await);
+        assert!(!is_intact(&folder, &file).await);
 
         assert!(!folder.join("model.bin").exists());
         std::fs::write(folder.join("model.bin"), b"model bytes").unwrap();
-        assert!(is_intact(&folder, file).await);
+        assert!(is_intact(&folder, &file).await);
         assert!(folder.join("model.bin").exists());
         std::fs::remove_dir_all(&folder).unwrap();
     }
@@ -730,29 +727,5 @@ mod tests {
         }
 
         assert_eq!(*reported.lock().unwrap(), [12, 25, 37, 50, 62, 75, 87, 100]);
-    }
-
-    /// Whether every pinned address still serves a file of the pinned size. It needs the
-    /// network, so it runs by hand: `cargo test -p instantpad-voice-ai -- --ignored`.
-    #[tokio::test]
-    #[ignore = "needs the network"]
-    async fn every_pinned_address_serves_a_file_of_the_pinned_size() {
-        let http = Client::new();
-
-        for file in all_downloads() {
-            let response = http.head(file.url).send().await.unwrap();
-            assert!(
-                response.status().is_success(),
-                "{}: {}",
-                file.url,
-                response.status()
-            );
-            let length = response
-                .headers()
-                .get(reqwest::header::CONTENT_LENGTH)
-                .and_then(|length| length.to_str().ok())
-                .and_then(|length| length.parse::<u64>().ok());
-            assert_eq!(length, Some(file.size), "{}", file.url);
-        }
     }
 }

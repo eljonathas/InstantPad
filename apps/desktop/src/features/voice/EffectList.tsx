@@ -2,8 +2,6 @@ import type { CSSProperties } from "react";
 import { commands, type EffectView } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
-import { useOverlay } from "../../shared/ui/overlay";
-import { DesignDialog } from "./DesignDialog";
 import { EffectIcon } from "./EffectIcon";
 import "./Voice.css";
 
@@ -11,7 +9,6 @@ import "./Voice.css";
 export function EffectList() {
   const { t, render } = useText();
   const { active, activeCloneId, effects, clonedVoices } = useBackend((state) => state.voice);
-  const overlay = useOverlay();
 
   const pick = ({ effect, cloneId }: EffectView) =>
     void (cloneId === null ? commands.selectVoiceEffect(effect) : commands.selectClonedVoice(cloneId));
@@ -58,7 +55,7 @@ export function EffectList() {
             <button
               type="button"
               className="effect"
-              onClick={() => void overlay.dialog<null>((done) => <DesignDialog onDone={() => done(null)} />)}
+              onClick={() => void commands.openDesigner()}
             >
               <span className="effect-well">
                 <span className="effect-cap">

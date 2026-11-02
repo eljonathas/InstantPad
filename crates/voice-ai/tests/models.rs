@@ -84,12 +84,10 @@ async fn speech_is_written_down() {
 async fn the_converted_speech_is_as_long_as_the_speech_less_the_delay() {
     let voices = voices();
     let speech = clip("speaker_a1.wav");
-    voices
-        .start(&Conversion {
-            source: voiceprint(&voices, "speaker_a1.wav").await,
-            target: voices.preset(VoicePreset::Feminine),
-        })
-        .unwrap();
+    voices.start(&Conversion {
+        source: voiceprint(&voices, "speaker_a1.wav").await,
+        target: voices.preset(VoicePreset::Feminine),
+    });
 
     let mut converted = 0;
     for piece in speech.chunks(480) {

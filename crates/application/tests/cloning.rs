@@ -793,6 +793,7 @@ fn calibration_and_cloning_cannot_record_at_once() {
             ..
         }
     ));
+    assert!(cloning.world.saw(&error(TextKey::MicrophoneBusy)));
     assert_eq!(
         cloning.world.voice.view().ai.calibration,
         Calibration::Recording
@@ -808,6 +809,7 @@ fn cloning_that_records_keeps_the_calibration_from_starting() {
 
     cloning.world.voice.start_calibration();
 
+    assert!(cloning.world.saw(&error(TextKey::MicrophoneBusy)));
     assert_eq!(cloning.world.voice.view().ai.calibration, Calibration::Idle);
     assert!(matches!(
         cloning.step(),
@@ -841,7 +843,7 @@ async fn closing_the_dialog_does_not_stop_a_calibration_recording() {
         .push(own_voice());
     cloning.records(MIN_CALIBRATION_SECONDS);
     cloning.world.voice.finish_calibration().await;
-    assert!(cloning.world.voice.view().ai.is_calibrated);
+    assert!(cloning.world.library.lock().own.is_some());
 }
 
 #[tokio::test]
@@ -977,4 +979,34 @@ async fn closing_and_opening_again_while_the_phrase_is_analyzed_stays_on_the_ter
             .clones
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn the_phrase_cannot_be_recorded_while_calibrating() {
+    let cloning = Cloning::new();
+    cloning.arrives_at_the_phrase().await;
+    cloning.world.voice.start_calibration();
+
+    cloning.session.start_phrase();
+
+    assert!(cloning.world.saw(&error(TextKey::MicrophoneBusy)));
+    assert!(matches!(
+        cloning.step(),
+        CloneStep::Phrase {
+            is_recording: false,
+            ..
+        }
+    ));
+}
+
+#[tokio::test]
+async fn a_voice_that_could_not_be_saved_leaves_the_other_voices_alone() {
+    let cloning = Cloning::new();
+    cloning.world.keep_clone("earlier", "Earlier");
+    cloning.arrives_at_the_name().await;
+    *cloning.world.repository.fails.lock().unwrap() = true;
+
+    cloning.session.save("My voice");
+
+    assert_eq!(cloning.world.library.lock().ids(), ["earlier"]);
 }

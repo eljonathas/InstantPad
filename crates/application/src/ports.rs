@@ -157,8 +157,9 @@ pub trait VoiceAnalyzer: Send + Sync {
 /// Turns one voice into another, a stretch at a time. It is far slower than the audio
 /// callbacks, so the engine runs it on a thread of its own. Speech is mono at 48 kHz.
 pub trait SpeechConverter: Send + Sync {
-    /// Starts over with new speakers, dropping anything half converted.
-    fn start(&self, conversion: &Conversion) -> Result<(), Failure>;
+    /// Starts over with new speakers, dropping anything half converted. Cheap: the work, and
+    /// any failure, comes with the next `convert`.
+    fn start(&self, conversion: &Conversion);
 
     /// Takes the next stretch of voice and returns the converted voice that is ready, which
     /// comes out later and in larger pieces than it went in.

@@ -165,10 +165,10 @@ pub enum Calibration {
 pub struct AiView {
     pub status: AiStatus,
     pub download_megabytes: u32,
-    pub is_calibrated: bool,
     pub calibration: Calibration,
     pub min_calibration_seconds: u32,
-    /// What the user asked for that waits for the AI to be set up, which then happens on its own.
+    /// What the user asked for that waits for the AI to be set up. A voice then comes on by
+    /// itself; cloning is opened again by the user.
     pub waiting: Option<Message>,
 }
 
@@ -190,6 +190,21 @@ pub struct VoiceView {
     pub is_hearing: bool,
     pub ai: AiView,
     pub cloned_voices: Vec<ClonedVoiceView>,
+    /// `None` while the voice designer is closed.
+    pub designer: Option<DesignerView>,
+}
+
+/// The voice designer, which the backend keeps open so a failed save loses nothing.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DesignerView {
+    /// The user hears the voice being designed, instead of the effect in use.
+    pub is_previewing: bool,
+    /// Where the timbre and blend knobs start, and where a double click puts them.
+    #[specta(type = u32)]
+    pub default_timbre: f64,
+    #[specta(type = u32)]
+    pub default_blend: f64,
 }
 
 /// Where the user is in cloning a voice. Each step only opens once the one before is done.

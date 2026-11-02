@@ -34,16 +34,9 @@ pub struct OnnxVoices {
     /// The only model that stays loaded, because the conversion runs all the time. The others
     /// serve a calibration or a clone now and then, and are loaded for each.
     tone_color: Cached,
-    requested: Mutex<Requested>,
+    requested: Mutex<Option<Conversion>>,
     /// The conversion in progress, which only the thread that converts uses.
     conversion: Mutex<Option<Running>>,
-}
-
-/// The speakers `start` asked for, which the next `convert` picks up.
-#[derive(Default)]
-struct Requested {
-    speakers: Option<Conversion>,
-    unseen: bool,
 }
 
 impl OnnxVoices {
@@ -51,19 +44,14 @@ impl OnnxVoices {
         Self {
             folder: folder.to_owned(),
             tone_color: Cached::new(folder, pack::TONE_COLOR),
-            requested: Mutex::new(Requested::default()),
+            requested: Mutex::new(None),
             conversion: Mutex::new(None),
         }
     }
 
     /// The speakers asked for since the last time, if any.
     fn take_request(&self) -> Option<Conversion> {
-        let mut requested = self.requested.lock().unwrap();
-        if !requested.unseen {
-            return None;
-        }
-        requested.unseen = false;
-        requested.speakers.clone()
+        self.requested.lock().unwrap().take()
     }
 }
 
@@ -158,13 +146,8 @@ impl SpeechConverter for OnnxVoices {
     /// Only notes the speakers, because the interface thread calls it and the conversion may be
     /// in the middle of a stretch. The thread that converts starts over at its next call, and
     /// that is where the model loads.
-    fn start(&self, conversion: &Conversion) -> Result<(), Failure> {
-        let mut requested = self.requested.lock().unwrap();
-        if requested.speakers.as_ref() != Some(conversion) {
-            requested.speakers = Some(conversion.clone());
-            requested.unseen = true;
-        }
-        Ok(())
+    fn start(&self, conversion: &Conversion) {
+        *self.requested.lock().unwrap() = Some(conversion.clone());
     }
 
     fn convert(&self, speech: &[f32]) -> Result<Vec<f32>, Failure> {
@@ -261,7 +244,7 @@ mod tests {
         let voices = empty_folder();
         let speakers = conversion(VoicePreset::Masculine, VoicePreset::Feminine);
 
-        voices.start(&speakers).unwrap();
+        voices.start(&speakers);
         // Enough speech for one window of the model.
         let failure = voices.convert(&vec![0.0; 24_000]).unwrap_err();
 
@@ -272,20 +255,20 @@ mod tests {
     }
 
     #[test]
-    fn the_conversion_starts_over_only_for_new_speakers() {
+    fn every_start_asks_the_conversion_to_start_over_even_with_the_same_speakers() {
         let voices = empty_folder();
         let first = conversion(VoicePreset::Masculine, VoicePreset::Feminine);
         let swapped = conversion(VoicePreset::Feminine, VoicePreset::Masculine);
         assert_eq!(voices.take_request(), None);
 
-        voices.start(&first).unwrap();
+        voices.start(&first);
         assert_eq!(voices.take_request(), Some(first.clone()));
         assert_eq!(voices.take_request(), None);
 
-        voices.start(&first).unwrap();
-        assert_eq!(voices.take_request(), None);
+        voices.start(&first);
+        assert_eq!(voices.take_request(), Some(first));
 
-        voices.start(&swapped).unwrap();
+        voices.start(&swapped);
         assert_eq!(voices.take_request(), Some(swapped));
     }
 

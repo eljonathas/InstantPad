@@ -74,6 +74,8 @@ fn specta_builder() -> Builder<Wry> {
             commands::voice::start_calibration,
             commands::voice::finish_calibration,
             commands::voice::delete_cloned_voice,
+            commands::voice::open_designer,
+            commands::voice::close_designer,
             commands::voice::preview_designed_voice,
             commands::voice::end_voice_preview,
             commands::voice::save_designed_voice,

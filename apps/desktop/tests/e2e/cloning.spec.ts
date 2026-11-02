@@ -259,26 +259,76 @@ test("the preview sends the recipe while it is on, and ends however the dialog c
   expect(await count("preview_designed_voice")).toBe(0);
 
   await designer(page).getByRole("button", { name: "Hear preview" }).click();
-  await expect.poll(() => count("set_hearing_voice")).toBe(1);
   await expect.poll(() => count("preview_designed_voice")).toBe(1);
+  await expect(designer(page).getByRole("button", { name: "Hear preview" })).toHaveAttribute("aria-pressed", "true");
 
   await designer(page).getByRole("slider", { name: "Timbre" }).focus();
   await page.keyboard.press("ArrowUp");
   await expect.poll(() => count("preview_designed_voice")).toBe(2);
 
-  const ended = await count("end_voice_preview");
   await designer(page).getByRole("button", { name: "Hear preview" }).click();
-  await expect.poll(() => count("end_voice_preview")).toBeGreaterThan(ended);
-  await designer(page).getByRole("button", { name: "Hear preview" }).click();
-  await expect.poll(() => count("preview_designed_voice")).toBe(3);
+  await expect.poll(() => count("end_voice_preview")).toBe(1);
+  await expect(designer(page).getByRole("button", { name: "Hear preview" })).toHaveAttribute("aria-pressed", "false");
 
-  const endedBeforeEsc = await count("end_voice_preview");
+  // The dialog tells the backend it closed, and nothing else: the backend ends the preview itself.
   await page.keyboard.press("Escape");
   await expect(designer(page)).toHaveCount(0);
-  await expect.poll(() => count("end_voice_preview")).toBeGreaterThan(endedBeforeEsc);
-  expect((await calls()).filter((call) => call.endsWith("_voice_preview") || call === "preview_designed_voice").at(-1)).toBe(
-    "end_voice_preview",
+  expect(await count("close_designer")).toBe(1);
+  expect(await count("set_hearing_voice")).toBe(0);
+});
+
+test("the preview turns hearing on, and gives it back as the user had it", async ({ page }) => {
+  await readyTheAi(page);
+  await cloneVoice(page, "Ana");
+  const hearing = page.getByRole("button", { name: "Hear my voice" });
+  await openDesigner(page);
+
+  await designer(page).getByRole("button", { name: "Hear preview" }).click();
+  await expect(hearing).toHaveAttribute("aria-pressed", "true");
+  await designer(page).getByRole("button", { name: "Hear preview" }).click();
+  await expect(hearing).toHaveAttribute("aria-pressed", "false");
+
+  await designer(page).getByRole("button", { name: "Hear preview" }).click();
+  await expect(hearing).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Escape");
+  await expect(hearing).toHaveAttribute("aria-pressed", "false");
+
+  await hearing.click();
+  await openDesigner(page);
+  await designer(page).getByRole("button", { name: "Hear preview" }).click();
+  await page.keyboard.press("Escape");
+  await expect(hearing).toHaveAttribute("aria-pressed", "true");
+});
+
+test("a preview the backend refuses stays off", async ({ page }) => {
+  await installTheAi(page);
+  await cloneVoice(page, "Ana");
+  await openDesigner(page);
+
+  await designer(page).getByRole("button", { name: "Hear preview" }).click();
+
+  await expect(lcd(page)).toHaveText("Error");
+  await expect(page.getByText("must learn your own voice first", { exact: false })).toBeVisible();
+  await expect(designer(page).getByRole("button", { name: "Hear preview" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Hear my voice" })).toHaveAttribute("aria-pressed", "false");
+});
+
+test("a save the backend refuses leaves the designer open", async ({ page }) => {
+  await readyTheAi(page);
+  await cloneVoice(page, "Ana");
+  await openDesigner(page);
+
+  await page.evaluate(() =>
+    (
+      window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args: unknown) => unknown } }
+    ).__TAURI_INTERNALS__.invoke("save_designed_voice", {
+      name: "  ",
+      recipe: { baseId: "x", timbre: 0.5, blendId: null, blend: 0.3 },
+    }),
   );
+
+  await expect(page.getByText("A name is needed.")).toBeVisible();
+  await expect(designer(page)).toBeVisible();
 });
 
 test("a design needs a name before it can be saved", async ({ page }) => {
@@ -320,4 +370,36 @@ test("deleting a designed voice leaves the voices it came from", async ({ page }
 
   await expect(page.getByRole("button", { name: "Ana deeper", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Ana", exact: true })).toBeVisible();
+});
+
+test("deleting a voice that is waiting for the AI leaves nothing waiting", async ({ page }) => {
+  await installTheAi(page);
+  await cloneVoice(page, "Ana");
+  await page.getByRole("button", { name: "Ana", exact: true }).dispatchEvent("pointerdown");
+  await expect(page.locator(".voice-title")).toHaveText("Ana");
+  await expect(page.getByText("read any text aloud", { exact: false })).toBeVisible();
+
+  // Its key is out of reach while the AI is being set up, so the command goes straight to the backend.
+  await page.evaluate(() =>
+    (
+      window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args: unknown) => unknown } }
+    ).__TAURI_INTERNALS__.invoke("delete_cloned_voice", { id: "clone-1" }),
+  );
+
+  await expect(page.getByRole("button", { name: "Ana", exact: true })).toHaveCount(0);
+  await expect(page.getByText("read any text aloud", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Natural" })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("the microphone is not shared between a calibration and the cloning dialog", async ({ page }) => {
+  await installTheAi(page);
+  await page.getByRole("button", { name: "Feminine AI", exact: true }).dispatchEvent("pointerdown");
+  await page.getByRole("button", { name: "Record" }).click();
+  await page.getByRole("button", { name: "Clone a voice" }).click();
+  await acceptTerms(page, "Ana Souza");
+
+  await wizard(page).getByRole("button", { name: "Record" }).click();
+
+  await expect(page.getByText("The microphone is already recording.", { exact: false })).toBeVisible();
+  await expect(wizard(page).getByRole("button", { name: "Record" })).toBeVisible();
 });

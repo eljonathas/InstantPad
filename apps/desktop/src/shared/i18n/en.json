@@ -139,6 +139,7 @@
   "Mic": "Mic",
   "MicMuted": "Mic muted",
   "MicOpen": "Mic open",
+  "MicrophoneBusy": "The microphone is already recording. Finish that recording first.",
   "MicStopped": "The microphone stopped: {0}",
   "Minimize": "Minimize",
   "Fullscreen": "Full screen (F11)",

@@ -29,7 +29,18 @@ impl VoiceLibraryStore {
         self.current.lock().expect("voice library lock poisoned")
     }
 
-    pub fn save(&self) -> Result<(), Failure> {
-        self.repository.save(&self.lock())
+    /// Changes the library and saves it under one lock, so no other change slips in between.
+    /// A failed save undoes the change: what is not on disk must not be used either.
+    pub fn change<R>(&self, change: impl FnOnce(&mut VoiceLibrary) -> R) -> Result<R, Failure> {
+        let mut library = self.lock();
+        let before = library.clone();
+        let result = change(&mut library);
+        if *library != before
+            && let Err(failure) = self.repository.save(&library)
+        {
+            *library = before;
+            return Err(failure);
+        }
+        Ok(result)
     }
 }

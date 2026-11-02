@@ -5,17 +5,15 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::Duration;
 
-use instantpad_domain::cloning::MAX_SAMPLE_SECONDS;
 use rtrb::{Consumer, Producer, RingBuffer};
 
-use crate::format::{downmix, frames_for};
+use crate::format::{MAX_SPEECH_SECONDS, downmix, frames_for};
 use crate::worker::Worker;
 
 /// Mono samples the callback can leave before the drain thread has to come, which is a second.
 const CAPACITY: usize = frames_for(1000);
-/// The longest a recording grows, which is a second more than anything the app takes. The
-/// application reports a longer one as too long, so a forgotten recording does not fill the memory.
-const MAX_RECORDED: usize = frames_for(1000 * (MAX_SAMPLE_SECONDS as usize + 1));
+/// A recording that nobody stops stops growing here, so it does not fill the memory.
+const MAX_RECORDED: usize = frames_for(1000 * MAX_SPEECH_SECONDS as usize);
 const DRAIN_EVERY: Duration = Duration::from_millis(20);
 
 /// The callback's half: it feeds the ring only while the user records.

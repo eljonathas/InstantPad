@@ -16,7 +16,7 @@ use instantpad_application::settings::{AppSettings, Settings};
 use instantpad_application::voice::{VoicePorts, VoiceSession};
 use instantpad_application::voice_library::VoiceLibraryStore;
 use instantpad_domain::cloning::{
-    ClonedVoice, Consent, TERMS_VERSION, VoiceLibrary, VoiceRecipe, Voiceprint,
+    ClonedVoice, Consent, DesignRefusal, TERMS_VERSION, VoiceLibrary, VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::voice::VoiceSettings;
 use instantpad_test_support::fakes::{
@@ -192,10 +192,16 @@ impl VoiceWorld {
 
     /// Adds a designed voice, as if it had been saved earlier. Returns its id.
     pub fn keep_design(&self, name: &str, recipe: VoiceRecipe) -> String {
-        let design = self.library.lock().design_voice(name, recipe).unwrap();
-        let id = design.id.clone();
-        self.library.lock().designs.push(design);
-        id
+        let design = self
+            .library
+            .change(|library| {
+                let design = library.design_voice(name, recipe)?;
+                let id = design.id.clone();
+                library.designs.push(design);
+                Ok::<_, DesignRefusal>(id)
+            })
+            .unwrap();
+        design.unwrap()
     }
 
     pub fn saw(&self, event: &AppEvent) -> bool {

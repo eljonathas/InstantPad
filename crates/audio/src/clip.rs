@@ -4,7 +4,6 @@ use std::fs::File;
 use std::path::Path;
 
 use instantpad_application::message::{Failure, TextKey};
-use instantpad_domain::cloning::MAX_SAMPLE_SECONDS;
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 use symphonia::core::codecs::audio::AudioDecoderOptions;
@@ -13,15 +12,10 @@ use symphonia::core::formats::TrackType;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::io::MediaSourceStream;
 
-use crate::format::{CHANNELS, SAMPLE_RATE, downmix};
+use crate::format::{CHANNELS, MAX_SPEECH_SECONDS, SAMPLE_RATE, downmix};
 
 /// Frames the resampler works on at a time.
 const RESAMPLE_CHUNK: usize = 1024;
-
-/// The longest file the voice can be learned from: what the app takes and a second more, so
-/// that the application reports a file just over the limit. Longer ones are refused while
-/// decoding, so a whole podcast never fills the memory.
-const MAX_SPEECH_SECONDS: u32 = MAX_SAMPLE_SECONDS + 1;
 
 /// How many bars the display draws for a sound.
 const PEAK_BARS: usize = 44;
@@ -56,7 +50,8 @@ impl SoundClip {
     }
 }
 
-/// A file of speech for the AI to learn from, as mono at the engine rate.
+/// A file of speech for the AI to learn from, as mono at the engine rate. Longer ones are
+/// refused while decoding, so a whole podcast never fills the memory.
 pub(crate) fn load_speech(path: &str) -> Result<Vec<f32>, Failure> {
     let stereo = load_stereo(path, Some(MAX_SPEECH_SECONDS))?;
     Ok(downmix(&stereo).collect())

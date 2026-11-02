@@ -26,6 +26,10 @@ const PHRASE_TOLERANCE: usize = 1;
 /// How far the timbre of a designed voice moves toward the deep or the high preset at the end of
 /// its range. Further, nothing is left of the voice it started from.
 const TIMBRE_REACH: f32 = 0.6;
+/// The timbre of the voice a design starts from, halfway between deeper and higher.
+pub const DEFAULT_TIMBRE: f32 = 0.5;
+/// A blend this small keeps the voice it starts from recognizable.
+pub const DEFAULT_BLEND: f32 = 0.3;
 
 /// What the AI hears as the identity of a voice.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -96,7 +100,9 @@ impl ClonedVoice {
 pub struct VoiceRecipe {
     /// The cloned voice it starts from.
     pub base_id: String,
-    /// From -1, deeper, to 1, higher.
+    // `#[specta(type = u32)]` exports these floats as a plain `number`, without the `| null`
+    // specta adds for NaN, which they never are.
+    /// From 0, deeper, to 1, higher. [`DEFAULT_TIMBRE`] leaves the voice as it is.
     #[specta(type = u32)]
     pub timbre: f32,
     /// Another cloned voice mixed in.
@@ -182,12 +188,14 @@ impl VoiceLibrary {
             let blended = &self.clone_voice(blend_id)?.voiceprint;
             voiceprint = voiceprint.toward(blended, recipe.blend);
         }
-        let toward = if recipe.timbre < 0.0 {
+        let offset = recipe.timbre - DEFAULT_TIMBRE;
+        let toward = if offset < 0.0 {
             VoicePreset::Masculine
         } else {
             VoicePreset::Feminine
         };
-        Some(voiceprint.toward(&preset(toward), recipe.timbre.abs() * TIMBRE_REACH))
+        let amount = offset.abs() / DEFAULT_TIMBRE * TIMBRE_REACH;
+        Some(voiceprint.toward(&preset(toward), amount))
     }
 
     /// The cloned voices, then the designed ones, each in the order it was made.
@@ -215,13 +223,16 @@ impl VoiceLibrary {
         if self.clone_voice(&recipe.base_id).is_none() || !blend_is_known {
             return Err(DesignRefusal::UnknownVoice);
         }
+        // Mixing a voice with itself changes nothing.
+        let blend_id = recipe.blend_id.filter(|id| *id != recipe.base_id);
         Ok(DesignedVoice {
             id: Uuid::new_v4().simple().to_string(),
             name: name.to_owned(),
             recipe: VoiceRecipe {
-                timbre: recipe.timbre.clamp(-1.0, 1.0),
+                base_id: recipe.base_id,
+                timbre: recipe.timbre.clamp(0.0, 1.0),
+                blend_id,
                 blend: recipe.blend.clamp(0.0, 1.0),
-                ..recipe
             },
         })
     }

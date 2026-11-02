@@ -1,6 +1,6 @@
 use instantpad_domain::cloning::{
-    Challenge, CloneRefusal, CloneRequest, ClonedVoice, Consent, DesignRefusal, TERMS_VERSION,
-    VoiceLibrary, VoiceRecipe, Voiceprint,
+    Challenge, CloneRefusal, CloneRequest, ClonedVoice, Consent, DEFAULT_BLEND, DEFAULT_TIMBRE,
+    DesignRefusal, TERMS_VERSION, VoiceLibrary, VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::voice::VoicePreset;
 
@@ -385,7 +385,7 @@ fn preset(preset: VoicePreset) -> Voiceprint {
 fn recipe(base: &str) -> VoiceRecipe {
     VoiceRecipe {
         base_id: base.to_owned(),
-        timbre: 0.0,
+        timbre: DEFAULT_TIMBRE,
         blend_id: None,
         blend: 0.0,
     }
@@ -468,7 +468,7 @@ fn an_amount_of_blend_without_a_voice_to_blend_changes_nothing() {
 fn a_higher_timbre_moves_the_voice_toward_the_feminine_preset() {
     let library = library();
     let high = VoiceRecipe {
-        timbre: 0.5,
+        timbre: 0.75,
         ..recipe("a")
     };
 
@@ -482,7 +482,7 @@ fn a_higher_timbre_moves_the_voice_toward_the_feminine_preset() {
 fn a_deeper_timbre_moves_the_voice_toward_the_masculine_preset() {
     let library = library();
     let deep = VoiceRecipe {
-        timbre: -0.5,
+        timbre: 0.25,
         ..recipe("a")
     };
 
@@ -562,6 +562,48 @@ fn a_designed_voice_is_named_and_gets_an_id_of_its_own() {
 }
 
 #[test]
+fn the_default_timbre_leaves_the_voice_as_it_is() {
+    assert_eq!(DEFAULT_TIMBRE, 0.5);
+    assert!((0.0..=1.0).contains(&DEFAULT_BLEND));
+    let library = library();
+
+    let heard = library.design_voiceprint(&recipe("a"), preset).unwrap();
+
+    assert_close(&heard, &[1.0, 0.0]);
+}
+
+#[test]
+fn the_ends_of_the_timbre_reach_the_same_distance_from_the_voice() {
+    let library = library();
+    let (deep, high) = (
+        VoiceRecipe {
+            timbre: 0.0,
+            ..recipe("a")
+        },
+        VoiceRecipe {
+            timbre: 1.0,
+            ..recipe("a")
+        },
+    );
+
+    let deep = library.design_voiceprint(&deep, preset).unwrap();
+    let high = library.design_voiceprint(&high, preset).unwrap();
+
+    assert_close(&deep, &[0.4 - 6.0, 0.0]);
+    assert_close(&high, &[0.4 + 6.0, 0.0]);
+}
+
+#[test]
+fn blending_a_voice_with_itself_blends_nothing() {
+    let library = library();
+
+    let designed = library.design_voice("Mix", blended("a", "a", 0.5)).unwrap();
+
+    assert_eq!(designed.recipe.blend_id, None);
+    assert_eq!(designed.recipe.base_id, "a");
+}
+
+#[test]
 fn a_designed_voice_without_a_name_is_refused() {
     assert_eq!(
         library().design_voice("   ", recipe("a")),
@@ -614,7 +656,7 @@ fn a_designed_voice_keeps_its_settings_inside_their_range() {
         .recipe;
 
     assert_eq!((low.timbre, low.blend), (1.0, 0.0));
-    assert_eq!((high.timbre, high.blend), (-1.0, 1.0));
+    assert_eq!((high.timbre, high.blend), (0.0, 1.0));
 }
 
 #[test]

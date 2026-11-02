@@ -1,7 +1,3 @@
-.design-field {
-  margin-bottom: var(--space-7);
-}
-
 .design-controls {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -30,12 +26,6 @@
 
 .design-ends > :only-child {
   margin-inline: auto;
-}
-
-.design-tip {
-  margin: 0 0 var(--space-7);
-  color: var(--color-dialog-label);
-  font-size: var(--font-status);
 }
 
 .design-preview {

@@ -166,7 +166,7 @@
   color: var(--gray-4);
   font-size: var(--font-pad-shortcut);
   font-weight: var(--weight-bold);
-  line-height: var(--line-height-badge);
+  line-height: var(--effect-badge-line-height);
 }
 
 .effect-plus {

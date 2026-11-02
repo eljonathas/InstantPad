@@ -168,13 +168,7 @@ impl AiBridge {
         // The new generation comes first, so that nothing the old speakers made is delivered
         // or fed to the converter once it has started over.
         self.shared.generation.fetch_add(1, Ordering::Relaxed);
-        if let Err(Failure(reason)) = self.converter.start(conversion) {
-            *active = None;
-            self.shared.is_routing.store(false, Ordering::Relaxed);
-            self.events.emit(AppEvent::error(reason));
-            return;
-        }
-
+        self.converter.start(conversion);
         *active = Some(conversion.clone());
         self.shared.is_routing.store(true, Ordering::Relaxed);
         let converter = Converting {
@@ -207,6 +201,9 @@ impl Converting {
     fn serve(self) {
         let mut speech = vec![0.0; MAX_BACKLOG];
         let mut generation = self.shared.generation.load(Ordering::Relaxed);
+        // The converter may load its model while it converts the first piece of a conversion,
+        // which takes longer than the backlog allows and is not falling behind.
+        let mut is_warm = false;
         loop {
             let Some(ends) = self.ends.upgrade() else {
                 return;
@@ -218,15 +215,25 @@ impl Converting {
             }
 
             let current = self.shared.generation.load(Ordering::Relaxed);
-            let is_new = generation != current;
-            generation = current;
-            match hear(&ends, is_new, &mut speech) {
-                Heard::Nothing => {}
-                Heard::TooMuch => self.give_up(generation, Message::text(TextKey::AiTooSlow)),
-                Heard::Speech(count) => match self.converter.convert(&speech[..count]) {
-                    Ok(converted) => deliver(&ends, &self.shared, generation, &converted),
-                    Err(Failure(reason)) => self.give_up(generation, reason),
-                },
+            if generation != current {
+                generation = current;
+                is_warm = false;
+                forget(&ends);
+            } else {
+                match hear(&ends, is_warm, &mut speech) {
+                    Heard::Nothing => {}
+                    Heard::TooMuch => self.give_up(generation, Message::text(TextKey::AiTooSlow)),
+                    Heard::Speech(count) => match self.converter.convert(&speech[..count]) {
+                        Ok(converted) => {
+                            deliver(&ends, &self.shared, generation, &converted);
+                            if !is_warm {
+                                is_warm = true;
+                                forget(&ends);
+                            }
+                        }
+                        Err(Failure(reason)) => self.give_up(generation, reason),
+                    },
+                }
             }
             drop(ends);
             thread::sleep(POLL);
@@ -243,21 +250,24 @@ impl Converting {
     }
 }
 
-/// Takes what the callback sent. The voice that waited for an earlier conversion is dropped.
-fn hear(ends: &Slot, is_new: bool, speech: &mut [f32]) -> Heard {
+/// Drops the voice that is waiting, which belongs to an earlier conversion or came in while the
+/// converter was getting ready.
+fn forget(ends: &Slot) {
+    if let Some(ends) = ends.lock().unwrap().as_mut()
+        && let Ok(chunk) = ends.heard.read_chunk(ends.heard.slots())
+    {
+        chunk.commit_all();
+    }
+}
+
+/// Takes what the callback sent. Only a converter that is ready can be told it falls behind.
+fn hear(ends: &Slot, is_warm: bool, speech: &mut [f32]) -> Heard {
     let mut ends = ends.lock().unwrap();
     let Some(ends) = ends.as_mut() else {
         return Heard::Nothing;
     };
 
-    let waiting = ends.heard.slots();
-    if is_new {
-        if let Ok(chunk) = ends.heard.read_chunk(waiting) {
-            chunk.commit_all();
-        }
-        return Heard::Nothing;
-    }
-    if waiting > MAX_BACKLOG {
+    if is_warm && ends.heard.slots() > MAX_BACKLOG {
         return Heard::TooMuch;
     }
     match ends.heard.pop_partial_slice(speech).0.len() {
@@ -367,9 +377,7 @@ pub(crate) mod tests {
     struct Mute;
 
     impl SpeechConverter for Mute {
-        fn start(&self, _: &Conversion) -> Result<(), Failure> {
-            Ok(())
-        }
+        fn start(&self, _: &Conversion) {}
 
         fn convert(&self, _: &[f32]) -> Result<Vec<f32>, Failure> {
             Ok(Vec::new())
@@ -383,9 +391,7 @@ pub(crate) mod tests {
     }
 
     impl SpeechConverter for Gate {
-        fn start(&self, _: &Conversion) -> Result<(), Failure> {
-            Ok(())
-        }
+        fn start(&self, _: &Conversion) {}
 
         fn convert(&self, _: &[f32]) -> Result<Vec<f32>, Failure> {
             self.asked.send(()).unwrap();
@@ -395,17 +401,10 @@ pub(crate) mod tests {
     }
 
     /// Fails like a model that cannot run.
-    pub(crate) struct Broken {
-        pub(crate) fails_to_start: bool,
-    }
+    struct Broken;
 
     impl SpeechConverter for Broken {
-        fn start(&self, _: &Conversion) -> Result<(), Failure> {
-            if self.fails_to_start {
-                return Err(Failure::text(TextKey::AiLoadFailed));
-            }
-            Ok(())
-        }
+        fn start(&self, _: &Conversion) {}
 
         fn convert(&self, _: &[f32]) -> Result<Vec<f32>, Failure> {
             Err(Failure::because(TextKey::AiLoadFailed, "out of memory"))
@@ -490,26 +489,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_conversion_that_cannot_start_keeps_the_voice_and_says_why() {
-        let mut rig = Rig::new(Arc::new(Broken {
-            fails_to_start: true,
-        }));
-
-        rig.bridge.route(Some(&conversion()));
-
-        let voice = ramp(0, 480);
-        assert_eq!(rig.process(&voice), voice);
-        assert_eq!(
-            rig.errors(),
-            [AppEvent::error(Message::text(TextKey::AiLoadFailed))]
-        );
-    }
-
-    #[test]
     fn a_converter_that_fails_is_bypassed_and_says_why_once() {
-        let mut rig = Rig::new(Arc::new(Broken {
-            fails_to_start: false,
-        }));
+        let mut rig = Rig::new(Arc::new(Broken));
         rig.bridge.route(Some(&conversion()));
         rig.process(&ramp(0, PIECE));
 
@@ -528,8 +509,9 @@ pub(crate) mod tests {
         );
     }
 
-    #[test]
-    fn a_converter_that_falls_behind_is_bypassed_and_the_user_is_told() {
+    /// A converter that stops on every piece until it is released, with a callback that has
+    /// gone through the first piece, which is the one that may load a model.
+    fn warmed_up_gate() -> (Rig, mpsc::Sender<()>) {
         let (asked, was_asked) = mpsc::channel();
         let (release, open) = mpsc::channel();
         let mut rig = Rig::new(Arc::new(Gate {
@@ -540,7 +522,37 @@ pub(crate) mod tests {
         rig.process(&ramp(0, PIECE));
         was_asked.recv_timeout(Duration::from_secs(10)).unwrap();
 
-        // The converter is stuck on its first piece while more than a second of voice comes in.
+        // More than a second of voice comes in while the first piece is converted.
+        for block in 0..=MAX_BACKLOG / PIECE + 1 {
+            rig.process(&ramp(block * PIECE, PIECE));
+        }
+        release.send(()).unwrap();
+
+        // The converter is asked again with voice that came after it was ready.
+        let started = Instant::now();
+        while was_asked.recv_timeout(Duration::from_millis(5)).is_err() {
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "never asked again"
+            );
+            rig.process(&ramp(0, PIECE));
+        }
+        (rig, release)
+    }
+
+    #[test]
+    fn a_converter_that_takes_long_on_its_first_piece_is_not_falling_behind() {
+        let (rig, _release) = warmed_up_gate();
+
+        assert!(rig.bridge.shared.is_routing.load(Ordering::Relaxed));
+        assert_eq!(rig.errors(), []);
+    }
+
+    #[test]
+    fn a_converter_that_stays_slow_is_bypassed_and_the_user_is_told() {
+        let (mut rig, release) = warmed_up_gate();
+
+        // Stuck on the second piece, while more than a second of voice comes in.
         for block in 0..=MAX_BACKLOG / PIECE + 1 {
             rig.process(&ramp(block * PIECE, PIECE));
         }
@@ -557,9 +569,7 @@ pub(crate) mod tests {
 
     #[test]
     fn starting_a_conversion_again_after_a_bypass_tries_the_converter_again() {
-        let mut rig = Rig::new(Arc::new(Broken {
-            fails_to_start: false,
-        }));
+        let mut rig = Rig::new(Arc::new(Broken));
         rig.bridge.route(Some(&conversion()));
         rig.process(&ramp(0, PIECE));
         eventually("the failure was not reported", || !rig.errors().is_empty());

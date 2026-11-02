@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { commands, type VoiceRecipe } from "../../shared/ipc";
+import { useEffect, useRef, useState } from "react";
+import { commands, type DesignerView, type VoiceRecipe } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { Dialog, DialogLabel } from "../../shared/ui/Dialog";
@@ -9,58 +9,48 @@ import "./Design.css";
 
 // A knob turns many times a second, and each preview change reaches the audio engine.
 const PREVIEW_DELAY_MS = 150;
-const DEFAULT_BLEND = 0.3;
 
-const fromKnob = (value: number) => value * 2 - 1;
-const toKnob = (timbre: number) => (timbre + 1) / 2;
-
-/** The timbre as the user reads it: a signed percent, with 0% meaning the voice is unchanged. */
-const timbreText = (timbre: number) => {
-  const percent = Math.round(timbre * 100);
+/** How far the timbre is from where it starts, as a signed percent of the way to either end. */
+const timbreText = (timbre: number, start: number) => {
+  const percent = Math.round((timbre - start) * 200);
   return `${percent > 0 ? "+" : ""}${percent}%`;
 };
 
 /** Makes a new voice out of a cloned one: shifts its timbre and mixes another cloned voice into it. */
-export function DesignDialog({ onDone }: { onDone: () => void }) {
+function Designer({ designer }: { designer: DesignerView }) {
   const { t } = useText();
   const voices = useBackend((state) => state.voice.clonedVoices);
   const [recipe, setRecipe] = useState<VoiceRecipe>({
     baseId: voices[0].id,
-    timbre: 0,
+    timbre: designer.defaultTimbre,
     blendId: null,
-    blend: DEFAULT_BLEND,
+    blend: designer.defaultBlend,
   });
-  const [isPreviewing, setIsPreviewing] = useState(false);
   const [name, setName] = useState("");
   const change = (patch: Partial<VoiceRecipe>) => setRecipe({ ...recipe, ...patch });
+  const { isPreviewing } = designer;
+
+  // The recipe the engine last got, so turning the preview on does not send it twice.
+  const sent = useRef<VoiceRecipe | null>(null);
+  const send = (next: VoiceRecipe) => {
+    sent.current = next;
+    void commands.previewDesignedVoice(next);
+  };
 
   useEffect(() => {
-    if (!isPreviewing) return;
-    const timer = setTimeout(() => void commands.previewDesignedVoice(recipe), PREVIEW_DELAY_MS);
+    if (!isPreviewing || sent.current === recipe) return;
+    const timer = setTimeout(() => send(recipe), PREVIEW_DELAY_MS);
     return () => clearTimeout(timer);
   }, [isPreviewing, recipe]);
 
-  // Whatever way the dialog closes, the user goes back to hearing the effect in use.
-  useEffect(() => () => void commands.endVoicePreview(), []);
-
-  function togglePreview() {
-    if (isPreviewing) void commands.endVoicePreview();
-    else void commands.setHearingVoice(true);
-    setIsPreviewing(!isPreviewing);
-  }
-
-  async function save() {
-    await commands.saveDesignedVoice(name.trim(), recipe);
-    onDone();
-  }
-
+  const save = () => void commands.saveDesignedVoice(name.trim(), recipe);
   const others = voices.filter((voice) => voice.id !== recipe.baseId);
 
   return (
-    <Dialog title={t("DesignVoice")} isWide onCancel={onDone}>
+    <Dialog title={t("DesignVoice")} isWide onCancel={() => void commands.closeDesigner()}>
       <DialogLabel>{t("DesignBase")}</DialogLabel>
       <select
-        className="field design-field"
+        className="field dialog-field"
         aria-label={t("DesignBase")}
         value={recipe.baseId}
         onChange={(event) =>
@@ -81,15 +71,15 @@ export function DesignDialog({ onDone }: { onDone: () => void }) {
         <div className="design-control">
           <Knob
             label={t("DesignTimbre")}
-            value={toKnob(recipe.timbre)}
-            defaultValue={toKnob(0)}
-            text={timbreText(recipe.timbre)}
-            onChange={(value) => change({ timbre: fromKnob(value) })}
+            value={recipe.timbre}
+            defaultValue={designer.defaultTimbre}
+            text={timbreText(recipe.timbre, designer.defaultTimbre)}
+            onChange={(timbre) => change({ timbre })}
           />
           <div className="silk">{t("DesignTimbre")}</div>
           <div className="design-ends">
             <span>{t("TimbreDeeper")}</span>
-            <span>{timbreText(recipe.timbre)}</span>
+            <span>{timbreText(recipe.timbre, designer.defaultTimbre)}</span>
             <span>{t("TimbreHigher")}</span>
           </div>
         </div>
@@ -97,7 +87,7 @@ export function DesignDialog({ onDone }: { onDone: () => void }) {
         <div className="design-control">
           <DialogLabel>{t("DesignMixWith")}</DialogLabel>
           <select
-            className="field design-field"
+            className="field dialog-field"
             aria-label={t("DesignMixWith")}
             value={recipe.blendId ?? ""}
             onChange={(event) => change({ blendId: event.target.value || null })}
@@ -114,7 +104,7 @@ export function DesignDialog({ onDone }: { onDone: () => void }) {
               <Knob
                 label={t("DesignAmount")}
                 value={recipe.blend}
-                defaultValue={DEFAULT_BLEND}
+                defaultValue={designer.defaultBlend}
                 onChange={(blend) => change({ blend })}
               />
               <div className="silk">{t("DesignAmount")}</div>
@@ -124,33 +114,44 @@ export function DesignDialog({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
-      <p className="design-tip">{t("DesignTip")}</p>
+      <p className="dialog-tip">{t("DesignTip")}</p>
 
       <ToggleKey
         kind="switch"
         className="design-preview"
         label={t("DesignHearPreview")}
         on={isPreviewing}
-        onClick={togglePreview}
+        onClick={() => (isPreviewing ? void commands.endVoicePreview() : send(recipe))}
       />
 
       <DialogLabel>{t("Name")}</DialogLabel>
       <input
-        className="field design-field"
+        className="field dialog-field"
         aria-label={t("Name")}
         value={name}
         onChange={(event) => setName(event.target.value)}
-        onKeyDown={(event) => event.key === "Enter" && name.trim() && void save()}
+        onKeyDown={(event) => event.key === "Enter" && name.trim() && save()}
       />
 
       <div className="dialog-buttons">
-        <button type="button" className="key" onClick={onDone}>
+        <button type="button" className="key" onClick={() => void commands.closeDesigner()}>
           {t("Cancel")}
         </button>
-        <button type="button" className="key" disabled={name.trim().length === 0} onClick={() => void save()}>
+        <button
+          type="button"
+          className="key"
+          disabled={name.trim().length === 0}
+          onClick={save}
+        >
           {t("Save")}
         </button>
       </div>
     </Dialog>
   );
+}
+
+/** The designer follows the backend: it is open while the voice view says so. */
+export function DesignDialog() {
+  const designer = useBackend((state) => state.voice.designer);
+  return designer && <Designer designer={designer} />;
 }

@@ -59,6 +59,8 @@ export const commands = {
 	startCalibration: () => __TAURI_INVOKE<void>("start_calibration"),
 	finishCalibration: () => typedError<null, null>(__TAURI_INVOKE("finish_calibration")),
 	deleteClonedVoice: (id: string) => __TAURI_INVOKE<void>("delete_cloned_voice", { id }),
+	openDesigner: () => __TAURI_INVOKE<void>("open_designer"),
+	closeDesigner: () => __TAURI_INVOKE<void>("close_designer"),
 	previewDesignedVoice: (recipe: VoiceRecipe) => __TAURI_INVOKE<void>("preview_designed_voice", { recipe }),
 	endVoicePreview: () => __TAURI_INVOKE<void>("end_voice_preview"),
 	saveDesignedVoice: (name: string, recipe: VoiceRecipe) => __TAURI_INVOKE<void>("save_designed_voice", { name, recipe }),
@@ -86,10 +88,12 @@ export type AiStatus = { kind: "missing" } | { kind: "downloading"; percent: num
 export type AiView = {
 	status: AiStatus,
 	downloadMegabytes: number,
-	isCalibrated: boolean,
 	calibration: Calibration,
 	minCalibrationSeconds: number,
-	/**  What the user asked for that waits for the AI to be set up, which then happens on its own. */
+	/**
+	 *  What the user asked for that waits for the AI to be set up. A voice then comes on by
+	 *  itself; cloning is opened again by the user.
+	 */
 	waiting: Message | null,
 };
 
@@ -134,6 +138,15 @@ export type CloneStep = { step: "closed" } |
 export type ClonedVoiceView = {
 	id: string,
 	name: string,
+};
+
+/**  The voice designer, which the backend keeps open so a failed save loses nothing. */
+export type DesignerView = {
+	/**  The user hears the voice being designed, instead of the effect in use. */
+	isPreviewing: boolean,
+	/**  Where the timbre and blend knobs start, and where a double click puts them. */
+	defaultTimbre: number,
+	defaultBlend: number,
 };
 
 /**  The LCD at the top of the device. */
@@ -315,7 +328,7 @@ export type StartView = {
  *  A key of the translated texts. The frontend owns the translations, so TypeScript refuses
  *  a variant that is missing from them.
  */
-export type TextKey = "AiCalibrationSaved" | "AiCalibrationTooShort" | "AiDownloadFailed" | "AiInstalled" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneNotTheSameSpeaker" | "CloneSaved" | "CloneTermsBiometric" | "CloneTermsNoMisuse" | "CloneTermsOwner" | "CloneTermsPresent" | "CloneTermsRefused" | "CloneTermsRevoke" | "CloneVoice" | "CloneWrongPhrase" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "PhraseTooLong" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
+export type TextKey = "AiCalibrationSaved" | "AiCalibrationTooShort" | "AiDownloadFailed" | "AiInstalled" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneNotTheSameSpeaker" | "CloneSaved" | "CloneTermsBiometric" | "CloneTermsNoMisuse" | "CloneTermsOwner" | "CloneTermsPresent" | "CloneTermsRefused" | "CloneTermsRevoke" | "CloneVoice" | "CloneWrongPhrase" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "MicrophoneBusy" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "PhraseTooLong" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
 
 export type UpdateView = {
 	status: Message,
@@ -335,7 +348,7 @@ export type VoiceParam = "thinIntensity" | "thinFormant" | "deepIntensity" | "de
 export type VoiceRecipe = {
 	/**  The cloned voice it starts from. */
 	baseId: string,
-	/**  From -1, deeper, to 1, higher. */
+	/**  From 0, deeper, to 1, higher. [`DEFAULT_TIMBRE`] leaves the voice as it is. */
 	timbre: number,
 	/**  Another cloned voice mixed in. */
 	blendId: string | null,
@@ -351,6 +364,8 @@ export type VoiceView = {
 	isHearing: boolean,
 	ai: AiView,
 	clonedVoices: ClonedVoiceView[],
+	/**  `None` while the voice designer is closed. */
+	designer: DesignerView | null,
 };
 
 /* Tauri Specta runtime */

@@ -66,11 +66,6 @@ fn refusal_text(refusal: CloneRefusal) -> Message {
     })
 }
 
-/// A limit the recording broke, with the number of seconds it allows.
-fn limit(key: TextKey, seconds: u32) -> Message {
-    Message::with(key, [Message::plain(seconds.to_string())])
-}
-
 fn seconds(speech: &[f32]) -> usize {
     speech.len() / SPEECH_RATE
 }
@@ -167,7 +162,7 @@ impl CloningSession {
                 ..
             }
         );
-        if is_ready && self.recorder.start(Recording::Cloning) {
+        if is_ready && self.start_recording() {
             self.show(&mut state, sample_step(true, None));
         }
     }
@@ -219,7 +214,7 @@ impl CloningSession {
                 ..
             }
         );
-        if is_ready && self.recorder.start(Recording::Cloning) {
+        if is_ready && self.start_recording() {
             let step = phrase_step(&state.draft.challenge, true, None);
             self.show(&mut state, step);
         }
@@ -240,7 +235,7 @@ impl CloningSession {
         };
         let speech = self.recorder.stop(Recording::Cloning);
         if seconds(&speech) > MAX_PHRASE_SECONDS as usize {
-            let problem = limit(TextKey::PhraseTooLong, MAX_PHRASE_SECONDS);
+            let problem = Message::limit(TextKey::PhraseTooLong, MAX_PHRASE_SECONDS);
             self.retry_phrase(generation, problem);
             return;
         }
@@ -316,11 +311,7 @@ impl CloningSession {
             }
         };
 
-        let id = voice.id.clone();
-        self.library.lock().clones.push(voice);
-        if let Err(Failure(reason)) = self.library.save() {
-            // Kept only in memory, a retry would add the voice twice.
-            self.library.lock().remove(&id);
+        if let Err(Failure(reason)) = self.library.change(|library| library.clones.push(voice)) {
             self.events.emit(AppEvent::error(reason));
             return;
         }
@@ -337,6 +328,15 @@ impl CloningSession {
         self.end(&mut state);
     }
 
+    fn start_recording(&self) -> bool {
+        let is_started = self.recorder.start(Recording::Cloning);
+        if !is_started {
+            let reason = Message::text(TextKey::MicrophoneBusy);
+            self.events.emit(AppEvent::error(reason));
+        }
+        is_started
+    }
+
     /// Moves to the analysis when `step` allows it, and returns the dialog it belongs to. In one
     /// go, so a second press of Stop finds the analysis already running.
     fn listen(&self, step: impl Fn(&CloneStep) -> bool) -> Option<u64> {
@@ -351,9 +351,9 @@ impl CloningSession {
     async fn take_sample(&self, generation: u64, speech: Vec<f32>) {
         let length = seconds(&speech);
         let problem = if length < MIN_SAMPLE_SECONDS as usize {
-            Some(limit(TextKey::SampleTooShort, MIN_SAMPLE_SECONDS))
+            Some(Message::limit(TextKey::SampleTooShort, MIN_SAMPLE_SECONDS))
         } else if length > MAX_SAMPLE_SECONDS as usize {
-            Some(limit(TextKey::SampleTooLong, MAX_SAMPLE_SECONDS))
+            Some(Message::limit(TextKey::SampleTooLong, MAX_SAMPLE_SECONDS))
         } else {
             None
         };

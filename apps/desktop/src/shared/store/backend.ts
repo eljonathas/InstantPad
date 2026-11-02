@@ -82,11 +82,11 @@ let state: BackendState = {
     activeCloneId: null,
     effects: [],
     clonedVoices: [],
+    designer: null,
     isHearing: false,
     ai: {
       status: { kind: "missing" },
       downloadMegabytes: 0,
-      isCalibrated: false,
       calibration: "idle",
       waiting: null,
       minCalibrationSeconds: 0,

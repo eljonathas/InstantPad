@@ -1,12 +1,13 @@
 mod support;
 
 use instantpad_application::events::{
-    AiStatus, AppEvent, Calibration, ClonedVoiceView, VoiceIcon, VoiceView,
+    AiStatus, AppEvent, Calibration, ClonedVoiceView, DesignerView, VoiceIcon, VoiceView,
 };
 use instantpad_application::message::{Message, TextKey};
 use instantpad_application::ports::VoiceAnalyzer;
 use instantpad_domain::cloning::{
-    MIN_CALIBRATION_SECONDS, TERMS_VERSION, VoiceLibrary, VoiceRecipe, Voiceprint,
+    DEFAULT_BLEND, DEFAULT_TIMBRE, MIN_CALIBRATION_SECONDS, TERMS_VERSION, VoiceLibrary,
+    VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::voice::{
     PitchShape, VoiceEffect, VoiceParam, VoicePreset, VoiceSettings, VoiceTarget,
@@ -212,7 +213,7 @@ async fn a_calibration_that_is_too_short_is_refused() {
     assert_eq!(world.analyzer.voiceprints.lock().unwrap().len(), 1);
     let view = world.voice.view();
     assert_eq!(view.ai.calibration, Calibration::Idle);
-    assert!(!view.ai.is_calibrated);
+    assert_eq!(world.library.lock().own, None);
 }
 
 #[tokio::test]
@@ -231,7 +232,7 @@ async fn a_long_enough_calibration_saves_the_own_voice() {
     assert!(world.saw(&shown(TextKey::AiCalibrationSaved)));
     assert!(!*world.recorder.is_recording.lock().unwrap());
     let view = world.voice.view();
-    assert!(view.ai.is_calibrated);
+    assert!(world.library.lock().own.is_some());
     assert_eq!(view.ai.calibration, Calibration::Idle);
 }
 
@@ -244,7 +245,7 @@ async fn a_calibration_the_ai_cannot_hear_shows_why() {
     world.voice.finish_calibration().await;
 
     assert!(world.saw(&failed(TextKey::AiLoadFailed, "no voiceprint prepared")));
-    assert!(!world.voice.view().ai.is_calibrated);
+    assert_eq!(world.library.lock().own, None);
 }
 
 #[tokio::test]
@@ -626,7 +627,7 @@ async fn a_calibration_that_cannot_be_saved_is_not_used() {
     assert!(world.saw(&error(TextKey::SaveFailed)));
     assert!(!world.saw(&shown(TextKey::AiCalibrationSaved)));
     assert_eq!(world.library.lock().own, None);
-    assert!(!world.voice.view().ai.is_calibrated);
+    assert_eq!(world.library.lock().own, None);
 }
 
 #[test]
@@ -741,7 +742,7 @@ async fn choosing_another_voice_cancels_the_waiting_one() {
 fn recipe(base: &str) -> VoiceRecipe {
     VoiceRecipe {
         base_id: base.to_owned(),
-        timbre: 0.0,
+        timbre: DEFAULT_TIMBRE,
         blend_id: None,
         blend: 0.0,
     }
@@ -787,9 +788,10 @@ fn designs(world: &VoiceWorld) -> Vec<String> {
 #[test]
 fn a_preview_sends_the_designed_voice_with_the_pitch_of_the_own_voice() {
     let world = designer();
+    world.voice.open_designer();
     world.voice.set_param(VoiceParam::ClonePitch, 1.0);
     let deep = VoiceRecipe {
-        timbre: -1.0,
+        timbre: 0.0,
         ..recipe("a")
     };
 
@@ -809,6 +811,7 @@ fn a_preview_sends_the_designed_voice_with_the_pitch_of_the_own_voice() {
 #[test]
 fn a_preview_follows_the_pitch_knob() {
     let world = designer();
+    world.voice.open_designer();
     world.voice.preview_design(recipe("a"));
 
     world.voice.set_param(VoiceParam::ClonePitch, 0.0);
@@ -823,6 +826,7 @@ fn a_preview_needs_the_models() {
     let world = VoiceWorld::new();
     world.keep_clone("a", "Ana");
 
+    world.voice.open_designer();
     world.voice.preview_design(recipe("a"));
 
     assert!(world.saw(&error(TextKey::AiNotInstalled)));
@@ -836,6 +840,7 @@ fn a_preview_needs_the_own_voice() {
     let world = VoiceWorld::installed();
     world.keep_clone("a", "Ana");
 
+    world.voice.open_designer();
     world.voice.preview_design(recipe("a"));
 
     assert!(world.saw(&error(TextKey::AiNotCalibrated)));
@@ -846,7 +851,9 @@ fn a_preview_needs_the_own_voice() {
 #[test]
 fn a_preview_of_a_voice_that_is_gone_is_refused_even_without_the_models() {
     let world = VoiceWorld::new();
+    world.keep_clone("a", "Ana");
 
+    world.voice.open_designer();
     world.voice.preview_design(recipe("gone"));
 
     assert!(world.saw(&error(TextKey::CloneDeleted)));
@@ -856,6 +863,7 @@ fn a_preview_of_a_voice_that_is_gone_is_refused_even_without_the_models() {
 #[test]
 fn ending_the_preview_goes_back_to_the_effect_in_use() {
     let world = designer();
+    world.voice.open_designer();
     world.voice.select(VoiceEffect::Ogre);
     let ogre = world.settings.lock().voice.chain();
     world.voice.preview_design(recipe("a"));
@@ -870,6 +878,7 @@ fn ending_the_preview_goes_back_to_the_effect_in_use() {
 #[test]
 fn ending_the_preview_goes_back_to_the_ai_effect_in_use() {
     let world = designer();
+    world.voice.open_designer();
     world.voice.select(VoiceEffect::FeminineAi);
     world.voice.preview_design(recipe("a"));
 
@@ -881,6 +890,7 @@ fn ending_the_preview_goes_back_to_the_ai_effect_in_use() {
 #[test]
 fn a_preview_whose_voice_is_deleted_ends_by_itself() {
     let world = designer();
+    world.voice.open_designer();
     world.voice.select(VoiceEffect::Ogre);
     world.voice.preview_design(recipe("a"));
 
@@ -899,6 +909,7 @@ fn saving_a_design_keeps_it_and_turns_it_on() {
         blend: 0.5,
         ..recipe("a")
     };
+    world.voice.open_designer();
     world.voice.preview_design(recipe.clone());
 
     world.voice.save_design("  Mix ", recipe);
@@ -921,6 +932,7 @@ fn saving_a_design_keeps_it_and_turns_it_on() {
 #[test]
 fn saving_a_design_ends_the_preview() {
     let world = designer();
+    world.voice.open_designer();
     world.voice.preview_design(recipe("a"));
     world.voice.save_design("Mix", recipe("a"));
 
@@ -935,6 +947,7 @@ fn a_design_that_could_not_be_saved_is_not_kept() {
     let world = designer();
     *world.repository.fails.lock().unwrap() = true;
 
+    world.voice.open_designer();
     world.voice.save_design("Mix", recipe("a"));
 
     assert!(world.saw(&error(TextKey::SaveFailed)));
@@ -948,6 +961,7 @@ fn a_design_that_could_not_be_saved_is_not_kept() {
 fn a_design_without_a_name_is_refused() {
     let world = designer();
 
+    world.voice.open_designer();
     world.voice.save_design("   ", recipe("a"));
 
     assert!(world.saw(&error(TextKey::CloneMissingName)));
@@ -958,6 +972,7 @@ fn a_design_without_a_name_is_refused() {
 fn a_design_from_a_voice_that_is_gone_is_refused() {
     let world = designer();
 
+    world.voice.open_designer();
     world.voice.save_design("Mix", recipe("gone"));
 
     assert!(world.saw(&error(TextKey::CloneDeleted)));
@@ -970,6 +985,7 @@ async fn a_design_saved_before_the_own_voice_is_known_waits_to_come_on() {
     let world = VoiceWorld::installed();
     world.keep_clone("a", "Ana");
 
+    world.voice.open_designer();
     world.voice.save_design("Mix", recipe("a"));
 
     assert_eq!(designs(&world), ["Mix"]);
@@ -995,6 +1011,7 @@ fn deleting_a_clone_deletes_the_designs_made_from_it_and_turns_off_the_active_on
         blend: 0.5,
         ..recipe("a")
     };
+    world.voice.open_designer();
     world.voice.save_design("Mix", recipe);
     assert_eq!(world.voice.view().active, VoiceEffect::Cloned);
 
@@ -1018,6 +1035,7 @@ fn deleting_a_clone_deletes_the_designs_made_from_it_and_turns_off_the_active_on
 #[test]
 fn deleting_a_clone_keeps_the_designs_that_do_not_use_it() {
     let world = designer();
+    world.voice.open_designer();
     world.voice.save_design("Mix", recipe("a"));
 
     world.voice.delete_clone("b");
@@ -1043,6 +1061,7 @@ fn deleting_a_design_keeps_the_clones_it_is_made_of() {
 fn deleting_the_voice_a_design_waits_with_ends_the_wait() {
     let world = VoiceWorld::installed();
     world.keep_clone("a", "Ana");
+    world.voice.open_designer();
     world.voice.save_design("Mix", recipe("a"));
     assert_eq!(world.voice.view().ai.waiting, Some(Message::plain("Mix")));
 
@@ -1118,4 +1137,256 @@ fn the_next_voice_walks_the_designs_after_the_clones() {
         ]
     );
     assert!(world.saw(&AppEvent::show(Message::plain("Mix"))));
+}
+
+fn designer_view(world: &VoiceWorld) -> Option<DesignerView> {
+    world.voice.view().designer
+}
+
+#[test]
+fn the_designer_opens_only_when_there_is_a_cloned_voice() {
+    let world = VoiceWorld::ready();
+
+    world.voice.open_designer();
+    assert_eq!(designer_view(&world), None);
+
+    world.keep_clone("a", "Ana");
+    world.voice.open_designer();
+    assert_eq!(
+        designer_view(&world),
+        Some(DesignerView {
+            is_previewing: false,
+            default_timbre: f64::from(DEFAULT_TIMBRE),
+            default_blend: f64::from(DEFAULT_BLEND),
+        })
+    );
+}
+
+#[test]
+fn closing_the_designer_ends_the_preview_and_hides_it() {
+    let world = designer();
+    world.voice.open_designer();
+    world.voice.preview_design(recipe("a"));
+    assert!(designer_view(&world).unwrap().is_previewing);
+
+    world.voice.close_designer();
+
+    assert_eq!(designer_view(&world), None);
+    assert_eq!(*world.changer.chain.lock().unwrap(), None);
+    assert_eq!(*world.changer.conversion.lock().unwrap(), None);
+}
+
+#[test]
+fn a_preview_needs_the_designer_to_be_open() {
+    let world = designer();
+
+    world.voice.preview_design(recipe("a"));
+
+    assert_eq!(*world.changer.conversion.lock().unwrap(), None);
+    assert!(!world.voice.view().is_hearing);
+    assert_eq!(designer_view(&world), None);
+}
+
+#[test]
+fn the_first_preview_turns_hearing_on_and_ending_it_restores_it() {
+    let world = designer();
+    world.voice.open_designer();
+
+    world.voice.preview_design(recipe("a"));
+    assert!(world.voice.view().is_hearing);
+    assert!(*world.changer.is_hearing.lock().unwrap());
+    world.voice.preview_design(recipe("b"));
+    world.voice.end_preview();
+
+    assert!(!world.voice.view().is_hearing);
+    assert!(!*world.changer.is_hearing.lock().unwrap());
+    assert!(!designer_view(&world).unwrap().is_previewing);
+}
+
+#[test]
+fn hearing_that_was_on_stays_on_after_the_preview() {
+    let world = designer();
+    world.voice.set_hearing(true);
+    world.voice.open_designer();
+    world.voice.preview_design(recipe("a"));
+
+    world.voice.end_preview();
+
+    assert!(world.voice.view().is_hearing);
+}
+
+#[test]
+fn the_choice_of_hearing_made_during_a_preview_is_what_comes_back() {
+    let world = designer();
+    world.voice.open_designer();
+    world.voice.preview_design(recipe("a"));
+
+    world.voice.set_hearing(true);
+    world.voice.end_preview();
+
+    assert!(world.voice.view().is_hearing);
+    assert!(*world.changer.is_hearing.lock().unwrap());
+}
+
+#[test]
+fn a_refused_preview_changes_nothing() {
+    let world = VoiceWorld::installed();
+    world.keep_clone("a", "Ana");
+    world.voice.open_designer();
+
+    world.voice.preview_design(recipe("a"));
+
+    assert!(world.saw(&error(TextKey::AiNotCalibrated)));
+    assert!(!world.voice.view().is_hearing);
+    assert!(!*world.changer.is_hearing.lock().unwrap());
+    assert!(!designer_view(&world).unwrap().is_previewing);
+}
+
+#[test]
+fn closing_the_designer_restores_the_hearing_too() {
+    let world = designer();
+    world.voice.open_designer();
+    world.voice.preview_design(recipe("a"));
+
+    world.voice.close_designer();
+
+    assert!(!world.voice.view().is_hearing);
+}
+
+#[test]
+fn saving_needs_the_designer_to_be_open() {
+    let world = designer();
+
+    world.voice.save_design("Mix", recipe("a"));
+
+    assert!(designs(&world).is_empty());
+    assert!(world.events.0.lock().unwrap().is_empty());
+}
+
+#[test]
+fn saving_closes_the_designer_and_restores_the_hearing() {
+    let world = designer();
+    world.voice.open_designer();
+    world.voice.preview_design(recipe("a"));
+
+    world.voice.save_design("Mix", recipe("a"));
+
+    assert_eq!(designer_view(&world), None);
+    assert!(!world.voice.view().is_hearing);
+    assert_eq!(world.voice.view().active, VoiceEffect::Cloned);
+}
+
+#[test]
+fn the_designer_stays_open_when_saving_fails_or_is_refused() {
+    let world = designer();
+    world.voice.open_designer();
+    world.voice.preview_design(recipe("a"));
+    *world.repository.fails.lock().unwrap() = true;
+
+    world.voice.save_design("Mix", recipe("a"));
+    world.voice.save_design("   ", recipe("a"));
+
+    assert!(designer_view(&world).unwrap().is_previewing);
+    assert!(world.voice.view().is_hearing);
+    assert!(designs(&world).is_empty());
+}
+
+#[test]
+fn a_design_whose_base_was_deleted_meanwhile_is_refused() {
+    let world = designer();
+    world.voice.open_designer();
+    world.voice.preview_design(recipe("a"));
+    world.voice.delete_clone("a");
+
+    world.voice.save_design("Mix", recipe("a"));
+
+    assert!(world.saw(&error(TextKey::CloneDeleted)));
+    assert!(designs(&world).is_empty());
+    assert!(world.repository.library.lock().unwrap().designs.is_empty());
+    assert!(designer_view(&world).is_some());
+}
+
+#[test]
+fn a_design_that_blends_a_voice_with_itself_keeps_no_blend() {
+    let world = designer();
+    world.voice.open_designer();
+    let twice = VoiceRecipe {
+        blend_id: Some("a".to_owned()),
+        blend: 0.5,
+        ..recipe("a")
+    };
+
+    world.voice.save_design("Mix", twice);
+
+    assert_eq!(world.library.lock().designs[0].recipe.blend_id, None);
+}
+
+#[test]
+fn a_failed_delete_keeps_what_was_added_before_it() {
+    let world = designer();
+    world.keep_clone("c", "Cia");
+    *world.repository.fails.lock().unwrap() = true;
+
+    world.voice.delete_clone("b");
+
+    assert!(world.saw(&error(TextKey::SaveFailed)));
+    assert_eq!(world.library.lock().ids(), ["a", "b", "c"]);
+}
+
+#[test]
+fn deleting_a_voice_that_is_not_there_saves_nothing() {
+    let world = designer();
+    *world.repository.fails.lock().unwrap() = true;
+
+    world.voice.delete_clone("nobody");
+
+    assert!(world.events.0.lock().unwrap().is_empty());
+}
+
+#[test]
+fn deleting_the_clone_a_voice_waits_for_ends_the_wait() {
+    let world = VoiceWorld::installed();
+    world.keep_clone("a", "Ana");
+    world.voice.select_clone("a");
+    assert_eq!(world.voice.view().ai.waiting, Some(Message::plain("Ana")));
+
+    world.voice.delete_clone("a");
+
+    assert_eq!(world.voice.view().ai.waiting, None);
+}
+
+#[test]
+fn deleting_the_clone_named_in_the_settings_keeps_a_waiting_effect_that_is_not_a_clone() {
+    let mut voice = VoiceSettings::default();
+    voice.select_clone("a");
+    voice.select(VoiceEffect::Thin);
+    let library = VoiceLibrary {
+        clones: vec![cloned_voice("a", "Ana")],
+        ..VoiceLibrary::default()
+    };
+    let world = VoiceWorld::resuming(voice, library, true);
+    world.voice.select(VoiceEffect::FeminineAi);
+    assert_eq!(
+        world.voice.view().ai.waiting,
+        Some(Message::text(TextKey::EffectFeminineAi))
+    );
+
+    world.voice.delete_clone("a");
+
+    assert_eq!(
+        world.voice.view().ai.waiting,
+        Some(Message::text(TextKey::EffectFeminineAi))
+    );
+}
+
+#[tokio::test]
+async fn a_waiting_effect_keeps_the_knobs_turned_while_it_waited() {
+    let world = VoiceWorld::resuming(VoiceSettings::default(), calibrated(), false);
+    world.voice.select(VoiceEffect::FeminineAi);
+    world.voice.set_param(VoiceParam::FeminineAiPitch, 1.0);
+
+    world.voice.install_ai().await;
+
+    assert_eq!(world.voice.view().active, VoiceEffect::FeminineAi);
+    assert_eq!(pitch_of(&world), 8.0);
 }

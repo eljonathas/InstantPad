@@ -106,7 +106,7 @@ pub fn voice_library_repository(repository: &dyn VoiceLibraryRepository) {
             name: "Mix".to_owned(),
             recipe: VoiceRecipe {
                 base_id: "a".to_owned(),
-                timbre: -0.5,
+                timbre: 0.25,
                 blend_id: Some("b".to_owned()),
                 blend: 0.25,
             },

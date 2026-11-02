@@ -139,6 +139,7 @@
   "Mic": "Mic",
   "MicMuted": "Mic mudo",
   "MicOpen": "Mic aberto",
+  "MicrophoneBusy": "O microfone já está gravando. Termine essa gravação primeiro.",
   "MicStopped": "Microfone parou: {0}",
   "Minimize": "Minimizar",
   "Fullscreen": "Tela cheia (F11)",

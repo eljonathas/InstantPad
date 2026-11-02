@@ -539,9 +539,8 @@ pub struct FakeConverter {
 }
 
 impl SpeechConverter for FakeConverter {
-    fn start(&self, conversion: &Conversion) -> Result<(), Failure> {
+    fn start(&self, conversion: &Conversion) {
         self.started.lock().unwrap().push(conversion.clone());
-        Ok(())
     }
 
     fn convert(&self, speech: &[f32]) -> Result<Vec<f32>, Failure> {

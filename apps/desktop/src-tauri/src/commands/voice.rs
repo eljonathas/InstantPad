@@ -56,6 +56,18 @@ pub fn delete_cloned_voice(core: State<'_, Core>, id: String) {
 
 #[tauri::command]
 #[specta::specta]
+pub fn open_designer(core: State<'_, Core>) {
+    core.voice.open_designer();
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn close_designer(core: State<'_, Core>) {
+    core.voice.close_designer();
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn preview_designed_voice(core: State<'_, Core>, recipe: VoiceRecipe) {
     core.voice.preview_design(recipe);
 }

@@ -60,6 +60,7 @@ pub enum TextKey {
     InterfaceFullHint,
     Listening,
     MicStopped,
+    MicrophoneBusy,
     Missing,
     NoDriverHint,
     Ok,
@@ -116,6 +117,11 @@ impl Message {
 
     pub fn plain(text: impl Into<String>) -> Self {
         Self::Plain { text: text.into() }
+    }
+
+    /// A limit the user went past, with the number of seconds it allows.
+    pub(crate) fn limit(key: TextKey, seconds: u32) -> Self {
+        Self::with(key, [Self::plain(seconds.to_string())])
     }
 }
 

@@ -2,14 +2,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use instantpad_domain::cloning::{
-    DesignRefusal, MIN_CALIBRATION_SECONDS, VoiceLibrary, VoiceRecipe, Voiceprint,
+    DEFAULT_BLEND, DEFAULT_TIMBRE, DesignRefusal, MIN_CALIBRATION_SECONDS, VoiceLibrary,
+    VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::palette;
 use instantpad_domain::voice::{Conversion, VoiceEffect, VoiceParam, VoiceSettings, VoiceTarget};
 
 use crate::events::{
-    AiStatus, AiView, AppEvent, Calibration, ClonedVoiceView, EffectView, ParamView, VoiceIcon,
-    VoiceView,
+    AiStatus, AiView, AppEvent, Calibration, ClonedVoiceView, DesignerView, EffectView, ParamView,
+    VoiceIcon, VoiceView,
 };
 use crate::message::{Failure, Message, TextKey};
 use crate::ports::{EventSink, VoiceAnalyzer, VoiceChanger, VoiceModels};
@@ -161,10 +162,36 @@ impl Unready {
     }
 }
 
+/// A voice the user picked, by its effect and, for one of their own, its id.
+#[derive(Clone)]
+struct Choice {
+    effect: VoiceEffect,
+    clone_id: Option<String>,
+}
+
+impl Choice {
+    fn of(voice: &VoiceSettings) -> Self {
+        let clone_id = voice.clone_id.clone();
+        Self {
+            effect: voice.effect,
+            clone_id: clone_id.filter(|_| voice.effect == VoiceEffect::Cloned),
+        }
+    }
+}
+
 /// What the user asked for that waits for the AI to be set up.
 enum Waiting {
-    Voice(VoiceSettings),
+    Voice(Choice),
     Cloning,
+}
+
+/// The voice designer while it is open.
+#[derive(Default)]
+struct Designer {
+    /// The voice being tried, which the user hears instead of the effect.
+    preview: Option<VoiceRecipe>,
+    /// What "hear my voice" was before the preview turned it on, while a preview runs.
+    hearing_before: Option<bool>,
 }
 
 /// The effect on the voice, which keeps working on both screens of the app.
@@ -182,8 +209,7 @@ pub struct VoiceSession {
     download: Mutex<Option<u8>>,
     calibration: Mutex<Calibration>,
     waiting: Mutex<Option<Waiting>>,
-    /// A voice being designed, which the user hears instead of the effect until it is saved.
-    preview: Mutex<Option<VoiceRecipe>>,
+    designer: Mutex<Option<Designer>>,
 }
 
 impl VoiceSession {
@@ -206,7 +232,7 @@ impl VoiceSession {
             download: Mutex::new(None),
             calibration: Mutex::new(Calibration::Idle),
             waiting: Mutex::new(None),
-            preview: Mutex::new(None),
+            designer: Mutex::new(None),
         };
         // The models or the cloned voice may be gone since the effect was saved.
         let target = session.settings.lock().voice.target();
@@ -247,8 +273,13 @@ impl VoiceSession {
             None => AiStatus::Missing,
         };
         let waiting = self.waiting().as_ref().map(|waiting| match waiting {
-            Waiting::Voice(voice) => voice_name(voice, &library),
+            Waiting::Voice(choice) => voice_name(choice, &library),
             Waiting::Cloning => Message::text(TextKey::CloneVoice),
+        });
+        let designer = self.designer().as_ref().map(|designer| DesignerView {
+            is_previewing: designer.preview.is_some(),
+            default_timbre: f64::from(DEFAULT_TIMBRE),
+            default_blend: f64::from(DEFAULT_BLEND),
         });
 
         VoiceView {
@@ -262,7 +293,6 @@ impl VoiceSession {
             ai: AiView {
                 status,
                 download_megabytes: self.models.download_megabytes(),
-                is_calibrated: library.own.is_some(),
                 calibration: *self.calibration(),
                 min_calibration_seconds: MIN_CALIBRATION_SECONDS,
                 waiting,
@@ -275,6 +305,7 @@ impl VoiceSession {
                     name: clone.name.clone(),
                 })
                 .collect(),
+            designer,
         }
     }
 
@@ -297,8 +328,15 @@ impl VoiceSession {
     }
 
     pub fn set_hearing(&self, enabled: bool) {
-        self.is_hearing.store(enabled, Ordering::Relaxed);
-        self.changer.set_hearing_voice(enabled);
+        // The user's own choice is what comes back when a preview ends.
+        if let Some(Designer {
+            hearing_before: Some(before),
+            ..
+        }) = &mut *self.designer()
+        {
+            *before = enabled;
+        }
+        self.hear(enabled);
         self.publish();
     }
 
@@ -363,7 +401,12 @@ impl VoiceSession {
             return;
         }
         let mut calibration = self.calibration();
-        if *calibration != Calibration::Idle || !self.recorder.start(Recording::Calibration) {
+        if *calibration != Calibration::Idle {
+            return;
+        }
+        if !self.recorder.start(Recording::Calibration) {
+            let reason = Message::text(TextKey::MicrophoneBusy);
+            self.events.emit(AppEvent::error(reason));
             return;
         }
         *calibration = Calibration::Recording;
@@ -398,24 +441,27 @@ impl VoiceSession {
     /// Deletes a voice for good. A cloned one takes its consent record and the voices designed
     /// from it along.
     pub fn delete_clone(&self, id: &str) {
-        let before = self.library.lock().clone();
-        let removed = self.library.lock().remove(id);
+        let removed = match self.library.change(|library| library.remove(id)) {
+            Ok(removed) => removed,
+            Err(Failure(reason)) => {
+                self.events.emit(AppEvent::error(reason));
+                return;
+            }
+        };
         if removed.is_empty() {
             return;
         }
-        if let Err(Failure(reason)) = self.library.save() {
-            // Still on disk, so it must stay in the app too.
-            *self.library.lock() = before;
-            self.events.emit(AppEvent::error(reason));
-            return;
-        }
-        let mut waiting = self.waiting();
         for id in &removed {
             self.settings.lock().voice.forget_clone(id);
-            if matches!(&*waiting, Some(Waiting::Voice(voice)) if voice.clone_id.as_ref() == Some(id))
-            {
-                *waiting = None;
-            }
+        }
+        let mut waiting = self.waiting();
+        if let Some(Waiting::Voice(Choice {
+            clone_id: Some(waiting_id),
+            ..
+        })) = &*waiting
+            && removed.contains(waiting_id)
+        {
+            *waiting = None;
         }
         drop(waiting);
         self.events
@@ -423,28 +469,70 @@ impl VoiceSession {
         self.apply();
     }
 
-    /// Lets the user hear a voice while designing it, instead of the effect in use.
+    /// Opens the voice designer, which starts from a cloned voice.
+    pub fn open_designer(&self) {
+        if self.library.lock().clones.is_empty() {
+            return;
+        }
+        *self.designer() = Some(Designer::default());
+        self.publish();
+    }
+
+    /// Lets the user hear a voice while designing it, on the headphones, instead of the effect
+    /// in use.
     pub fn preview_design(&self, recipe: VoiceRecipe) {
+        if self.designer().is_none() {
+            return;
+        }
         if let Err(unready) = self.design_conversion(&recipe) {
             self.events.emit(AppEvent::error(unready.message()));
             return;
         }
-        *self.preview() = Some(recipe);
-        self.send_to_engine();
+        let is_hearing = self.is_hearing.load(Ordering::Relaxed);
+        {
+            let mut designer = self.designer();
+            let Some(designer) = designer.as_mut() else {
+                return;
+            };
+            designer.preview = Some(recipe);
+            designer.hearing_before.get_or_insert(is_hearing);
+        }
+        self.hear(true);
+        self.apply();
     }
 
-    /// Back to the effect in use.
+    /// Back to the effect in use, and to the headphones as the user had them.
     pub fn end_preview(&self) {
-        *self.preview() = None;
-        self.send_to_engine();
+        let hearing_before = self.designer().as_mut().and_then(|designer| {
+            designer.preview = None;
+            designer.hearing_before.take()
+        });
+        if let Some(enabled) = hearing_before {
+            self.hear(enabled);
+        }
+        self.apply();
     }
 
-    /// Keeps a designed voice and turns it on.
+    pub fn close_designer(&self) {
+        self.end_preview();
+        *self.designer() = None;
+        self.publish();
+    }
+
+    /// Keeps a designed voice and turns it on. The designer stays open when that fails.
     pub fn save_design(&self, name: &str, recipe: VoiceRecipe) {
-        let design = self.library.lock().design_voice(name, recipe);
-        let design = match design {
-            Ok(design) => design,
-            Err(refusal) => {
+        if self.designer().is_none() {
+            return;
+        }
+        let saved = self.library.change(|library| {
+            let design = library.design_voice(name, recipe)?;
+            let id = design.id.clone();
+            library.designs.push(design);
+            Ok(id)
+        });
+        let id = match saved {
+            Ok(Ok(id)) => id,
+            Ok(Err(refusal)) => {
                 let key = match refusal {
                     DesignRefusal::MissingName => TextKey::CloneMissingName,
                     DesignRefusal::UnknownVoice => TextKey::CloneDeleted,
@@ -452,16 +540,12 @@ impl VoiceSession {
                 self.events.emit(AppEvent::error(Message::text(key)));
                 return;
             }
+            Err(Failure(reason)) => {
+                self.events.emit(AppEvent::error(reason));
+                return;
+            }
         };
-        let id = design.id.clone();
-        self.library.lock().designs.push(design);
-        if let Err(Failure(reason)) = self.library.save() {
-            // Kept only in memory, a retry would add the voice twice.
-            self.library.lock().remove(&id);
-            self.events.emit(AppEvent::error(reason));
-            return;
-        }
-        *self.preview() = None;
+        self.close_designer();
         self.events
             .emit(AppEvent::show(Message::text(TextKey::CloneSaved)));
         self.select_clone(&id);
@@ -482,27 +566,23 @@ impl VoiceSession {
 
     async fn calibrate(&self, speech: Vec<f32>) -> Result<(), Failure> {
         if speech.len() < MIN_CALIBRATION_SECONDS as usize * SPEECH_RATE {
-            let seconds = Message::plain(MIN_CALIBRATION_SECONDS.to_string());
-            let reason = Message::with(TextKey::AiCalibrationTooShort, [seconds]);
+            let reason = Message::limit(TextKey::AiCalibrationTooShort, MIN_CALIBRATION_SECONDS);
             return Err(Failure(reason));
         }
         let own = self.analyzer.voiceprint(speech).await?;
-        let before = self.library.lock().own.replace(own);
-        self.library.save().inspect_err(|_| {
-            // Not on disk, so the app must not use it either.
-            self.library.lock().own = before;
-        })
+        self.library.change(|library| library.own = Some(own))
     }
 
     /// Takes what waited for the AI, once it can run.
     fn resume(&self) {
         let waiting = self.waiting().take();
         match waiting {
-            Some(Waiting::Voice(voice)) => {
-                if self.conversion(voice.target()) == Err(Unready::NotCalibrated) {
-                    *self.waiting() = Some(Waiting::Voice(voice));
+            Some(Waiting::Voice(choice)) => {
+                let candidate = self.candidate(&choice);
+                if self.conversion(candidate.target()) == Err(Unready::NotCalibrated) {
+                    *self.waiting() = Some(Waiting::Voice(choice));
                 } else {
-                    self.switch_to(voice);
+                    self.switch_to(candidate);
                 }
             }
             // The user opens the dialog again, now that the models are here.
@@ -515,7 +595,7 @@ impl VoiceSession {
     fn switch_to(&self, candidate: VoiceSettings) -> bool {
         if let Err(unready) = self.conversion(candidate.target()) {
             if unready != Unready::NoSuchVoice {
-                *self.waiting() = Some(Waiting::Voice(candidate));
+                *self.waiting() = Some(Waiting::Voice(Choice::of(&candidate)));
             }
             self.events.emit(AppEvent::error(unready.message()));
             self.publish();
@@ -525,6 +605,16 @@ impl VoiceSession {
         self.settings.lock().voice = candidate;
         self.apply();
         true
+    }
+
+    /// The settings in use with `choice` picked, so the knobs turned meanwhile stay.
+    fn candidate(&self, choice: &Choice) -> VoiceSettings {
+        let mut candidate = self.settings.lock().voice.clone();
+        match &choice.clone_id {
+            Some(id) => candidate.select_clone(id),
+            None => candidate.select(choice.effect),
+        }
+        candidate
     }
 
     /// The speakers for the AI, or why it cannot speak yet.
@@ -570,10 +660,11 @@ impl VoiceSession {
     fn send_to_engine(&self) {
         let settings = self.settings.lock().voice.clone();
         // A preview whose voices are gone ends by itself, back to the effect.
-        let preview = self
-            .preview()
+        let recipe = self
+            .designer()
             .as_ref()
-            .and_then(|recipe| self.design_conversion(recipe).ok());
+            .and_then(|designer| designer.preview.clone());
+        let preview = recipe.and_then(|recipe| self.design_conversion(&recipe).ok());
         let (chain, conversion) = match preview {
             Some(conversion) => (Some(settings.own_voice_chain()), Some(conversion)),
             // Checked when the effect was picked, and only a delete removes what it needs,
@@ -591,14 +682,19 @@ impl VoiceSession {
         self.publish();
     }
 
+    fn hear(&self, enabled: bool) {
+        self.is_hearing.store(enabled, Ordering::Relaxed);
+        self.changer.set_hearing_voice(enabled);
+    }
+
     fn set_download(&self, percent: Option<u8>) {
         *self.download.lock().expect("download lock poisoned") = percent;
         self.publish();
     }
 
     fn announce(&self) {
-        let settings = self.settings.lock().voice.clone();
-        let name = voice_name(&settings, &self.library.lock());
+        let choice = Choice::of(&self.settings.lock().voice);
+        let name = voice_name(&choice, &self.library.lock());
         self.events.emit(AppEvent::show(name));
     }
 
@@ -610,8 +706,8 @@ impl VoiceSession {
         self.waiting.lock().expect("waiting lock poisoned")
     }
 
-    fn preview(&self) -> MutexGuard<'_, Option<VoiceRecipe>> {
-        self.preview.lock().expect("preview lock poisoned")
+    fn designer(&self) -> MutexGuard<'_, Option<Designer>> {
+        self.designer.lock().expect("designer lock poisoned")
     }
 
     fn publish(&self) {
@@ -619,18 +715,14 @@ impl VoiceSession {
     }
 }
 
-/// The name of the effect `voice` has on, as the effects list shows it.
-fn voice_name(voice: &VoiceSettings, library: &VoiceLibrary) -> Message {
-    let own = voice
-        .clone_id
-        .as_deref()
-        .and_then(|id| library.name(id))
-        .filter(|_| voice.effect == VoiceEffect::Cloned);
+/// The name of a voice, as the effects list shows it.
+fn voice_name(choice: &Choice, library: &VoiceLibrary) -> Message {
+    let own = choice.clone_id.as_deref().and_then(|id| library.name(id));
     match own {
         Some(name) => Message::plain(name),
         None => EFFECTS
             .iter()
-            .find(|info| info.effect == voice.effect)
+            .find(|info| info.effect == choice.effect)
             .map_or(Message::text(TextKey::EffectNatural), |info| {
                 Message::text(info.name)
             }),

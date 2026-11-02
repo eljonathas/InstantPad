@@ -16,9 +16,16 @@ use crate::format::{CHANNELS, downmix, frames_for};
 use crate::worker::Worker;
 
 const CAPACITY: usize = frames_for(2000);
-/// The converter answers late and in pieces, so the output waits until this much has come,
-/// which is about one piece, and it can then bridge the gaps between pieces.
-pub(crate) const PRIME: usize = frames_for(160);
+/// The converter answers late and in pieces of about 140 ms. The output starts once this much
+/// has come, which is less than a piece, so it starts with the first one. Asking for more than
+/// a piece makes it wait for a second one, which is a whole piece of delay, at the start and
+/// again after every time the converter runs late.
+pub(crate) const PRIME: usize = frames_for(100);
+/// Silence before the first voice of a conversion, so that a piece that comes a little late
+/// finds the output still playing. The delay stays about this much longer for the whole
+/// conversion, and every late piece costs a gap, and then that much more delay, without it. On a
+/// 4-core 2.1 GHz processor, 60 ms still ran dry every few seconds and 100 ms rarely did.
+pub(crate) const CUSHION: usize = frames_for(100);
 /// Waiting longer than this means the converter is slower than the voice.
 const MAX_BACKLOG: usize = frames_for(1000);
 const POLL: Duration = Duration::from_millis(10);
@@ -53,6 +60,8 @@ pub(crate) struct AiStage {
     generation: u64,
     /// Whether the output has been waiting for enough converted voice and has begun.
     is_primed: bool,
+    /// What is left of the silence the conversion starts with.
+    cushion: usize,
     stereo: [f32; PIECE * CHANNELS],
 }
 
@@ -70,6 +79,7 @@ impl AiStage {
             self.was_routing = true;
             self.generation = generation;
             self.is_primed = false;
+            self.cushion = CUSHION;
             let waiting = self.from_ai.slots();
             if let Ok(chunk) = self.from_ai.read_chunk(waiting) {
                 chunk.commit_all();
@@ -87,14 +97,17 @@ impl AiStage {
 
             let frames = piece.len() / CHANNELS;
             for frame in &mut self.stereo.as_chunks_mut::<CHANNELS>().0[..frames] {
-                let sample = if self.is_primed {
+                let sample = if !self.is_primed {
+                    0.0
+                } else if self.cushion > 0 {
+                    self.cushion -= 1;
+                    0.0
+                } else {
                     self.from_ai.pop().unwrap_or_else(|_| {
                         // Ran dry: wait for the next piece instead of crackling sample by sample.
                         self.is_primed = false;
                         0.0
                     })
-                } else {
-                    0.0
                 };
                 *frame = [sample; CHANNELS];
             }
@@ -142,6 +155,7 @@ impl AiBridge {
             was_routing: false,
             generation: 0,
             is_primed: false,
+            cushion: 0,
             stereo: [0.0; PIECE * CHANNELS],
         };
         (stage, WorkerEnds { heard, converted })
@@ -430,10 +444,11 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_converted_voice_comes_out_after_priming_as_the_voice_delayed() {
+    fn the_converted_voice_comes_out_after_priming_and_the_cushion_as_the_voice_delayed() {
         let mut rig = Rig::new(Arc::new(FakeConverter::default()));
         rig.bridge.route(Some(&conversion()));
-        let blocks = PRIME / PIECE + 8;
+        let first_voice = (PRIME + CUSHION) / PIECE;
+        let blocks = first_voice + 8;
 
         let mut heard = Vec::new();
         for block in 0..blocks {
@@ -443,14 +458,14 @@ pub(crate) mod tests {
             } else {
                 rig.process(&voice)
             });
-            // Nothing is played until the first block after priming.
+            // Nothing is played until the first block after priming and the cushion.
             rig.settle(
                 (block + 1) * PIECE,
-                block.saturating_sub(PRIME / PIECE - 1) * PIECE,
+                block.saturating_sub(first_voice - 1) * PIECE,
             );
         }
 
-        let (silence, voice) = heard.split_at(PRIME * CHANNELS);
+        let (silence, voice) = heard.split_at((PRIME + CUSHION) * CHANNELS);
         assert!(silence.iter().all(|&sample| sample == 0.0));
         assert_eq!(voice, &ramp(0, 8 * PIECE)[..]);
     }
@@ -476,6 +491,9 @@ pub(crate) mod tests {
         rig.feed(&mono(0, PRIME + PIECE));
         let silence = vec![0.0; PIECE * CHANNELS];
 
+        let cushion: Vec<f32> = (0..CUSHION / PIECE)
+            .flat_map(|_| rig.process(&silence))
+            .collect();
         let played: Vec<f32> = (0..PRIME / PIECE + 1)
             .flat_map(|_| rig.process(&silence))
             .collect();
@@ -485,9 +503,11 @@ pub(crate) mod tests {
         rig.feed(&mono(0, PRIME));
         let resumed = rig.process(&silence);
 
+        assert_eq!(cushion, vec![0.0; CUSHION * CHANNELS]);
         assert_eq!(played, ramp(0, PRIME + PIECE));
         assert_eq!(dry, silence);
         assert_eq!(waiting, silence);
+        // The cushion is only for the start: a late piece is played as soon as it is here.
         assert_eq!(resumed, ramp(0, PIECE));
     }
 
@@ -649,7 +669,10 @@ pub(crate) mod tests {
             rig.bridge.shared.generation.load(Ordering::Relaxed),
             generation
         );
-        // What was converted still plays.
+        // The cushion of the first start plays out, and then what was converted.
+        for _ in 0..CUSHION / PIECE {
+            rig.process(&ramp(0, PIECE));
+        }
         assert_ne!(rig.process(&ramp(0, PIECE)), vec![0.0; PIECE * CHANNELS]);
     }
 

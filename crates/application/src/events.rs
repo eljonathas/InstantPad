@@ -160,7 +160,8 @@ pub enum AiStatus {
 #[serde(rename_all = "camelCase")]
 pub enum Calibration {
     Idle,
-    Recording,
+    /// The AI listens to the user talk, which is all it takes to learn their voice.
+    Listening,
     Analyzing,
 }
 
@@ -171,7 +172,8 @@ pub struct AiView {
     pub status: AiStatus,
     pub download_megabytes: u32,
     pub calibration: Calibration,
-    pub min_calibration_seconds: u32,
+    /// How much of the talk the AI needs it has heard, from 0 to 100.
+    pub heard_percent: u8,
     /// What the user asked for that waits for the AI to be set up. A voice then comes on by
     /// itself; cloning is opened again by the user.
     pub waiting: Option<Message>,
@@ -221,27 +223,16 @@ pub struct DesignerView {
 )]
 pub enum CloneStep {
     Closed,
-    /// The owner of the voice reads and accepts each clause.
-    Terms {
-        clauses: Vec<TextKey>,
-    },
-    /// The owner records a long sample, or picks a file of their voice.
+    /// A long sample of the voice, recorded or picked from a file.
     Sample {
         is_recording: bool,
         min_seconds: u32,
         max_seconds: u32,
         problem: Option<Message>,
     },
-    /// The owner reads the digits aloud, which proves they are at the microphone.
-    Phrase {
-        digits: String,
-        is_recording: bool,
-        max_seconds: u32,
-        problem: Option<Message>,
-    },
     /// The AI is listening to a recording.
     Analyzing,
-    /// The voice passed every check and only needs a name.
+    /// The AI heard the voice, which only needs a name.
     Name,
 }
 

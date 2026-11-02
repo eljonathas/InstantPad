@@ -123,6 +123,9 @@ pub trait VoiceRecorder: Send + Sync {
     /// Mono at 48 kHz. Empty when no microphone was open.
     fn stop_recording(&self) -> Vec<f32>;
 
+    /// What has been recorded so far, mono at 48 kHz, while the recording goes on.
+    fn recorded(&self) -> Vec<f32>;
+
     /// Reads an audio file the user chose, as mono at 48 kHz.
     async fn decode_file(&self, path: &str) -> Result<Vec<f32>, Failure>;
 }
@@ -144,14 +147,8 @@ pub trait VoiceModels: Send + Sync {
 pub trait VoiceAnalyzer: Send + Sync {
     async fn voiceprint(&self, speech: Vec<f32>) -> Result<Voiceprint, Failure>;
 
-    /// What was said, as text.
-    async fn transcribe(&self, speech: Vec<f32>) -> Result<String, Failure>;
-
     /// The voiceprint of a voice that ships with the app.
     fn preset(&self, preset: VoicePreset) -> Voiceprint;
-
-    /// SHA-256 of the speech, in hex, which records what was cloned without keeping it.
-    fn fingerprint(&self, speech: &[f32]) -> String;
 }
 
 /// Turns one voice into another, a stretch at a time. It is far slower than the audio

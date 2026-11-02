@@ -7,7 +7,7 @@
 //! ```
 //!
 //! `INSTANTPAD_VOICE_MODELS` is a model folder the app filled: the ONNX Runtime library and the
-//! OpenVoice and Whisper files. `INSTANTPAD_VOICE_CLIPS` holds mono 48 kHz 16-bit WAV files of
+//! OpenVoice files. `INSTANTPAD_VOICE_CLIPS` holds mono 48 kHz 16-bit WAV files of
 //! English speech: `speaker_a1.wav` and `speaker_a2.wav` are the same person talking, and
 //! `speaker_b1.wav` is someone else.
 
@@ -67,16 +67,6 @@ async fn two_clips_of_one_speaker_have_alike_voiceprints_and_another_speaker_doe
         first.similarity(&second)
     );
     assert!(first.similarity(&other) < first.similarity(&second));
-}
-
-#[tokio::test]
-#[ignore = "needs the downloaded models"]
-async fn speech_is_written_down() {
-    let voices = voices();
-
-    let text = voices.transcribe(clip("speaker_a1.wav")).await.unwrap();
-
-    assert!(!text.trim().is_empty());
 }
 
 #[tokio::test]

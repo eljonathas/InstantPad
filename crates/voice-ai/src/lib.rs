@@ -1,6 +1,5 @@
 //! The AI voices: downloads the models on demand and runs them with ONNX Runtime.
 
-mod fingerprint;
 mod openvoice;
 mod pack;
 mod presets;
@@ -8,7 +7,6 @@ mod resample;
 mod runtime;
 mod stft;
 mod stream;
-mod whisper;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -23,7 +21,6 @@ use crate::openvoice::Spectrogram;
 use crate::resample::{SPEECH_RATE, StreamResampler, resample};
 use crate::runtime::{Cached, load_failed, session};
 use crate::stream::Stream;
-use crate::whisper::Whisper;
 
 // The smallest blocks of speech that 48 kHz and 22.05 kHz divide into, one way and the other.
 const DOWN_BLOCK: usize = 320;
@@ -31,8 +28,8 @@ const UP_BLOCK: usize = 147;
 
 pub struct OnnxVoices {
     folder: PathBuf,
-    /// The only model that stays loaded, because the conversion runs all the time. The others
-    /// serve a calibration or a clone now and then, and are loaded for each.
+    /// The only model that stays loaded, because the conversion runs all the time. The one that
+    /// hears a voice serves a calibration or a clone now and then, and is loaded for each.
     tone_color: Cached,
     requested: Mutex<Option<Conversion>>,
     /// The conversion in progress, which only the thread that converts uses.
@@ -41,6 +38,7 @@ pub struct OnnxVoices {
 
 impl OnnxVoices {
     pub fn new(folder: &Path) -> Self {
+        pack::remove_retired(folder);
         Self {
             folder: folder.to_owned(),
             tone_color: Cached::new(folder, pack::TONE_COLOR),
@@ -92,27 +90,12 @@ impl VoiceAnalyzer for OnnxVoices {
         .await
     }
 
-    async fn transcribe(&self, speech: Vec<f32>) -> Result<String, Failure> {
-        let folder = self.folder.clone();
-        blocking(move || {
-            let speech = resample(&speech, SPEECH_RATE, whisper::RATE);
-            Whisper::load(&folder)?
-                .transcribe(&speech)
-                .map_err(load_failed)
-        })
-        .await
-    }
-
     fn preset(&self, preset: VoicePreset) -> Voiceprint {
         let values = match preset {
             VoicePreset::Feminine => presets::FEMININE,
             VoicePreset::Masculine => presets::MASCULINE,
         };
         Voiceprint::new(values.to_vec())
-    }
-
-    fn fingerprint(&self, speech: &[f32]) -> String {
-        fingerprint::of_speech(speech)
     }
 }
 
@@ -209,34 +192,25 @@ mod tests {
             assert_eq!(preset.values().len(), 256);
             assert!((preset.similarity(preset) - 1.0).abs() < 1e-6);
         }
-        assert!(!feminine.is_same_speaker(&masculine));
+        assert!(feminine.similarity(&masculine) < 0.8);
     }
 
     #[test]
-    fn the_fingerprint_of_a_speech_is_its_sha256() {
-        assert_eq!(
-            empty_folder().fingerprint(&[]),
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        );
-    }
-
-    #[test]
-    fn analyzing_speech_with_models_that_were_not_downloaded_fails_to_load() {
+    fn hearing_a_voice_with_models_that_were_not_downloaded_fails_to_load() {
         let voices = empty_folder();
         assert!(!voices.is_installed());
 
         let runtime = tokio::runtime::Builder::new_current_thread()
             .build()
             .unwrap();
-        let voiceprint = runtime.block_on(voices.voiceprint(vec![0.0; 48_000]));
-        let transcript = runtime.block_on(voices.transcribe(vec![0.0; 48_000]));
+        let failure = runtime
+            .block_on(voices.voiceprint(vec![0.0; 48_000]))
+            .unwrap_err();
 
-        for failure in [voiceprint.unwrap_err(), transcript.unwrap_err()] {
-            let Failure(Message::Text { key, .. }) = failure else {
-                panic!("expected a translated message");
-            };
-            assert_eq!(key, TextKey::AiLoadFailed);
-        }
+        let Failure(Message::Text { key, .. }) = failure else {
+            panic!("expected a translated message");
+        };
+        assert_eq!(key, TextKey::AiLoadFailed);
     }
 
     #[test]

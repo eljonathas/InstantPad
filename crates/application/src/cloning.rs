@@ -1,9 +1,7 @@
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use instantpad_domain::cloning::{
-    Challenge, CloneRefusal, CloneRequest, MAX_PHRASE_SECONDS, MAX_SAMPLE_SECONDS,
-    MIN_SAMPLE_SECONDS, Voiceprint,
+    CloneRefusal, ClonedVoice, MAX_SAMPLE_SECONDS, MIN_SAMPLE_SECONDS, Voiceprint,
 };
 
 use crate::events::{AppEvent, CloneStep};
@@ -13,23 +11,10 @@ use crate::recorder::{Recording, SharedRecorder};
 use crate::voice::{SPEECH_RATE, VoiceSession};
 use crate::voice_library::VoiceLibraryStore;
 
-/// What the owner of the voice agrees to, one clause at a time.
-const CLAUSES: [TextKey; 5] = [
-    TextKey::CloneTermsOwner,
-    TextKey::CloneTermsPresent,
-    TextKey::CloneTermsNoMisuse,
-    TextKey::CloneTermsBiometric,
-    TextKey::CloneTermsRevoke,
-];
-
-/// What was learned about the voice so far. The recordings themselves are never kept.
+/// What was learned about the voice so far. The recording itself is never kept.
 #[derive(Default)]
 struct Draft {
-    owner_name: String,
-    sample: Option<(Voiceprint, String)>,
-    challenge: Challenge,
-    /// The voiceprint and the words of the phrase, once they passed the checks.
-    phrase: Option<(Voiceprint, String)>,
+    sample: Option<Voiceprint>,
 }
 
 struct State {
@@ -49,19 +34,8 @@ fn sample_step(is_recording: bool, problem: Option<Message>) -> CloneStep {
     }
 }
 
-fn phrase_step(challenge: &Challenge, is_recording: bool, problem: Option<Message>) -> CloneStep {
-    CloneStep::Phrase {
-        digits: challenge.digits().to_owned(),
-        is_recording,
-        max_seconds: MAX_PHRASE_SECONDS,
-        problem,
-    }
-}
-
 fn refusal_text(refusal: CloneRefusal) -> Message {
     Message::text(match refusal {
-        CloneRefusal::NotTheSameSpeaker => TextKey::CloneNotTheSameSpeaker,
-        CloneRefusal::WrongPhrase => TextKey::CloneWrongPhrase,
         CloneRefusal::MissingName => TextKey::CloneMissingName,
     })
 }
@@ -70,14 +44,7 @@ fn seconds(speech: &[f32]) -> usize {
     speech.len() / SPEECH_RATE
 }
 
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs())
-}
-
-/// Clones a voice in steps: the terms, a sample, the phrase that proves the owner is present,
-/// and a name. Only the voiceprint and the consent record are kept.
+/// Clones a voice in steps: a sample and a name. Only the voiceprint is kept.
 pub struct CloningSession {
     recorder: Arc<SharedRecorder>,
     analyzer: Arc<dyn VoiceAnalyzer>,
@@ -122,34 +89,11 @@ impl CloningSession {
             self.voice.wait_for_cloning();
             return;
         }
+        // The AI stops listening to the user for the dialog, which needs the microphone.
+        self.voice.hold_microphone(true);
         let mut state = self.state();
         state.generation += 1;
         state.draft = Draft::default();
-        let terms = CloneStep::Terms {
-            clauses: CLAUSES.to_vec(),
-        };
-        self.show(&mut state, terms);
-    }
-
-    /// The owner must accept every clause, and sign with their name.
-    pub fn accept_terms(&self, owner_name: &str, accepted: &[TextKey]) {
-        let mut state = self.state();
-        if !matches!(state.step, CloneStep::Terms { .. }) {
-            return;
-        }
-        let owner_name = owner_name.trim();
-        let refusal = if !CLAUSES.iter().all(|clause| accepted.contains(clause)) {
-            Some(TextKey::CloneTermsRefused)
-        } else if owner_name.is_empty() {
-            Some(TextKey::CloneMissingName)
-        } else {
-            None
-        };
-        if let Some(refusal) = refusal {
-            self.events.emit(AppEvent::error(Message::text(refusal)));
-            return;
-        }
-        state.draft.owner_name = owner_name.to_owned();
         self.show(&mut state, sample_step(false, None));
     }
 
@@ -205,105 +149,16 @@ impl CloningSession {
         }
     }
 
-    pub fn start_phrase(&self) {
-        let mut state = self.state();
-        let is_ready = matches!(
-            state.step,
-            CloneStep::Phrase {
-                is_recording: false,
-                ..
-            }
-        );
-        if is_ready && self.start_recording() {
-            let step = phrase_step(&state.draft.challenge, true, None);
-            self.show(&mut state, step);
-        }
-    }
-
-    pub async fn finish_phrase(&self) {
-        let is_recording = |step: &CloneStep| {
-            matches!(
-                step,
-                CloneStep::Phrase {
-                    is_recording: true,
-                    ..
-                }
-            )
-        };
-        let Some(generation) = self.listen(is_recording) else {
-            return;
-        };
-        let speech = self.recorder.stop(Recording::Cloning);
-        if seconds(&speech) > MAX_PHRASE_SECONDS as usize {
-            let problem = Message::limit(TextKey::PhraseTooLong, MAX_PHRASE_SECONDS);
-            self.retry_phrase(generation, problem);
-            return;
-        }
-
-        let heard = tokio::try_join!(
-            self.analyzer.voiceprint(speech.clone()),
-            self.analyzer.transcribe(speech),
-        );
-        let (phrase, transcript) = match heard {
-            Ok(heard) => heard,
-            Err(Failure(reason)) => {
-                self.retry_phrase(generation, reason);
-                return;
-            }
-        };
-
-        let mut state = self.state();
-        if state.generation != generation {
-            return;
-        }
-        let Some((sample, sample_sha256)) = &state.draft.sample else {
-            return;
-        };
-        let request = CloneRequest {
-            name: "",
-            owner_name: &state.draft.owner_name,
-            sample,
-            sample_sha256,
-            phrase: &phrase,
-            challenge: &state.draft.challenge,
-            transcript: &transcript,
-            now: now(),
-        };
-        match request.verify() {
-            Ok(()) => {
-                state.draft.phrase = Some((phrase, transcript));
-                self.show(&mut state, CloneStep::Name);
-            }
-            Err(refusal) => {
-                drop(state);
-                self.retry_phrase(generation, refusal_text(refusal));
-            }
-        }
-    }
-
     /// Keeps the voice, which then shows among the effects.
     pub fn save(&self, name: &str) {
         let mut state = self.state();
         if state.step != CloneStep::Name {
             return;
         }
-        let draft = &state.draft;
-        let (Some((sample, sample_sha256)), Some((phrase, transcript))) =
-            (&draft.sample, &draft.phrase)
-        else {
+        let Some(sample) = state.draft.sample.clone() else {
             return;
         };
-        let request = CloneRequest {
-            name,
-            owner_name: &draft.owner_name,
-            sample,
-            sample_sha256,
-            phrase,
-            challenge: &draft.challenge,
-            transcript,
-            now: now(),
-        };
-        let voice = match request.clone_voice() {
+        let voice = match ClonedVoice::clone_from(name, sample) {
             Ok(voice) => voice,
             Err(refusal) => {
                 self.events.emit(AppEvent::error(refusal_text(refusal)));
@@ -366,7 +221,6 @@ impl CloningSession {
             return;
         }
 
-        let sample_sha256 = self.analyzer.fingerprint(&speech);
         let voiceprint = self.analyzer.voiceprint(speech).await;
 
         let mut state = self.state();
@@ -375,24 +229,11 @@ impl CloningSession {
         }
         match voiceprint {
             Ok(voiceprint) => {
-                state.draft.sample = Some((voiceprint, sample_sha256));
-                state.draft.challenge = Challenge::new();
-                let step = phrase_step(&state.draft.challenge, false, None);
-                self.show(&mut state, step);
+                state.draft.sample = Some(voiceprint);
+                self.show(&mut state, CloneStep::Name);
             }
             Err(Failure(reason)) => self.show(&mut state, sample_step(false, Some(reason))),
         }
-    }
-
-    /// Asks for new digits, so a recording of the old ones cannot be played back.
-    fn retry_phrase(&self, generation: u64, problem: Message) {
-        let mut state = self.state();
-        if state.generation != generation {
-            return;
-        }
-        state.draft.challenge = Challenge::new();
-        let step = phrase_step(&state.draft.challenge, false, Some(problem));
-        self.show(&mut state, step);
     }
 
     fn show_if_current(&self, generation: u64, step: CloneStep) {
@@ -405,6 +246,7 @@ impl CloningSession {
     /// Closes the dialog, and drops whatever the AI is still listening to for it.
     fn end(&self, state: &mut MutexGuard<'_, State>) {
         self.recorder.stop(Recording::Cloning);
+        self.voice.hold_microphone(false);
         state.generation += 1;
         state.draft = Draft::default();
         self.show(state, CloneStep::Closed);

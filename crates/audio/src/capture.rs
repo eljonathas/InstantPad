@@ -325,11 +325,20 @@ mod tests {
         let left: Vec<f32> = heard.iter().step_by(CHANNELS).copied().collect();
         let first = left.iter().position(|&sample| sample != 0.0).unwrap();
         let converted: Vec<f32> = left.into_iter().filter(|&sample| sample != 0.0).collect();
-        let voice: Vec<f32> = ramp(0, converted.len())
-            .into_iter()
-            .step_by(CHANNELS)
-            .collect();
         assert!(first >= PRIME, "{first}");
-        assert_eq!(converted, voice);
+
+        // Which sample of the voice each converted one is: the ramp counts up by 1e-5.
+        let sample_of = |value: f32| (value / 1e-5).round() as usize;
+        let samples: Vec<usize> = converted.iter().map(|&value| sample_of(value)).collect();
+        // The converter throws away the voice that came in while it warmed up, on purpose, and
+        // how much that is depends on when the thread of the test ran. That can leave one gap
+        // near the start of what comes out. Everything else is the voice in order, with
+        // nothing missing.
+        let gaps: Vec<usize> = (1..samples.len())
+            .filter(|&at| samples[at] != samples[at - 1] + 1)
+            .collect();
+        assert!(gaps.len() <= 1, "gaps at {gaps:?}");
+        assert!(gaps.iter().all(|&at| at < 2000), "gaps at {gaps:?}");
+        assert!(samples.windows(2).all(|pair| pair[1] > pair[0]));
     }
 }

@@ -70,10 +70,15 @@ export async function installTheAi(page: Page) {
   await expect(page.locator(".lcd-main")).toHaveText("AI voices installed.");
 }
 
-/** Picks Feminine AI, downloads the AI and teaches it the user's voice, which then turns it on. */
+/** The page's clock runs through the seconds the AI needs to hear the user talk, and to learn. */
+export async function letTheAiListen(page: Page) {
+  await page.clock.runFor(9000);
+}
+
+/** Picks Feminine AI, downloads the AI and lets it learn the user's voice, which then turns it on. */
 export async function readyTheAi(page: Page) {
   await page.getByRole("button", { name: "Feminine AI", exact: true }).dispatchEvent("pointerdown");
   await page.getByRole("button", { name: "Download" }).click();
-  await recordFor(page, 8);
+  await letTheAiListen(page);
   await expect(page.getByRole("slider", { name: "Pitch" })).toBeVisible();
 }

@@ -120,22 +120,22 @@ Um efeito atrasa sua voz em cerca de 40 ms. **Natural** não acrescenta atraso.
 
 ### Vozes com IA
 
-**Feminina IA** e as vozes clonadas rodam um modelo de IA no seu próprio computador. Nada do que você fala sai dele. Na primeira vez, o app baixa os modelos, cerca de 260 MB, e pede que você leia por alguns segundos para a IA aprender a sua própria voz. Uma voz com IA atrasa sua voz em cerca de um quarto de segundo e precisa de um processador recente. Se o computador não acompanhar, o app avisa e mantém só a parte de tom do efeito.
+**Feminina IA** e as vozes clonadas rodam um modelo de IA no seu próprio computador. Nada do que você fala sai dele. Na primeira vez, o app baixa os modelos, cerca de 180 MB, e a IA aprende a sua própria voz sozinha: na primeira vez que você escolhe uma voz de IA, ela escuta você falar por alguns segundos, sem gravar nada, e a voz liga quando termina. Se a primeira vez foi num lugar barulhento ou em outro microfone, **Aprender minha voz de novo** refaz isso. Uma voz com IA atrasa sua voz em cerca de um terço de segundo e precisa de um processador recente. Se o computador não acompanhar, o app avisa e mantém só a parte de tom do efeito.
 
 ### Clonar uma voz
 
 A tecla **+** depois dos efeitos clona uma voz, para você falar com ela em chamadas e jogos:
 
-1. A pessoa dona da voz lê e aceita cada cláusula do termo e escreve o nome dela. Clonar alguém exige o consentimento explícito dessa pessoa.
-2. A pessoa grava de 20 segundos a 5 minutos de fala natural, sozinha num lugar silencioso, ou você escolhe um arquivo de áudio com a voz dela.
-3. A pessoa lê em voz alta seis números sorteados. O app confere os números e se a voz é a mesma da amostra. Uma gravação de outra pessoa não passa nessa etapa, porque os números não existiam antes.
-4. Você dá um nome à voz.
+1. Você grava de 20 segundos a 5 minutos de fala natural, sozinho num lugar silencioso, ou escolhe um arquivo de áudio com a voz.
+2. Você dá um nome à voz.
 
-O app guarda só a assinatura da voz e o registro do consentimento (nome, data, versão do termo e uma impressão digital da amostra). A gravação em si nunca é guardada. Selecione uma voz clonada e clique em **Excluir voz** para apagá-la, com o consentimento, quando quiser.
+O app guarda só a assinatura da voz. A gravação em si nunca é guardada. Selecione uma voz clonada e clique em **Excluir voz** para apagá-la quando quiser.
+
+O app não confere de quem é a voz, então clone só a sua própria voz ou a de quem concordou. Usar a voz de alguém para se passar por essa pessoa pode ser crime, e a responsabilidade é de quem usa.
 
 #### Dicas para um bom clone
 
-A qualidade do clone depende quase toda da amostra. Grave num lugar silencioso e sem eco, com o microfone das chamadas a um palmo da boca. Fale com naturalidade e varie a entonação, como numa conversa. De 1 a 3 minutos de fala é o ideal, e menos de 30 segundos deixa a voz pobre. Se usar um arquivo, escolha um sem música de fundo e sem compressão forte, porque áudios de aplicativos de mensagem perdem detalhes. Na hora de usar, calibre a sua própria voz no mesmo microfone e ajuste o **Tom** até ficar perto da voz clonada. A IA copia o timbre, mas o ritmo e o jeito de falar continuam sendo seus.
+A qualidade do clone depende quase toda da amostra. Grave num lugar silencioso e sem eco, com o microfone das chamadas a um palmo da boca. Fale com naturalidade e varie a entonação, como numa conversa. De 1 a 3 minutos de fala é o ideal, e menos de 30 segundos deixa a voz pobre. Se usar um arquivo, escolha um sem música de fundo e sem compressão forte, porque áudios de aplicativos de mensagem perdem detalhes. Na hora de usar, deixe a IA aprender a sua própria voz no mesmo microfone e ajuste o **Tom** até ficar perto da voz clonada. A IA copia o timbre, mas o ritmo e o jeito de falar continuam sendo seus.
 
 ### Criar uma voz personalizada
 
@@ -224,6 +224,5 @@ As vozes com IA baixam estes modelos, que não fazem parte do app:
 
 - [ONNX Runtime](https://onnxruntime.ai), da Microsoft, sob a licença MIT.
 - O conversor de timbre do [OpenVoice V2](https://github.com/myshell-ai/OpenVoice), da MyShell, sob a licença MIT, na [exportação ONNX de Hinotsuba](https://huggingface.co/Hinotsuba/OpenVoice-ONNX-v2).
-- O [Whisper base](https://huggingface.co/openai/whisper-base), da OpenAI, sob a Apache License 2.0, na [exportação ONNX da ONNX Community](https://huggingface.co/onnx-community/whisper-base). Ele confere os números lidos ao clonar uma voz.
 
 A voz da **Feminina IA** é a média de dez locutoras do [LibriSpeech](https://www.openslr.org/12) (Panayotov et al., CC BY 4.0), então não é a voz de nenhuma pessoa em particular.

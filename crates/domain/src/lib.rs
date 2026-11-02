@@ -5,5 +5,6 @@ pub mod cloning;
 pub mod hotkeys;
 pub mod palette;
 pub mod sounds;
+pub mod speech;
 pub mod trending;
 pub mod voice;

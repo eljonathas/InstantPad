@@ -16,7 +16,7 @@ use instantpad_application::settings::{AppSettings, Settings};
 use instantpad_application::voice::{VoicePorts, VoiceSession};
 use instantpad_application::voice_library::VoiceLibraryStore;
 use instantpad_domain::cloning::{
-    ClonedVoice, Consent, DesignRefusal, TERMS_VERSION, VoiceLibrary, VoiceRecipe, Voiceprint,
+    ClonedVoice, DesignRefusal, MIN_CALIBRATION_SECONDS, VoiceLibrary, VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::voice::VoiceSettings;
 use instantpad_test_support::fakes::{
@@ -124,6 +124,17 @@ pub struct VoiceWorld {
 }
 
 impl VoiceWorld {
+    /// The user talks for as long as the AI needs, and the AI gets to listen.
+    pub async fn hears_the_user_talk(&self) {
+        *self.recorder.next.lock().unwrap() = talking(MIN_CALIBRATION_SECONDS);
+        self.voice.learn().await;
+    }
+
+    /// Whether the microphone is recording, for the AI or anyone else.
+    pub fn is_listening(&self) -> bool {
+        *self.recorder.is_recording.lock().unwrap()
+    }
+
     /// No AI models and no voices: the app on its first run.
     pub fn new() -> Self {
         Self::resuming(VoiceSettings::default(), VoiceLibrary::default(), false)
@@ -238,19 +249,19 @@ pub fn cloned_voice(id: &str, name: &str) -> ClonedVoice {
         id: id.to_owned(),
         name: name.to_owned(),
         voiceprint: FakeAnalyzer::voice([0.6, 0.8]),
-        consent: Consent {
-            owner_name: "Ana".to_owned(),
-            terms_version: TERMS_VERSION,
-            accepted_at: 0,
-            similarity: 1.0,
-            sample_sha256: "abc".to_owned(),
-        },
     }
 }
 
 /// Mono speech at 48 kHz lasting `seconds`.
 pub fn speech(seconds: u32) -> Vec<f32> {
     vec![0.0; seconds as usize * 48_000]
+}
+
+/// Mono speech at 48 kHz lasting `seconds` in which someone talks the whole time.
+pub fn talking(seconds: u32) -> Vec<f32> {
+    (0..seconds as usize * 48_000)
+        .map(|n| 0.2 * (n as f32 * 0.07).sin() * (1.0 + (n as f32 * 0.0005).sin()) / 2.0)
+        .collect()
 }
 
 /// Polls a future once, which is all that fits while the fakes run on the same thread. `None`

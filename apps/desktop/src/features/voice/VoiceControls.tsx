@@ -55,6 +55,11 @@ export function VoiceControls() {
       )}
       {!isSettingUp && effect?.needsAi && <p className="screen-text voice-note">{t("AiDelayNote")}</p>}
       {!isSettingUp && cloneId && <p className="screen-text voice-note">{t("CloneUsageTip")}</p>}
+      {!isSettingUp && effect?.needsAi && (
+        <button type="button" className="key voice-relearn" onClick={() => void commands.relearnVoice()}>
+          {t("AiRelearn")}
+        </button>
+      )}
       {!isSettingUp && effect && cloneId && (
         <button
           type="button"

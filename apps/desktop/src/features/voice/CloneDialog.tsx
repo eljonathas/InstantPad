@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { pickAudioFiles } from "../../shared/audioFiles";
-import { commands, type CloneStep, type Message, type TextKey } from "../../shared/ipc";
+import { commands, type CloneStep, type Message } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { Dialog, DialogLabel } from "../../shared/ui/Dialog";
@@ -25,49 +25,6 @@ function Buttons({ children }: { children?: ReactNode }) {
       </button>
       {children}
     </div>
-  );
-}
-
-function Terms({ clauses }: { clauses: TextKey[] }) {
-  const { t } = useText();
-  const [accepted, setAccepted] = useState<TextKey[]>([]);
-  const [ownerName, setOwnerName] = useState("");
-  const toggle = (clause: TextKey) =>
-    setAccepted((now) => (now.includes(clause) ? now.filter((item) => item !== clause) : [...now, clause]));
-  const name = ownerName.trim();
-  const isComplete = clauses.every((clause) => accepted.includes(clause)) && name.length > 0;
-
-  return (
-    <>
-      <p className="clone-text">{t("CloneTermsIntro")}</p>
-      <ul className="clone-clauses">
-        {clauses.map((clause) => (
-          <li key={clause}>
-            <label className="clone-clause">
-              <input type="checkbox" checked={accepted.includes(clause)} onChange={() => toggle(clause)} />
-              <span>{t(clause)}</span>
-            </label>
-          </li>
-        ))}
-      </ul>
-      <DialogLabel>{t("CloneOwnerName")}</DialogLabel>
-      <input
-        className="field dialog-field"
-        aria-label={t("CloneOwnerName")}
-        value={ownerName}
-        onChange={(event) => setOwnerName(event.target.value)}
-      />
-      <Buttons>
-        <button
-          type="button"
-          className="key"
-          disabled={!isComplete}
-          onClick={() => void commands.acceptCloneTerms(name, accepted)}
-        >
-          {t("Continue")}
-        </button>
-      </Buttons>
-    </>
   );
 }
 
@@ -101,27 +58,6 @@ function Sample({ step }: { step: Step<"sample"> }) {
           <li key={tip}>{t(tip)}</li>
         ))}
       </ol>
-      <Buttons />
-    </>
-  );
-}
-
-function Phrase({ step }: { step: Step<"phrase"> }) {
-  const { t } = useText();
-
-  return (
-    <>
-      <p className="clone-text">{t("ClonePhraseIntro", [String(step.maxSeconds)])}</p>
-      <p className="clone-digits">{step.digits}</p>
-      <p className="dialog-tip">{t("ClonePhraseTip")}</p>
-      <Problem message={step.problem} />
-      <div className="clone-actions">
-        <RecordKey
-          isRecording={step.isRecording}
-          onStart={() => void commands.startClonePhrase()}
-          onStop={() => void commands.finishClonePhrase()}
-        />
-      </div>
       <Buttons />
     </>
   );
@@ -172,9 +108,7 @@ export function CloneDialog() {
 
   return (
     <Dialog title={t("CloneVoice")} isWide onCancel={() => void commands.closeCloning()}>
-      {step.step === "terms" && <Terms clauses={step.clauses} />}
       {step.step === "sample" && <Sample step={step} />}
-      {step.step === "phrase" && <Phrase step={step} />}
       {step.step === "analyzing" && <Analyzing />}
       {step.step === "name" && <NameVoice />}
     </Dialog>

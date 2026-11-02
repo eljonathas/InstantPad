@@ -431,6 +431,8 @@ impl EventSink for RecordingEvents {
 #[derive(Default)]
 pub struct FakeRecorder {
     pub is_recording: Mutex<bool>,
+    /// How many times a recording started, which also counts starting over.
+    pub starts: Mutex<u32>,
     pub next: Mutex<Vec<f32>>,
     /// What a file decodes to, or `None` for a file that cannot be read.
     pub file: Mutex<Option<Vec<f32>>>,
@@ -441,12 +443,17 @@ pub struct FakeRecorder {
 #[async_trait]
 impl VoiceRecorder for FakeRecorder {
     fn start_recording(&self) {
+        *self.starts.lock().unwrap() += 1;
         *self.is_recording.lock().unwrap() = true;
     }
 
     fn stop_recording(&self) -> Vec<f32> {
         *self.is_recording.lock().unwrap() = false;
         std::mem::take(&mut *self.next.lock().unwrap())
+    }
+
+    fn recorded(&self) -> Vec<f32> {
+        self.next.lock().unwrap().clone()
     }
 
     async fn decode_file(&self, _path: &str) -> Result<Vec<f32>, Failure> {
@@ -489,12 +496,11 @@ impl VoiceModels for FakeModels {
     }
 }
 
-/// Hears the voiceprint and words that tests prepare, whatever the speech.
+/// Hears the voiceprint that tests prepare, whatever the speech.
 #[derive(Default)]
 pub struct FakeAnalyzer {
     /// What the next calls to `voiceprint` give, one each. The analyzer fails when it runs out.
     pub voiceprints: Mutex<Vec<Voiceprint>>,
-    pub transcript: Mutex<String>,
     /// Runs while a voiceprint is being taken, for what the user does meanwhile.
     pub meanwhile: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
 }
@@ -522,19 +528,11 @@ impl VoiceAnalyzer for FakeAnalyzer {
         Ok(voiceprints.remove(0))
     }
 
-    async fn transcribe(&self, _speech: Vec<f32>) -> Result<String, Failure> {
-        Ok(self.transcript.lock().unwrap().clone())
-    }
-
     fn preset(&self, preset: VoicePreset) -> Voiceprint {
         match preset {
             VoicePreset::Feminine => Self::voice([0.0, 1.0]),
             VoicePreset::Masculine => Self::voice([0.0, -1.0]),
         }
-    }
-
-    fn fingerprint(&self, speech: &[f32]) -> String {
-        format!("{} samples", speech.len())
     }
 }
 

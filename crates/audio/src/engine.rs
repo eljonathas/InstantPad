@@ -314,6 +314,10 @@ impl VoiceRecorder for AudioEngine {
         self.recorder.stop()
     }
 
+    fn recorded(&self) -> Vec<f32> {
+        self.recorder.peek()
+    }
+
     async fn decode_file(&self, path: &str) -> Result<Vec<f32>, Failure> {
         let path = path.to_owned();
         tokio::task::spawn_blocking(move || clip::load_speech(&path))

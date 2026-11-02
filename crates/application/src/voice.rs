@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use instantpad_domain::cloning::{
@@ -6,6 +6,7 @@ use instantpad_domain::cloning::{
     VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::palette;
+use instantpad_domain::speech::voiced;
 use instantpad_domain::voice::{Conversion, VoiceEffect, VoiceParam, VoiceSettings, VoiceTarget};
 
 use crate::events::{
@@ -20,6 +21,8 @@ use crate::voice_library::VoiceLibraryStore;
 
 /// The rate of everything the recorder hands over.
 pub(crate) const SPEECH_RATE: usize = 48_000;
+/// Listening that has not heard enough talk by now starts over, so the recording stays small.
+const LISTEN_LIMIT_SECONDS: usize = 40;
 
 struct EffectInfo {
     effect: VoiceEffect,
@@ -208,6 +211,12 @@ pub struct VoiceSession {
     /// How far the AI models have downloaded, while they do.
     download: Mutex<Option<u8>>,
     calibration: Mutex<Calibration>,
+    /// How much of the talk the AI needs it has heard, from 0 to 100.
+    heard_percent: AtomicU8,
+    /// The talk heard before the recording started over, which only grows to what is needed.
+    carried: Mutex<Vec<f32>>,
+    /// Set while the cloning dialog is open, which needs the microphone for itself.
+    is_microphone_held: AtomicBool,
     waiting: Mutex<Option<Waiting>>,
     designer: Mutex<Option<Designer>>,
 }
@@ -231,6 +240,9 @@ impl VoiceSession {
             is_hearing: AtomicBool::new(false),
             download: Mutex::new(None),
             calibration: Mutex::new(Calibration::Idle),
+            heard_percent: AtomicU8::new(0),
+            carried: Mutex::new(Vec::new()),
+            is_microphone_held: AtomicBool::new(false),
             waiting: Mutex::new(None),
             designer: Mutex::new(None),
         };
@@ -294,7 +306,7 @@ impl VoiceSession {
                 status,
                 download_megabytes: self.models.download_megabytes(),
                 calibration: *self.calibration(),
-                min_calibration_seconds: MIN_CALIBRATION_SECONDS,
+                heard_percent: self.heard_percent.load(Ordering::Relaxed),
                 waiting,
             },
             cloned_voices: library
@@ -393,53 +405,155 @@ impl VoiceSession {
         self.publish();
     }
 
-    /// Starts listening to the user, so the AI learns their own voice.
-    pub fn start_calibration(&self) {
-        if !self.models.is_installed() {
-            self.events
-                .emit(AppEvent::error(Unready::NoModels.message()));
+    /// Called every half second while the app runs. The AI learns the voice of the user by
+    /// itself: when an AI voice waits for it, it listens to the microphone, and once the user
+    /// has talked long enough it learns the voice and the AI voice comes on.
+    pub async fn learn(&self) {
+        let state = *self.calibration();
+        match state {
+            Calibration::Idle => self.begin_listening(),
+            Calibration::Listening => self.keep_listening().await,
+            Calibration::Analyzing => {}
+        }
+    }
+
+    /// Asks the AI to learn the voice of the user again, for when the first time was in a noisy
+    /// room or on another microphone. The effect in use waits for it, then comes back on.
+    pub fn relearn(&self) {
+        let voice = self.settings.lock().voice.clone();
+        if !voice.effect.needs_ai() || !self.models.is_installed() {
             return;
         }
-        let mut calibration = self.calibration();
-        if *calibration != Calibration::Idle {
-            return;
-        }
-        if !self.recorder.start(Recording::Calibration) {
-            let reason = Message::text(TextKey::MicrophoneBusy);
+        self.stop_listening();
+        if let Err(Failure(reason)) = self.library.change(|library| library.own = None) {
             self.events.emit(AppEvent::error(reason));
             return;
         }
-        *calibration = Calibration::Recording;
+        *self.waiting() = Some(Waiting::Voice(Choice::of(&voice)));
+        self.settings.lock().voice.select(VoiceEffect::Natural);
+        self.events
+            .emit(AppEvent::show(Message::text(TextKey::AiListening)));
+        self.apply();
+        self.begin_listening();
+    }
+
+    /// The cloning dialog takes the microphone while it is open, and gives it back when it closes.
+    pub(crate) fn hold_microphone(&self, is_held: bool) {
+        self.is_microphone_held.store(is_held, Ordering::Relaxed);
+        if is_held {
+            self.stop_listening();
+        }
+    }
+
+    /// Whether an AI voice waits for the AI to know the user, and nothing else prevents it.
+    fn wants_own_voice(&self) -> bool {
+        self.models.is_installed()
+            && !self.is_microphone_held.load(Ordering::Relaxed)
+            && self.library.lock().own.is_none()
+            && matches!(*self.waiting(), Some(Waiting::Voice(_)))
+    }
+
+    fn begin_listening(&self) {
+        if !self.wants_own_voice() {
+            return;
+        }
+        let mut calibration = self.calibration();
+        // Checked again under the lock: the cloning dialog may have taken the microphone since,
+        // and its `hold_microphone` waits for this lock to stop what it finds listening. The
+        // microphone may also be busy, and the next call tries again.
+        if *calibration != Calibration::Idle
+            || self.is_microphone_held.load(Ordering::Relaxed)
+            || !self.recorder.start(Recording::Calibration)
+        {
+            return;
+        }
+        *calibration = Calibration::Listening;
+        self.carried.lock().expect("carried lock poisoned").clear();
+        self.heard_percent.store(0, Ordering::Relaxed);
         drop(calibration);
         self.publish();
     }
 
-    pub async fn finish_calibration(&self) {
-        {
+    /// The recorder stops while the lock is held, so that no listening starts in between and has
+    /// its recording stopped from under it.
+    fn stop_listening(&self) {
+        let mut calibration = self.calibration();
+        if *calibration != Calibration::Listening {
+            return;
+        }
+        self.recorder.stop(Recording::Calibration);
+        *calibration = Calibration::Idle;
+        self.carried.lock().expect("carried lock poisoned").clear();
+        self.heard_percent.store(0, Ordering::Relaxed);
+        drop(calibration);
+        self.publish();
+    }
+
+    async fn keep_listening(&self) {
+        if !self.wants_own_voice() {
+            self.stop_listening();
+            return;
+        }
+        let heard = self.recorder.peek(Recording::Calibration);
+        let needed = MIN_CALIBRATION_SECONDS as usize * SPEECH_RATE;
+        let talk = self.carried.lock().expect("carried lock poisoned").len()
+            + voiced(&heard, SPEECH_RATE).len();
+        if talk < needed {
+            let percent = (talk * 100 / needed) as u8;
+            let calibration = self.calibration();
+            // Stopped or taken meanwhile, which is not for this call to undo.
+            if *calibration != Calibration::Listening {
+                return;
+            }
+            if heard.len() > LISTEN_LIMIT_SECONDS * SPEECH_RATE {
+                // The recording starts over so it stays small, and keeps the talk heard so far.
+                let speech = self.recorder.stop(Recording::Calibration);
+                self.carried
+                    .lock()
+                    .expect("carried lock poisoned")
+                    .extend(voiced(&speech, SPEECH_RATE));
+                self.recorder.start(Recording::Calibration);
+            }
+            let changed = self.heard_percent.swap(percent, Ordering::Relaxed) != percent;
+            drop(calibration);
+            if changed {
+                self.publish();
+            }
+            return;
+        }
+
+        let speech = {
             let mut calibration = self.calibration();
-            if *calibration != Calibration::Recording {
+            if *calibration != Calibration::Listening {
                 return;
             }
             *calibration = Calibration::Analyzing;
-        }
-        let speech = self.recorder.stop(Recording::Calibration);
+            self.recorder.stop(Recording::Calibration)
+        };
+        self.heard_percent.store(100, Ordering::Relaxed);
         self.publish();
 
-        let result = self.calibrate(speech).await;
+        let mut talk = std::mem::take(&mut *self.carried.lock().expect("carried lock poisoned"));
+        talk.extend(voiced(&speech, SPEECH_RATE));
+        let result = self.learn_from(talk).await;
         *self.calibration() = Calibration::Idle;
+        self.heard_percent.store(0, Ordering::Relaxed);
         match result {
             Ok(()) => {
                 let saved = Message::text(TextKey::AiCalibrationSaved);
                 self.events.emit(AppEvent::show(saved));
                 self.resume();
             }
-            Err(Failure(reason)) => self.events.emit(AppEvent::error(reason)),
+            Err(Failure(reason)) => {
+                // Left waiting, the voice would listen again and fail the same way.
+                *self.waiting() = None;
+                self.events.emit(AppEvent::error(reason));
+            }
         }
         self.publish();
     }
 
-    /// Deletes a voice for good. A cloned one takes its consent record and the voices designed
-    /// from it along.
+    /// Deletes a voice for good. A cloned one takes the voices designed from it along.
     pub fn delete_clone(&self, id: &str) {
         let removed = match self.library.change(|library| library.remove(id)) {
             Ok(removed) => removed,
@@ -564,12 +678,8 @@ impl VoiceSession {
         self.publish();
     }
 
-    async fn calibrate(&self, speech: Vec<f32>) -> Result<(), Failure> {
-        if speech.len() < MIN_CALIBRATION_SECONDS as usize * SPEECH_RATE {
-            let reason = Message::limit(TextKey::AiCalibrationTooShort, MIN_CALIBRATION_SECONDS);
-            return Err(Failure(reason));
-        }
-        let own = self.analyzer.voiceprint(speech).await?;
+    async fn learn_from(&self, talk: Vec<f32>) -> Result<(), Failure> {
+        let own = self.analyzer.voiceprint(talk).await?;
         self.library.change(|library| library.own = Some(own))
     }
 
@@ -581,6 +691,7 @@ impl VoiceSession {
                 let candidate = self.candidate(&choice);
                 if self.conversion(candidate.target()) == Err(Unready::NotCalibrated) {
                     *self.waiting() = Some(Waiting::Voice(choice));
+                    self.begin_listening();
                 } else {
                     self.switch_to(candidate);
                 }
@@ -597,11 +708,21 @@ impl VoiceSession {
             if unready != Unready::NoSuchVoice {
                 *self.waiting() = Some(Waiting::Voice(Choice::of(&candidate)));
             }
-            self.events.emit(AppEvent::error(unready.message()));
+            // Not knowing the user is no error: the AI starts learning their voice right now.
+            let is_learning = unready == Unready::NotCalibrated;
+            self.events.emit(if is_learning {
+                AppEvent::show(Message::text(TextKey::AiListening))
+            } else {
+                AppEvent::error(unready.message())
+            });
             self.publish();
+            if is_learning {
+                self.begin_listening();
+            }
             return false;
         }
         *self.waiting() = None;
+        self.stop_listening();
         self.settings.lock().voice = candidate;
         self.apply();
         true

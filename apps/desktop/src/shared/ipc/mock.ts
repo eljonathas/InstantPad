@@ -258,6 +258,15 @@ export function installMock() {
   }
 
   const active = () => backend.interfaces.find((item) => item.id === backend.activeId)!;
+  /** The empty pads of the interface on screen, in order. */
+  const freeSlots = () => {
+    const taken = new Set(
+      backend.sounds.filter((item) => item.interfaceId === backend.activeId).map((item) => item.slot),
+    );
+    return Array.from({ length: active().rows * active().columns }, (_, index) => index).filter(
+      (index) => !taken.has(index),
+    );
+  };
   const soundAt = (slot: number) =>
     backend.sounds.find((item) => item.interfaceId === backend.activeId && item.slot === slot);
   const label = (slot: number) => String(slot + 1).padStart(2, "0");
@@ -453,13 +462,19 @@ export function installMock() {
       if (backend.activeId === id) activate(backend.interfaces[Math.max(0, index - 1)].id);
       publish();
     },
-    import_file: ({ path, slot }) => {
-      const stem = (path as string)
-        .split(/[/\\]/)
-        .pop()!
-        .replace(/\.[^.]+$/, "");
-      const color = PAD_COLORS[(slot as number) % PAD_COLORS.length];
-      arrive(slot as number, () => place(slot as number, stem, path as string, color));
+    import_files: ({ paths, slot }) => {
+      const files = paths as string[];
+      const first = (slot as number | null) ?? backend.targetSlot ?? freeSlots()[0];
+      const targets = first === undefined ? [] : [first, ...freeSlots().filter((free) => free !== first)];
+      targets.slice(0, files.length).forEach((target, index) => {
+        const stem = files[index]
+          .split(/[/\\]/)
+          .pop()!
+          .replace(/\.[^.]+$/, "");
+        const color = PAD_COLORS[target % PAD_COLORS.length];
+        arrive(target, () => place(target, stem, files[index], color));
+      });
+      if (targets.length < files.length) return fail({ kind: "text", key: "InterfaceFullHint", args: [] });
     },
     swap_pads: ({ fromSlot, toSlot }) => {
       const [from, to] = [soundAt(fromSlot as number), soundAt(toSlot as number)];
@@ -513,13 +528,7 @@ export function installMock() {
     play_in_game: ({ source }) =>
       show({ kind: "text", key: "InGameSound", args: [plain((source as SoundSource).name)] }),
     add_to_pad: ({ source, slot }) => {
-      const taken = new Set(
-        backend.sounds.filter((item) => item.interfaceId === backend.activeId).map((item) => item.slot),
-      );
-      const free = Array.from({ length: active().rows * active().columns }, (_, index) => index).find(
-        (index) => !taken.has(index),
-      );
-      const target = (slot as number | null) ?? backend.targetSlot ?? free;
+      const target = (slot as number | null) ?? backend.targetSlot ?? freeSlots()[0];
       if (target === undefined) return fail({ kind: "text", key: "InterfaceFullHint", args: [] });
       const { name, path, color } = source as SoundSource;
       arrive(target, () => place(target, name, path, color));
@@ -606,7 +615,10 @@ export function installMock() {
     },
     // The dialog plugin: a confirmation always passes, and the pickers answer with a path.
     "plugin:dialog|message": () => "Yes",
-    "plugin:dialog|open": () => "/mock/Music/Applause.mp3",
+    "plugin:dialog|open": ({ options }) =>
+      (options as { multiple?: boolean }).multiple
+        ? ["/mock/Music/Applause.mp3", "/mock/Music/Drum roll.wav"]
+        : "/mock/Music/Applause.mp3",
     "plugin:dialog|save": () => "/mock/Downloads/sound.mp3",
     "plugin:path|resolve_directory": () => "/mock/Music",
     "plugin:path|join": ({ paths }) => (paths as string[]).join("/"),

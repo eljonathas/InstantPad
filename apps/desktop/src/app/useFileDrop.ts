@@ -31,7 +31,7 @@ export function useFileDrop() {
         if (payload.type !== "drop" || payload.paths.length === 0) return;
 
         const slot = padAt(payload.position);
-        if (slot !== null) void commands.importFile(payload.paths[0], slot);
+        if (slot !== null) void commands.importFiles(payload.paths, slot);
       })
       .then((unlisten) => (leaving ? unlisten() : (stop = unlisten)));
 

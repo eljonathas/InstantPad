@@ -45,6 +45,8 @@
   "FavoritesEmpty": "No favorites yet. Use the star on a result, or right-click a pad.",
   "FavoritesOne": "1 favorite",
   "FavoritesTab": "★ Favorites",
+  "FromComputer": "From computer...",
+  "FromComputerHint": "Puts audio files from your computer on the chosen pad and the next free ones.",
   "Game": "Game",
   "GameInstruction": "Open the voice settings of your game or Discord and select \"{0}\" as the microphone.",
   "GameMicrophoneHint": "In the game, choose the microphone: {0}",

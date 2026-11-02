@@ -1,8 +1,8 @@
 mod support;
 
-use instantpad_application::events::DisplayEvent;
+use instantpad_application::events::{DisplayEvent, PadView};
 use instantpad_application::hotkeys::HotkeyCommand;
-use instantpad_application::message::Message;
+use instantpad_application::message::{Message, TextKey};
 use instantpad_application::ports::{PlaybackTag, SoundFileStore};
 use instantpad_domain::board::InterfaceLayout;
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
@@ -93,6 +93,73 @@ async fn pressing_an_empty_pad_waits_for_a_sound_and_placing_clears_it() {
     fill(&world, 4, "a").await;
     assert_eq!(world.board.view().target_slot, None);
     assert_eq!(world.board.pad_for_new_sound().unwrap().slot, 0);
+}
+
+fn names(world: &World) -> Vec<Option<String>> {
+    let view = world.board.view();
+    let name = |pad: &PadView| pad.sound.as_ref().map(|sound| sound.name.clone());
+    view.pads.iter().map(name).collect()
+}
+
+fn paths(files: &[&str]) -> Vec<String> {
+    files
+        .iter()
+        .map(|file| format!("/home/user/{file}"))
+        .collect()
+}
+
+#[tokio::test]
+async fn files_from_the_computer_go_to_the_chosen_pad_and_then_the_free_ones() {
+    let world = World::new();
+    fill(&world, 1, "kept").await;
+
+    let files = paths(&["airhorn.mp3", "bruh.wav", "oof.ogg"]);
+    world.board.import_files(&files, Some(3)).await;
+
+    let names = names(&world);
+    assert_eq!(names[3].as_deref(), Some("airhorn"));
+    assert_eq!(names[0].as_deref(), Some("bruh"));
+    assert_eq!(names[1].as_deref(), Some("kept"));
+    assert_eq!(names[2].as_deref(), Some("oof"));
+    assert!(world.files.exists("store/bruh.wav"));
+}
+
+#[tokio::test]
+async fn files_with_no_chosen_pad_go_to_the_pad_waiting_for_a_sound() {
+    let world = World::new();
+    world.board.press_pad(5).await;
+
+    world
+        .board
+        .import_files(&paths(&["a.mp3", "b.mp3"]), None)
+        .await;
+
+    let names = names(&world);
+    assert_eq!(names[5].as_deref(), Some("a"));
+    assert_eq!(names[0].as_deref(), Some("b"));
+    assert_eq!(world.board.view().target_slot, None);
+}
+
+#[tokio::test]
+async fn files_past_a_full_interface_are_left_out_and_reported() {
+    let world = World::new();
+    world.board.add_interface(InterfaceLayout {
+        rows: 1,
+        columns: 2,
+        ..layout("Small")
+    });
+
+    let files = paths(&["a.mp3", "b.mp3", "c.mp3"]);
+    world.board.import_files(&files, None).await;
+
+    let names = names(&world);
+    assert_eq!(names, [Some("a".to_owned()), Some("b".to_owned())]);
+    assert!(!world.files.exists("store/c.mp3"));
+    let full = Message::text(TextKey::InterfaceFullHint);
+    assert_eq!(
+        world.last_display(),
+        Some(DisplayEvent::Error { message: full })
+    );
 }
 
 #[tokio::test]

@@ -29,6 +29,12 @@
   white-space: nowrap;
 }
 
+/* The keys of the panel are icons, which leaves the room to the search and the list title */
+.browser-key {
+  flex: none;
+  width: var(--key-plus-width);
+}
+
 .browser-more {
   margin-top: var(--space-4);
 }

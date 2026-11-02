@@ -77,7 +77,7 @@ In Discord, set **Input Profile** to **Studio**. Voice Isolation removes everyth
 | Try an online sound on your headphones | The play button on the result (**Listen on your headphones only**) |
 | Play an online sound in the game without saving it | **Mic** on the result (**Play in the game now**) |
 | Mark a favorite | The star on a result, or right-click a pad and choose **Add to favorites** |
-| Use your own file | Drag it from your file manager onto a pad, or right-click the pad and choose **Load audio file...** |
+| Use your own files | Click the folder key next to the search and pick one or more files: they go to the pad you clicked and the next free ones. You can also drag files from your file manager onto a pad, or right-click a pad and choose **Load audio file...** |
 | Save a copy of a sound elsewhere | Right-click its pad and choose **Download to computer...** |
 | Change a pad's shortcut, volume, color or name | Right-click the pad |
 | Rearrange pads | Hold Ctrl and drag |

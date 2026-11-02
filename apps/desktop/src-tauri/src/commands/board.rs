@@ -49,8 +49,12 @@ pub fn delete_interface(core: State<'_, Core>, id: String) {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn import_file(core: State<'_, Core>, path: String, slot: u32) -> Result<(), ()> {
-    core.board.import_file(&path, slot).await;
+pub async fn import_files(
+    core: State<'_, Core>,
+    paths: Vec<String>,
+    slot: Option<u32>,
+) -> Result<(), ()> {
+    core.board.import_files(&paths, slot).await;
     Ok(())
 }
 

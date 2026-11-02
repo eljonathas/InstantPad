@@ -4,6 +4,7 @@ mod commands;
 mod composition;
 mod events;
 mod hotkeys;
+mod installer_step;
 mod updater;
 
 use std::sync::Arc;
@@ -94,6 +95,11 @@ fn show_main_window(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+/// For the installer, which runs the app with a step to do instead of opening it.
+pub fn run_installer_step(args: impl Iterator<Item = String>) -> Option<i32> {
+    installer_step::run(args)
 }
 
 pub fn run() {

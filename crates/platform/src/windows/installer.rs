@@ -37,7 +37,11 @@ pub async fn install(progress: &(dyn Fn(Message) + Send + Sync)) -> Result<(), F
     super::signature::verify(&setup)?;
 
     progress(Message::text(TextKey::DriverOpeningSetup));
-    shell::open_elevated(&setup).map_err(|refusal| match refusal {
+    // The setup decides when the driver is in, so the install ends when it closes.
+    let ran = tokio::task::spawn_blocking(move || shell::run_elevated(&setup))
+        .await
+        .map_err(failed)?;
+    ran.map_err(|refusal| match refusal {
         Refusal::Declined => Failure::text(TextKey::DriverInstallCanceled),
         Refusal::Failed(code) => failed(format!("ShellExecute error {code}")),
     })

@@ -33,19 +33,23 @@ Baixe o arquivo do seu sistema na [última versão](https://github.com/eljonatha
 
 ### Windows
 
-1. Baixe o instalador `.exe` e execute. Ele instala só para o seu usuário e não pede senha de administrador. O app ainda não tem assinatura de código, então o Windows pode exibir um aviso na primeira vez. Clique em **Mais informações** e depois em **Executar assim mesmo**.
-2. Abra o InstantPad, vá em **Ajustes** e clique em **Instalar VB-CABLE**. O InstantPad baixa o driver do site oficial da VB-Audio e abre o instalador dele. Nessa janela, clique em **Install Driver**.
-3. Reinicie o PC. Antes disso o Windows já mostra o driver como funcionando, mas ele só funciona direito depois da reinicialização.
+1. Baixe o instalador `.exe` e execute. O app ainda não tem assinatura de código, então o Windows pode exibir um aviso na primeira vez. Clique em **Mais informações** e depois em **Executar assim mesmo**.
+2. Depois de copiar o app, o instalador procura o VB-CABLE, o cabo virtual, e oferece instalá-lo se ele não estiver no PC. Clique em **Sim**. O Windows pede permissão de administrador, só para o driver, e a janela da VB-Audio abre: clique em **Install Driver**. O VB-CABLE é um donationware da [VB-Audio](https://vb-cable.com).
+3. Escolha **Reiniciar agora** na última tela. O driver só funciona direito depois de reiniciar, e o InstantPad abre sozinho quando você entrar de novo.
 4. O VB-CABLE se define como dispositivo de saída do Windows ao instalar. Abra as configurações de som do Windows e escolha seus fones como saída de novo. Enquanto a saída continuar no cabo, a tela **Ajustes** mostra um aviso com o botão **Abrir configurações de som**.
 
-Se preferir não instalar o app, baixe o `InstantPad-portable.exe`. Ele roda sozinho e não se atualiza. Você ainda precisa do VB-CABLE, então siga os passos 2 a 4.
+Se você pulou o driver na instalação, ou o removeu depois, vá em **Ajustes** e clique em **Instalar VB-CABLE**: o InstantPad baixa o driver do site oficial da VB-Audio, confere a assinatura e abre o instalador dele. Reinicie o PC em seguida.
+
+Se preferir não instalar o app, baixe o `InstantPad-portable.exe`. Ele roda sozinho, não se atualiza e não tem instalador, então instale o VB-CABLE pelo botão em **Ajustes**.
 
 ### macOS
 
-1. Baixe o `.dmg` que combina com o seu Mac: o de Apple silicon para chips M1 e mais novos, o de Intel para Macs mais antigos. Abra e arraste o InstantPad para Aplicativos.
-2. O app ainda não é notarizado, então o macOS o bloqueia na primeira vez. Tente abrir uma vez, depois abra os **Ajustes do Sistema**, vá em **Privacidade e Segurança** e clique em **Abrir Mesmo Assim**.
-3. Permita o acesso ao microfone quando o macOS perguntar.
-4. Instale o [BlackHole 2ch](https://existential.audio/blackhole/), o cabo virtual. O botão **Instalar BlackHole** em **Ajustes** abre a página de download dele. No macOS o InstantPad não usa o VB-CABLE. Depois de instalar, clique em **Atualizar dispositivos**.
+1. Baixe o instalador `.pkg` que combina com o seu Mac: `aarch64` para Apple silicon (M1 e mais novos), `x64` para Macs Intel.
+2. O InstantPad ainda não é notarizado, então o macOS bloqueia o instalador na primeira vez. Abra os **Ajustes do Sistema**, vá em **Privacidade e Segurança**, clique em **Abrir Mesmo Assim** e abra o instalador de novo.
+3. Deixe marcado **BlackHole 2ch (cabo de áudio virtual)** na etapa de tipo de instalação. O instalador baixa o pacote oficial do BlackHole da Existential Audio, confere e instala junto com o app. A opção fica cinza quando o BlackHole já está instalado.
+4. Abra o InstantPad em Aplicativos e permita o acesso ao microfone quando o macOS perguntar.
+
+Também dá para baixar o `.dmg` e arrastar o InstantPad para Aplicativos. Nesse caso, instale o [BlackHole 2ch](https://existential.audio/blackhole/) por conta própria: o botão **Instalar BlackHole** em **Ajustes** abre a página de download dele, e **Atualizar dispositivos** o encontra depois. No macOS o InstantPad não usa o VB-CABLE.
 
 ### Linux
 
@@ -170,7 +174,7 @@ O [CONTRIBUTING.md](CONTRIBUTING.md) explica a estrutura do projeto, os testes e
 
 No Windows o dispositivo virtual é o VB-CABLE, da VB-Audio. O Windows só carrega drivers de áudio assinados pela Microsoft, então o app não consegue criar o próprio. Ele baixa o instalador do site oficial e só o executa se a assinatura digital for da VB-Audio. O VB-CABLE é gratuito, com doação opcional.
 
-No macOS o app não é notarizado, e você mesmo instala o cabo virtual (BlackHole).
+No macOS o app e o instalador não são notarizados, então o macOS pede que você os libere na primeira vez. O instalador `.pkg` baixa o BlackHole para você; com o `.dmg`, você mesmo o instala.
 
 O MyInstants não tem API pública, então o app lê o HTML do site. Se o site mudar, o arquivo a corrigir é o [`parser.rs`](crates/catalog/src/parser.rs).
 

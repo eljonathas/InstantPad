@@ -70,6 +70,19 @@ jobs:
           releaseDraft: true
           args: --target ${{ matrix.target }} --config '{"version":"${{ inputs.version }}"}'
 
+      - name: Build and upload the installer package
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "$TARGET" = aarch64-apple-darwin ]; then arch=arm64 name=aarch64; else arch=x86_64 name=x64; fi
+          package="InstantPad_${VERSION}_${name}.pkg"
+          apps/desktop/src-tauri/macos/build-pkg.sh "target/$TARGET/release/bundle/macos/InstantPad.app" "$VERSION" "$arch" "$package"
+          gh release upload "v$VERSION" "$package" --clobber
+
       - name: Upload the portable executable
         if: runner.os == 'Windows'
         shell: bash

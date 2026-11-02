@@ -1,0 +1,33 @@
+#!/bin/sh
+# Installs BlackHole 2ch, the virtual audio cable that carries the mix into the game. Pinned to one
+# version of the official package, checked by its SHA-256 before it is installed. The Installer
+# runs this as root.
+set -u
+
+VERSION=0.7.1
+SHA256=57b540f27a3e29c37e310e01bee0fdfab76733087e47f997ef9dccf851400dcf
+URL="https://existential.audio/downloads/BlackHole2ch-$VERSION.pkg"
+DRIVER=/Library/Audio/Plug-Ins/HAL/BlackHole2ch.driver
+
+if [ -d "$DRIVER" ]; then
+  exit 0
+fi
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+package="$work/BlackHole2ch.pkg"
+
+# The app is installed whatever happens here, and its settings offer BlackHole again, so a failure
+# is logged rather than reported as a failed install of the app.
+if ! curl --fail --silent --show-error --location --retry 2 --output "$package" "$URL"; then
+  echo "BlackHole was not installed: the download failed"
+  exit 0
+fi
+if ! echo "$SHA256  $package" | shasum -a 256 -c -; then
+  echo "BlackHole was not installed: the download does not match the pinned package"
+  exit 0
+fi
+if ! /usr/sbin/installer -pkg "$package" -target /; then
+  echo "BlackHole was not installed: its installer failed"
+fi
+exit 0

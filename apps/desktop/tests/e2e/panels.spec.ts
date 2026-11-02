@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openApp, row } from "./support";
+import { emptyPad, openApp, pad, row } from "./support";
 
 test.beforeEach(async ({ page }) => openApp(page));
 
@@ -65,6 +65,15 @@ test("the star follows the favorites", async ({ page }) => {
 
   await page.getByRole("tab", { name: /Favorites/ }).click();
   await expect(page.getByRole("status").filter({ hasText: "2 favorites" })).toBeVisible();
+});
+
+test("sounds from the computer go to the chosen pad and the next free one", async ({ page }) => {
+  await emptyPad(page, "04").click();
+
+  await page.getByRole("button", { name: "From computer..." }).click();
+
+  await expect(pad(page, "04 Applause")).toBeVisible();
+  await expect(page.locator(".pad", { hasText: "Drum roll" })).toHaveCount(1);
 });
 
 test("a sound row has no button to save it to the computer", async ({ page }) => {

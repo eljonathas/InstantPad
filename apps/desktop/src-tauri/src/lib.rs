@@ -30,7 +30,7 @@ fn specta_builder() -> Builder<Wry> {
             commands::board::configure_interface,
             commands::board::move_interface,
             commands::board::delete_interface,
-            commands::board::import_file,
+            commands::board::import_files,
             commands::board::swap_pads,
             commands::board::send_to_interface,
             commands::board::rename_pad,

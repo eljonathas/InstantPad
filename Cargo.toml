@@ -17,6 +17,7 @@ instantpad-domain = { path = "crates/domain" }
 instantpad-platform = { path = "crates/platform" }
 instantpad-storage = { path = "crates/storage" }
 instantpad-test-support = { path = "crates/test-support" }
+instantpad-voice-ai = { path = "crates/voice-ai" }
 
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }

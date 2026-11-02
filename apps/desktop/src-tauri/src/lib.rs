@@ -67,8 +67,22 @@ fn specta_builder() -> Builder<Wry> {
             commands::setup::open_sound_settings,
             commands::updates::restart_now,
             commands::voice::select_voice_effect,
+            commands::voice::select_cloned_voice,
             commands::voice::set_voice_param,
             commands::voice::set_hearing_voice,
+            commands::voice::install_voice_ai,
+            commands::voice::start_calibration,
+            commands::voice::finish_calibration,
+            commands::voice::delete_cloned_voice,
+            commands::cloning::open_cloning,
+            commands::cloning::accept_clone_terms,
+            commands::cloning::start_clone_sample,
+            commands::cloning::finish_clone_sample,
+            commands::cloning::import_clone_sample,
+            commands::cloning::start_clone_phrase,
+            commands::cloning::finish_clone_phrase,
+            commands::cloning::save_cloned_voice,
+            commands::cloning::close_cloning,
         ])
         .events(collect_events![BackendEvent, MeterEvent])
         .disable_serde_phases()

@@ -3,6 +3,7 @@
 use std::sync::{Arc, Once};
 
 use instantpad_application::board::BoardSession;
+use instantpad_application::cloning::CloningSession;
 use instantpad_application::events::MeterFrame;
 use instantpad_application::favorites::Favorites;
 use instantpad_application::hotkeys::{HotkeyCommand, HotkeyService};
@@ -13,13 +14,15 @@ use instantpad_application::rows::SoundRows;
 use instantpad_application::settings::Settings;
 use instantpad_application::setup::SetupSession;
 use instantpad_application::updates::UpdateSession;
-use instantpad_application::voice::VoiceSession;
+use instantpad_application::voice::{VoicePorts, VoiceSession};
+use instantpad_application::voice_library::VoiceLibraryStore;
 use instantpad_audio::AudioEngine;
 use instantpad_catalog::MyInstantsCatalog;
 use instantpad_storage::{
     AppDataFolder, FolderSoundStore, JsonBoardRepository, JsonFavoritesRepository,
-    JsonSettingsRepository,
+    JsonSettingsRepository, JsonVoiceLibraryRepository,
 };
+use instantpad_voice_ai::OnnxVoices;
 use tauri::{AppHandle, Manager};
 
 use crate::events::TauriEvents;
@@ -34,7 +37,8 @@ pub struct Core {
     pub rows: SoundRows,
     pub setup: SetupSession,
     pub updates: UpdateSession,
-    pub voice: VoiceSession,
+    pub voice: Arc<VoiceSession>,
+    pub cloning: CloningSession,
     pub settings: Arc<Settings>,
     /// The interface can start more than once, as it does after a reload.
     pub background_work: Once,
@@ -73,7 +77,8 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
 
     let folder = AppDataFolder::resolve(app.path().app_data_dir()?)?;
     let files = Arc::new(FolderSoundStore::new(&folder));
-    let engine = Arc::new(AudioEngine::new(events.clone()));
+    let ai = Arc::new(OnnxVoices::new(folder.voice_models()));
+    let engine = Arc::new(AudioEngine::new(events.clone(), ai.clone()));
 
     let settings = Arc::new(Settings::load(Arc::new(JsonSettingsRepository::new(
         &folder,
@@ -99,9 +104,32 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
         events.clone(),
     ));
 
+    let voices = Arc::new(VoiceLibraryStore::load(Arc::new(
+        JsonVoiceLibraryRepository::new(&folder),
+    )));
+    let voice = Arc::new(VoiceSession::new(
+        VoicePorts {
+            changer: engine.clone(),
+            models: ai.clone(),
+            analyzer: ai.clone(),
+            recorder: engine.clone(),
+        },
+        voices.clone(),
+        settings.clone(),
+        events.clone(),
+    ));
+
     Ok(Core {
         mixer: MixerSession::new(engine.clone(), settings.clone()),
-        voice: VoiceSession::new(engine.clone(), settings.clone(), events.clone()),
+        cloning: CloningSession::new(
+            engine.clone(),
+            ai.clone(),
+            ai,
+            voices,
+            voice.clone(),
+            events.clone(),
+        ),
+        voice,
         rows: SoundRows::new(
             board.clone(),
             library.clone(),

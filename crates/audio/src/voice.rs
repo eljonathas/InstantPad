@@ -4,7 +4,7 @@ use std::f32::consts::TAU;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use instantpad_domain::voice::{PitchShape, VoiceShift};
+use instantpad_domain::voice::{PitchShape, VoiceChain};
 use signalsmith_stretch::Stretch;
 
 use crate::controls::AtomicF32;
@@ -37,8 +37,8 @@ impl VoiceControls {
         }
     }
 
-    pub(crate) fn set(&self, shift: Option<VoiceShift>) {
-        let Some(VoiceShift { pitch, formant }) = shift else {
+    pub(crate) fn set(&self, chain: Option<VoiceChain>) {
+        let Some(VoiceChain { pitch, formant, .. }) = chain else {
             self.is_on.store(false, Ordering::Relaxed);
             return;
         };
@@ -134,6 +134,8 @@ impl VoiceProcessor {
 
 #[cfg(test)]
 mod tests {
+    use instantpad_domain::voice::VoiceColor;
+
     use super::*;
 
     fn tone(frequency: f32, frames: usize) -> Vec<f32> {
@@ -146,7 +148,7 @@ mod tests {
             .collect()
     }
 
-    fn run(shift: Option<VoiceShift>, input: &[f32]) -> Vec<f32> {
+    fn run(shift: Option<VoiceChain>, input: &[f32]) -> Vec<f32> {
         let controls = Arc::new(VoiceControls::new());
         controls.set(shift);
         let mut voice = VoiceProcessor::new(controls);
@@ -173,10 +175,11 @@ mod tests {
         rises as f32 / (settled.len() as f32 / SAMPLE_RATE as f32)
     }
 
-    fn fixed(semitones: f32) -> Option<VoiceShift> {
-        Some(VoiceShift {
+    fn fixed(semitones: f32) -> Option<VoiceChain> {
+        Some(VoiceChain {
             pitch: PitchShape::Fixed { semitones },
             formant: 0.0,
+            color: VoiceColor::default(),
         })
     }
 
@@ -213,13 +216,14 @@ mod tests {
     #[test]
     fn a_pitch_cycle_goes_both_above_and_below_the_voice() {
         let frames = SAMPLE_RATE as usize * 2;
-        let shift = Some(VoiceShift {
+        let shift = Some(VoiceChain {
             pitch: PitchShape::Cycle {
                 low: -7.0,
                 high: 7.0,
                 seconds: 2.0,
             },
             formant: 0.0,
+            color: VoiceColor::default(),
         });
 
         let output = run(shift, &tone(330.0, frames));

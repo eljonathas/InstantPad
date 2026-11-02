@@ -11,6 +11,12 @@ pub fn select_voice_effect(core: State<'_, Core>, effect: VoiceEffect) {
 
 #[tauri::command]
 #[specta::specta]
+pub fn select_cloned_voice(core: State<'_, Core>, id: String) {
+    core.voice.select_clone(&id);
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn set_voice_param(core: State<'_, Core>, param: VoiceParam, value: f64) {
     core.voice.set_param(param, value);
 }
@@ -19,4 +25,30 @@ pub fn set_voice_param(core: State<'_, Core>, param: VoiceParam, value: f64) {
 #[specta::specta]
 pub fn set_hearing_voice(core: State<'_, Core>, enabled: bool) {
     core.voice.set_hearing(enabled);
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn install_voice_ai(core: State<'_, Core>) -> Result<(), ()> {
+    core.voice.install_ai().await;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn start_calibration(core: State<'_, Core>) {
+    core.voice.start_calibration();
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn finish_calibration(core: State<'_, Core>) -> Result<(), ()> {
+    core.voice.finish_calibration().await;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn delete_cloned_voice(core: State<'_, Core>, id: String) {
+    core.voice.delete_clone(&id);
 }

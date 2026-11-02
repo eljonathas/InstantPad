@@ -9,7 +9,7 @@ use std::cell::Cell;
 use std::sync::Arc;
 
 use instantpad_application::ports::PlaybackTag;
-use instantpad_domain::voice::{PitchShape, VoiceShift};
+use instantpad_domain::voice::{PitchShape, VoiceChain, VoiceColor};
 use rtrb::RingBuffer;
 
 use crate::capture::CaptureProcessor;
@@ -207,13 +207,14 @@ fn changing_the_voice_allocates_and_frees_nothing() {
     let callback: Vec<f32> = (0..441 * 2)
         .map(|index| (index as f32 * 0.03).sin() * 0.3)
         .collect();
-    let cycle = VoiceShift {
+    let cycle = VoiceChain {
         pitch: PitchShape::Cycle {
             low: -12.0,
             high: 12.0,
             seconds: 0.2,
         },
         formant: 3.0,
+        color: VoiceColor::default(),
     };
 
     let requests = requests_during(|| {

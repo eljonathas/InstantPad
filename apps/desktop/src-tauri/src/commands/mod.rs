@@ -3,6 +3,7 @@
 pub mod app;
 pub mod board;
 pub mod browser;
+pub mod cloning;
 pub mod mixer;
 pub mod setup;
 pub mod updates;

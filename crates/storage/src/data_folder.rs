@@ -7,18 +7,22 @@ pub struct AppDataFolder {
     root: PathBuf,
     sounds: PathBuf,
     previews: PathBuf,
+    voice_models: PathBuf,
 }
 
 impl AppDataFolder {
     pub fn new(root: PathBuf) -> io::Result<Self> {
         let sounds = root.join("sounds");
         let previews = root.join("previews");
+        let voice_models = root.join("voice-models");
         std::fs::create_dir_all(&sounds)?;
         std::fs::create_dir_all(&previews)?;
+        std::fs::create_dir_all(&voice_models)?;
         Ok(Self {
             root,
             sounds,
             previews,
+            voice_models,
         })
     }
 
@@ -40,5 +44,10 @@ impl AppDataFolder {
 
     pub(crate) fn previews(&self) -> &Path {
         &self.previews
+    }
+
+    /// Where the AI voice models are downloaded to.
+    pub fn voice_models(&self) -> &Path {
+        &self.voice_models
     }
 }

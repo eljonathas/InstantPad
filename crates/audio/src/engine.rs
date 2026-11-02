@@ -11,9 +11,9 @@ use async_trait::async_trait;
 use instantpad_application::message::{Failure, TextKey};
 use instantpad_application::ports::{
     AudioDevice, AudioMix, AudioRouter, EventSink, NowPlaying, PlaybackTag, SoundPlayer,
-    VoiceChanger,
+    SpeechConverter, VoiceChanger, VoiceRecorder,
 };
-use instantpad_domain::voice::VoiceShift;
+use instantpad_domain::voice::{Conversion, VoiceChain};
 use tokio::sync::OnceCell;
 
 use crate::clip::SoundClip;
@@ -102,6 +102,7 @@ struct Microphone {
 /// allocates or waits.
 pub struct AudioEngine {
     events: Arc<dyn EventSink>,
+    converter: Arc<dyn SpeechConverter>,
     clips: Mutex<Clips>,
     started: Mutex<Vec<Started>>,
     microphone: Microphone,
@@ -110,13 +111,14 @@ pub struct AudioEngine {
 }
 
 impl AudioEngine {
-    pub fn new(events: Arc<dyn EventSink>) -> Self {
+    pub fn new(events: Arc<dyn EventSink>, converter: Arc<dyn SpeechConverter>) -> Self {
         let reader = mic::empty_slot();
         let hearing = mic::empty_slot();
         let monitor = Output::new("monitor output", Some(hearing.clone()));
         monitor.controls.mic_enabled.store(false, Ordering::Relaxed);
         Self {
             events,
+            converter,
             clips: Mutex::default(),
             started: Mutex::default(),
             microphone: Microphone {
@@ -277,8 +279,9 @@ impl AudioRouter for AudioEngine {
 }
 
 impl VoiceChanger for AudioEngine {
-    fn set_voice(&self, shift: Option<VoiceShift>) {
-        self.microphone.voice.set(shift);
+    fn set_voice(&self, chain: Option<VoiceChain>, conversion: Option<Conversion>) {
+        let _ = (&self.converter, conversion);
+        self.microphone.voice.set(chain);
     }
 
     fn set_hearing_voice(&self, enabled: bool) {
@@ -286,6 +289,21 @@ impl VoiceChanger for AudioEngine {
             .controls
             .mic_enabled
             .store(enabled, Ordering::Relaxed);
+    }
+}
+
+#[async_trait]
+impl VoiceRecorder for AudioEngine {
+    fn start_recording(&self) {
+        todo!()
+    }
+
+    fn stop_recording(&self) -> Vec<f32> {
+        todo!()
+    }
+
+    async fn decode_file(&self, _path: &str) -> Result<Vec<f32>, Failure> {
+        todo!()
     }
 }
 
@@ -322,7 +340,7 @@ impl AudioMix for AudioEngine {
 #[cfg(test)]
 mod tests {
     use instantpad_test_support::contract;
-    use instantpad_test_support::fakes::RecordingEvents;
+    use instantpad_test_support::fakes::{FakeConverter, RecordingEvents};
 
     use super::*;
     use crate::clip::tests::wav;
@@ -341,7 +359,10 @@ mod tests {
     }
 
     fn engine() -> AudioEngine {
-        AudioEngine::new(Arc::new(RecordingEvents::default()))
+        AudioEngine::new(
+            Arc::new(RecordingEvents::default()),
+            Arc::new(FakeConverter::default()),
+        )
     }
 
     fn heard(mixer: &mut Mixer) -> f32 {

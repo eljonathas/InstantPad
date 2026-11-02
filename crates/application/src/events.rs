@@ -106,6 +106,11 @@ pub enum VoiceIcon {
     Feather,
     Mountain,
     Wave,
+    Flower,
+    Ghost,
+    Horns,
+    Sparkles,
+    Person,
 }
 
 /// A knob of an effect. The interface draws whatever an effect lists here.
@@ -126,18 +131,74 @@ pub struct ParamView {
 #[serde(rename_all = "camelCase")]
 pub struct EffectView {
     pub effect: VoiceEffect,
-    pub name: TextKey,
+    /// Tells the cloned voices apart, which all share [`VoiceEffect::Cloned`].
+    pub clone_id: Option<String>,
+    /// A cloned voice has the name the user gave it.
+    pub name: Message,
     pub icon: VoiceIcon,
     pub color: String,
+    pub needs_ai: bool,
     pub params: Vec<ParamView>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AiStatus {
+    Missing,
+    Downloading { percent: u8 },
+    Ready,
+}
+
+/// What the AI voices need before they can speak.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AiView {
+    pub status: AiStatus,
+    pub download_megabytes: u32,
+    /// The AI knows the user's own voice, which it must remove before adding another.
+    pub is_calibrated: bool,
+    pub is_calibrating: bool,
+    pub min_calibration_seconds: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceView {
     pub active: VoiceEffect,
+    /// The cloned voice in use, when `active` is [`VoiceEffect::Cloned`].
+    pub active_clone_id: Option<String>,
     pub effects: Vec<EffectView>,
     pub is_hearing: bool,
+    pub ai: AiView,
+}
+
+/// Where the user is in cloning a voice. Each step only opens once the one before is done.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(tag = "step", rename_all = "camelCase")]
+pub enum CloneStep {
+    Closed,
+    /// The owner of the voice reads and accepts each clause.
+    Terms {
+        clauses: Vec<TextKey>,
+    },
+    /// The owner records a long sample, or picks a file of their voice.
+    Sample {
+        is_recording: bool,
+        min_seconds: u32,
+        max_seconds: u32,
+        problem: Option<Message>,
+    },
+    /// The owner reads the digits aloud, which proves they are at the microphone.
+    Phrase {
+        digits: String,
+        is_recording: bool,
+        max_seconds: u32,
+        problem: Option<Message>,
+    },
+    /// The AI is listening to a recording.
+    Analyzing,
+    /// The voice passed every check and only needs a name.
+    Name,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
@@ -178,6 +239,7 @@ pub enum AppEvent {
     DriverStatus(Message),
     Update(UpdateView),
     Voice(VoiceView),
+    Cloning(CloneStep),
     Display(DisplayEvent),
 }
 

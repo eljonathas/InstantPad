@@ -8,13 +8,15 @@ use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{
     AppUpdater, AudioDevice, AudioMix, AudioRouter, BoardRepository, CatalogPage, EventSink,
     FavoritesRepository, HotkeyHost, NowPlaying, PlaybackTag, SettingsRepository, SoundCatalog,
-    SoundFileStore, SoundPlayer, SystemAudio, VirtualCable, VoiceChanger,
+    SoundFileStore, SoundPlayer, SpeechConverter, SystemAudio, VirtualCable, VoiceAnalyzer,
+    VoiceChanger, VoiceLibraryRepository, VoiceModels, VoiceRecorder,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
+use instantpad_domain::cloning::{VoiceLibrary, Voiceprint};
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
-use instantpad_domain::voice::VoiceShift;
+use instantpad_domain::voice::{Conversion, VoiceChain, VoicePreset};
 
 pub fn device(id: &str, name: &str) -> AudioDevice {
     AudioDevice {
@@ -165,13 +167,15 @@ impl AudioMix for FakeMix {
 
 #[derive(Default)]
 pub struct FakeVoiceChanger {
-    pub shift: Mutex<Option<VoiceShift>>,
+    pub chain: Mutex<Option<VoiceChain>>,
+    pub conversion: Mutex<Option<Conversion>>,
     pub is_hearing: Mutex<bool>,
 }
 
 impl VoiceChanger for FakeVoiceChanger {
-    fn set_voice(&self, shift: Option<VoiceShift>) {
-        *self.shift.lock().unwrap() = shift;
+    fn set_voice(&self, chain: Option<VoiceChain>, conversion: Option<Conversion>) {
+        *self.chain.lock().unwrap() = chain;
+        *self.conversion.lock().unwrap() = conversion;
     }
 
     fn set_hearing_voice(&self, enabled: bool) {
@@ -414,5 +418,130 @@ pub struct RecordingEvents(pub Mutex<Vec<AppEvent>>);
 impl EventSink for RecordingEvents {
     fn emit(&self, event: AppEvent) {
         self.0.lock().unwrap().push(event);
+    }
+}
+
+/// Hands back whatever `next` holds when a recording stops.
+#[derive(Default)]
+pub struct FakeRecorder {
+    pub is_recording: Mutex<bool>,
+    pub next: Mutex<Vec<f32>>,
+    /// What a file decodes to, or `None` for a file that cannot be read.
+    pub file: Mutex<Option<Vec<f32>>>,
+}
+
+#[async_trait]
+impl VoiceRecorder for FakeRecorder {
+    fn start_recording(&self) {
+        *self.is_recording.lock().unwrap() = true;
+    }
+
+    fn stop_recording(&self) -> Vec<f32> {
+        *self.is_recording.lock().unwrap() = false;
+        std::mem::take(&mut *self.next.lock().unwrap())
+    }
+
+    async fn decode_file(&self, _path: &str) -> Result<Vec<f32>, Failure> {
+        self.file
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(Failure::text(TextKey::SoundOpenFailed))
+    }
+}
+
+#[derive(Default)]
+pub struct FakeModels {
+    pub is_installed: Mutex<bool>,
+    /// Makes the next install fail.
+    pub is_offline: Mutex<bool>,
+}
+
+#[async_trait]
+impl VoiceModels for FakeModels {
+    fn is_installed(&self) -> bool {
+        *self.is_installed.lock().unwrap()
+    }
+
+    fn download_megabytes(&self) -> u32 {
+        260
+    }
+
+    async fn install(&self, progress: &(dyn Fn(u8) + Send + Sync)) -> Result<(), Failure> {
+        if *self.is_offline.lock().unwrap() {
+            return Err(Failure::text(TextKey::AiDownloadFailed));
+        }
+        progress(50);
+        progress(100);
+        *self.is_installed.lock().unwrap() = true;
+        Ok(())
+    }
+}
+
+/// Hears the voiceprint and words that tests prepare, whatever the speech.
+#[derive(Default)]
+pub struct FakeAnalyzer {
+    pub voiceprints: Mutex<Vec<Voiceprint>>,
+    pub transcript: Mutex<String>,
+}
+
+impl FakeAnalyzer {
+    /// A voice the analyzer will hear, one per call to `voiceprint`.
+    pub fn voice(values: [f32; 2]) -> Voiceprint {
+        Voiceprint::new(values.to_vec())
+    }
+}
+
+#[async_trait]
+impl VoiceAnalyzer for FakeAnalyzer {
+    async fn voiceprint(&self, _speech: Vec<f32>) -> Result<Voiceprint, Failure> {
+        let mut voiceprints = self.voiceprints.lock().unwrap();
+        if voiceprints.is_empty() {
+            return Err(Failure::text(TextKey::AiLoadFailed));
+        }
+        Ok(voiceprints.remove(0))
+    }
+
+    async fn transcribe(&self, _speech: Vec<f32>) -> Result<String, Failure> {
+        Ok(self.transcript.lock().unwrap().clone())
+    }
+
+    fn preset(&self, _preset: VoicePreset) -> Voiceprint {
+        Self::voice([0.0, 1.0])
+    }
+
+    fn fingerprint(&self, speech: &[f32]) -> String {
+        format!("{} samples", speech.len())
+    }
+}
+
+/// Gives the speech straight back.
+#[derive(Default)]
+pub struct FakeConverter {
+    pub started: Mutex<Vec<Conversion>>,
+}
+
+impl SpeechConverter for FakeConverter {
+    fn start(&self, conversion: &Conversion) -> Result<(), Failure> {
+        self.started.lock().unwrap().push(conversion.clone());
+        Ok(())
+    }
+
+    fn convert(&self, speech: &[f32]) -> Result<Vec<f32>, Failure> {
+        Ok(speech.to_vec())
+    }
+}
+
+#[derive(Default)]
+pub struct InMemoryVoiceLibrary(pub Mutex<VoiceLibrary>);
+
+impl VoiceLibraryRepository for InMemoryVoiceLibrary {
+    fn load(&self) -> VoiceLibrary {
+        self.0.lock().unwrap().clone()
+    }
+
+    fn save(&self, library: &VoiceLibrary) -> Result<(), Failure> {
+        *self.0.lock().unwrap() = library.clone();
+        Ok(())
     }
 }

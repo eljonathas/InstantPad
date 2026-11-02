@@ -144,14 +144,8 @@ pub trait VoiceModels: Send + Sync {
 pub trait VoiceAnalyzer: Send + Sync {
     async fn voiceprint(&self, speech: Vec<f32>) -> Result<Voiceprint, Failure>;
 
-    /// What was said, as text.
-    async fn transcribe(&self, speech: Vec<f32>) -> Result<String, Failure>;
-
     /// The voiceprint of a voice that ships with the app.
     fn preset(&self, preset: VoicePreset) -> Voiceprint;
-
-    /// SHA-256 of the speech, in hex, which records what was cloned without keeping it.
-    fn fingerprint(&self, speech: &[f32]) -> String;
 }
 
 /// Turns one voice into another, a stretch at a time. It is far slower than the audio

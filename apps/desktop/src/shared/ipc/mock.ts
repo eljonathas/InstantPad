@@ -145,22 +145,13 @@ const BUILT_IN: BuiltIn[] = [
 type Waiting = { kind: "voice"; effect: VoiceEffect; cloneId: string | null } | { kind: "cloning" } | null;
 
 const CLONE_PITCH: [VoiceParam, TextKey][] = [["clonePitch", "ParamPitch"]];
-const AI_DOWNLOAD_MEGABYTES = 255;
+const AI_DOWNLOAD_MEGABYTES = 180;
 const AI_STEP_MS = 60;
 const AI_STEP_PERCENT = 20;
 const MIN_CALIBRATION_SECONDS = 8;
 const MIN_SAMPLE_SECONDS = 20;
 const MAX_SAMPLE_SECONDS = 300;
-const MAX_PHRASE_SECONDS = 20;
 const ANALYZE_MS = 400;
-const CLAUSES: TextKey[] = [
-  "CloneTermsOwner",
-  "CloneTermsPresent",
-  "CloneTermsNoMisuse",
-  "CloneTermsBiometric",
-  "CloneTermsRevoke",
-];
-const MOCK_DIGITS = "482915";
 
 function seedVoice() {
   return {
@@ -547,14 +538,6 @@ export function installMock() {
     problem,
   });
 
-  const phraseStep = (isRecording: boolean, problem: Message | null = null): CloneStep => ({
-    step: "phrase",
-    digits: MOCK_DIGITS,
-    isRecording,
-    maxSeconds: MAX_PHRASE_SECONDS,
-    problem,
-  });
-
   /** The AI listens for a moment, then `next` says where the dialog goes. */
   function analyze(next: () => CloneStep) {
     const generation = cloningGeneration;
@@ -830,7 +813,7 @@ export function installMock() {
       const { ai } = backend.voice;
       if (!ai.isInstalled) return fail(text("AiNotInstalled"));
       if (ai.calibration !== "idle") return;
-      if (isMicrophoneBusy("sample", "phrase")) return fail(text("MicrophoneBusy"));
+      if (isMicrophoneBusy("sample")) return fail(text("MicrophoneBusy"));
       record("calibration");
       ai.calibration = "recording";
       publishVoice();
@@ -875,13 +858,6 @@ export function installMock() {
         return publishVoice();
       }
       cloningGeneration++;
-      showCloning({ step: "terms", clauses: CLAUSES });
-    },
-    accept_clone_terms: ({ ownerName, accepted }) => {
-      if (!CLAUSES.every((clause) => (accepted as TextKey[]).includes(clause))) {
-        return fail(text("CloneTermsRefused"));
-      }
-      if (!(ownerName as string).trim()) return fail(text("CloneMissingName"));
       showCloning(sampleStep(false));
     },
     start_clone_sample: () => {
@@ -896,22 +872,11 @@ export function installMock() {
           ? sampleStep(false, limit("SampleTooShort", MIN_SAMPLE_SECONDS))
           : seconds > MAX_SAMPLE_SECONDS
             ? sampleStep(false, limit("SampleTooLong", MAX_SAMPLE_SECONDS))
-            : phraseStep(false),
+            : { step: "name" },
       );
     },
     // A file is as long as a good sample needs, whatever it holds.
-    import_clone_sample: () => analyze(() => phraseStep(false)),
-    start_clone_phrase: () => {
-      if (isMicrophoneBusy("calibration")) return fail(text("MicrophoneBusy"));
-      record("phrase");
-      showCloning(phraseStep(true));
-    },
-    finish_clone_phrase: () => {
-      const seconds = recordedSeconds("phrase");
-      analyze(() =>
-        seconds > MAX_PHRASE_SECONDS ? phraseStep(false, limit("PhraseTooLong", MAX_PHRASE_SECONDS)) : { step: "name" },
-      );
-    },
+    import_clone_sample: () => analyze(() => ({ step: "name" })),
     save_cloned_voice: ({ name }) => {
       backend.voice.clones.push({ id: `clone-${++counter}`, name: name as string });
       showCloning({ step: "closed" });
@@ -948,7 +913,6 @@ export function installMock() {
     close_cloning: () => {
       cloningGeneration++;
       recordings.delete("sample");
-      recordings.delete("phrase");
       showCloning({ step: "closed" });
     },
     set_one_sound_at_a_time: ({ enabled }) => {

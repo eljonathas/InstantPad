@@ -16,7 +16,7 @@ use instantpad_application::settings::{AppSettings, Settings};
 use instantpad_application::voice::{VoicePorts, VoiceSession};
 use instantpad_application::voice_library::VoiceLibraryStore;
 use instantpad_domain::cloning::{
-    ClonedVoice, Consent, DesignRefusal, TERMS_VERSION, VoiceLibrary, VoiceRecipe, Voiceprint,
+    ClonedVoice, DesignRefusal, VoiceLibrary, VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::voice::VoiceSettings;
 use instantpad_test_support::fakes::{
@@ -238,13 +238,6 @@ pub fn cloned_voice(id: &str, name: &str) -> ClonedVoice {
         id: id.to_owned(),
         name: name.to_owned(),
         voiceprint: FakeAnalyzer::voice([0.6, 0.8]),
-        consent: Consent {
-            owner_name: "Ana".to_owned(),
-            terms_version: TERMS_VERSION,
-            accepted_at: 0,
-            similarity: 1.0,
-            sample_sha256: "abc".to_owned(),
-        },
     }
 }
 

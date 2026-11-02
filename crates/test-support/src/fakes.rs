@@ -489,12 +489,11 @@ impl VoiceModels for FakeModels {
     }
 }
 
-/// Hears the voiceprint and words that tests prepare, whatever the speech.
+/// Hears the voiceprint that tests prepare, whatever the speech.
 #[derive(Default)]
 pub struct FakeAnalyzer {
     /// What the next calls to `voiceprint` give, one each. The analyzer fails when it runs out.
     pub voiceprints: Mutex<Vec<Voiceprint>>,
-    pub transcript: Mutex<String>,
     /// Runs while a voiceprint is being taken, for what the user does meanwhile.
     pub meanwhile: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
 }
@@ -522,19 +521,11 @@ impl VoiceAnalyzer for FakeAnalyzer {
         Ok(voiceprints.remove(0))
     }
 
-    async fn transcribe(&self, _speech: Vec<f32>) -> Result<String, Failure> {
-        Ok(self.transcript.lock().unwrap().clone())
-    }
-
     fn preset(&self, preset: VoicePreset) -> Voiceprint {
         match preset {
             VoicePreset::Feminine => Self::voice([0.0, 1.0]),
             VoicePreset::Masculine => Self::voice([0.0, -1.0]),
         }
-    }
-
-    fn fingerprint(&self, speech: &[f32]) -> String {
-        format!("{} samples", speech.len())
     }
 }
 

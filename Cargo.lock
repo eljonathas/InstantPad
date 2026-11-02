@@ -2157,6 +2157,7 @@ name = "instantpad-domain"
 version = "0.0.0"
 dependencies = [
  "serde",
+ "serde_json",
  "specta",
  "thiserror 2.0.21",
  "uuid",
@@ -2212,7 +2213,6 @@ dependencies = [
  "realfft",
  "reqwest",
  "rubato",
- "serde_json",
  "sha2",
  "tokio",
  "zip",

@@ -16,13 +16,15 @@ use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
 use zip::ZipArchive;
 
-use crate::fingerprint::hex;
-
 pub(crate) const TONE_EXTRACT: &str = "tone_extract.onnx";
 pub(crate) const TONE_COLOR: &str = "tone_color.onnx";
-pub(crate) const WHISPER_ENCODER: &str = "whisper_encoder.onnx";
-pub(crate) const WHISPER_DECODER: &str = "whisper_decoder.onnx";
-pub(crate) const TOKENIZER: &str = "tokenizer.json";
+
+/// Files an earlier version downloaded and no version uses anymore.
+const RETIRED: [&str; 3] = [
+    "whisper_encoder.onnx",
+    "whisper_decoder.onnx",
+    "tokenizer.json",
+];
 
 const STALLED_AFTER: Duration = Duration::from_secs(30);
 const BYTES_PER_MEGABYTE: u64 = 1_000_000;
@@ -149,32 +151,6 @@ static OPENVOICE: [Download; 2] = [
     },
 ];
 
-/// Whisper base (Apache-2.0), shrunk to 8 bits, writes down the phrase the user reads aloud. The
-/// encoder is the unsigned variant, because ONNX Runtime 1.23 cannot run the signed one.
-static WHISPER: [Download; 3] = [
-    Download {
-        name: WHISPER_ENCODER,
-        url: "https://huggingface.co/onnx-community/whisper-base/resolve/27a07b4b52b3a4c5886134bb4320e93e1a4bbc7c/onnx/encoder_model_uint8.onnx",
-        size: 23_201_314,
-        sha256: "5862993336bf33acd23736071aae2b32261d3b1b2f37780194460d4ef974dd46",
-        unpack: None,
-    },
-    Download {
-        name: WHISPER_DECODER,
-        url: "https://huggingface.co/onnx-community/whisper-base/resolve/27a07b4b52b3a4c5886134bb4320e93e1a4bbc7c/onnx/decoder_model_int8.onnx",
-        size: 53_310_178,
-        sha256: "c859636f4463dd5a9ea752546c6c7badeb48ab3e22b340cafef08a15552fcb2e",
-        unpack: None,
-    },
-    Download {
-        name: TOKENIZER,
-        url: "https://huggingface.co/onnx-community/whisper-base/resolve/27a07b4b52b3a4c5886134bb4320e93e1a4bbc7c/tokenizer.json",
-        size: 2_480_466,
-        sha256: "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566",
-        unpack: None,
-    },
-];
-
 /// ONNX Runtime for this computer, or why there is none.
 fn runtime() -> Result<&'static Download, String> {
     let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
@@ -212,10 +188,20 @@ fn is_macos_13_4_or_later(version: &str) -> bool {
 
 /// Everything to download.
 fn files() -> Result<Vec<&'static Download>, String> {
-    Ok(std::iter::once(runtime()?)
-        .chain(&OPENVOICE)
-        .chain(&WHISPER)
-        .collect())
+    Ok(std::iter::once(runtime()?).chain(&OPENVOICE).collect())
+}
+
+/// Deletes what an earlier version downloaded and nothing uses anymore. What cannot be deleted
+/// stays, because it only takes room.
+pub(crate) fn remove_retired(folder: &Path) {
+    for name in RETIRED {
+        let _ = std::fs::remove_file(folder.join(name));
+    }
+}
+
+/// The bytes in hex.
+fn hex(digest: &[u8]) -> String {
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// Where ONNX Runtime is, once downloaded.
@@ -498,7 +484,6 @@ mod tests {
             .iter()
             .map(|runtime| &runtime.download)
             .chain(&OPENVOICE)
-            .chain(&WHISPER)
     }
 
     #[test]
@@ -552,6 +537,22 @@ mod tests {
                 .unwrap();
         }
         assert_eq!(download_megabytes(&folder), 0);
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn the_files_of_earlier_versions_are_deleted_and_the_others_are_left_alone() {
+        let folder = folder("retired");
+        for name in RETIRED.into_iter().chain(["tone_color.onnx"]) {
+            std::fs::write(folder.join(name), b"bytes").unwrap();
+        }
+
+        remove_retired(&folder);
+
+        assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
+        assert!(folder.join("tone_color.onnx").exists());
+        // Nothing left to delete is not a problem.
+        remove_retired(&folder);
         std::fs::remove_dir_all(&folder).unwrap();
     }
 

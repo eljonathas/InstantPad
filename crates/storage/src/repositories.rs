@@ -66,8 +66,7 @@ impl SettingsRepository for JsonSettingsRepository {
     }
 }
 
-/// The user's voiceprint and the cloned voices with their consent records. No recording is
-/// ever kept here.
+/// The user's voiceprint and the cloned voices. No recording is ever kept here.
 pub struct JsonVoiceLibraryRepository(PathBuf);
 
 impl JsonVoiceLibraryRepository {

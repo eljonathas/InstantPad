@@ -82,12 +82,9 @@ fn specta_builder() -> Builder<Wry> {
             commands::voice::end_voice_preview,
             commands::voice::save_designed_voice,
             commands::cloning::open_cloning,
-            commands::cloning::accept_clone_terms,
             commands::cloning::start_clone_sample,
             commands::cloning::finish_clone_sample,
             commands::cloning::import_clone_sample,
-            commands::cloning::start_clone_phrase,
-            commands::cloning::finish_clone_phrase,
             commands::cloning::save_cloned_voice,
             commands::cloning::close_cloning,
         ])

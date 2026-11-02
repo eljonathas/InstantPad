@@ -221,27 +221,16 @@ pub struct DesignerView {
 )]
 pub enum CloneStep {
     Closed,
-    /// The owner of the voice reads and accepts each clause.
-    Terms {
-        clauses: Vec<TextKey>,
-    },
-    /// The owner records a long sample, or picks a file of their voice.
+    /// A long sample of the voice, recorded or picked from a file.
     Sample {
         is_recording: bool,
         min_seconds: u32,
         max_seconds: u32,
         problem: Option<Message>,
     },
-    /// The owner reads the digits aloud, which proves they are at the microphone.
-    Phrase {
-        digits: String,
-        is_recording: bool,
-        max_seconds: u32,
-        problem: Option<Message>,
-    },
     /// The AI is listening to a recording.
     Analyzing,
-    /// The voice passed every check and only needs a name.
+    /// The AI heard the voice, which only needs a name.
     Name,
 }
 

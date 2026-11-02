@@ -1,5 +1,7 @@
 # 0004: A voice is only cloned with its owner present
 
+> Superseded by [0005](0005-voice-cloning-without-checks.md). Kept for what it decided and why it was dropped.
+
 A voice changer that speaks as someone else, live in calls, can be used to deceive people. Cloning had to work for a friend who agrees, and fail for a voice taken from a video or a voice message.
 
 So cloning asks for two proofs, like the professional voice cloning of ElevenLabs:

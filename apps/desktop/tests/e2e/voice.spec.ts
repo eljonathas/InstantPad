@@ -91,7 +91,7 @@ test("an AI voice asks for the download, then for the user's own voice, then sho
   await expect(lcd(page)).toHaveText("Error");
   await expect(page.getByText("AI voices are not installed yet", { exact: false })).toBeVisible();
   await expect(page.locator(".voice-title")).toHaveText("Feminine AI");
-  await expect(page.getByText("one-time download of 255 MB", { exact: false })).toBeVisible();
+  await expect(page.getByText("one-time download of 180 MB", { exact: false })).toBeVisible();
   await expect(page.getByRole("slider", { name: "Pitch" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Natural" })).toHaveAttribute("aria-pressed", "true");
 
@@ -109,7 +109,7 @@ test("an AI voice asks for the download, then for the user's own voice, then sho
   // The backend turns the voice on by itself once it knows the user.
   await expect(feminineAi).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("slider", { name: "Pitch" })).toBeVisible();
-  await expect(page.getByText("about a quarter of a second of delay")).toBeVisible();
+  await expect(page.getByText("about a third of a second of delay")).toBeVisible();
 });
 
 test("choosing another effect leaves the AI setup", async ({ page }) => {

@@ -6,8 +6,7 @@ use instantpad_application::events::{
 use instantpad_application::message::{Message, TextKey};
 use instantpad_application::ports::VoiceAnalyzer;
 use instantpad_domain::cloning::{
-    DEFAULT_BLEND, DEFAULT_TIMBRE, MIN_CALIBRATION_SECONDS, TERMS_VERSION, VoiceLibrary,
-    VoiceRecipe, Voiceprint,
+    DEFAULT_BLEND, DEFAULT_TIMBRE, MIN_CALIBRATION_SECONDS, VoiceLibrary, VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::voice::{
     PitchShape, VoiceEffect, VoiceParam, VoicePreset, VoiceSettings, VoiceTarget,
@@ -508,52 +507,6 @@ fn the_knob_of_a_clone_changes_its_pitch() {
     let view = world.voice.view();
     let clone = view.effects.last().unwrap();
     assert_eq!(clone.params[0].text, "+8.0 st");
-}
-
-#[test]
-fn voices_cloned_under_older_terms_are_deleted_for_good_at_the_start() {
-    let mut old = cloned_voice("old", "Old");
-    old.consent.terms_version = TERMS_VERSION - 1;
-    let library = VoiceLibrary {
-        own: Some(own_voice()),
-        clones: vec![old, cloned_voice("a", "Ana")],
-        ..VoiceLibrary::default()
-    };
-
-    let world = VoiceWorld::resuming(VoiceSettings::default(), library, true);
-
-    let ids: Vec<_> = world
-        .library
-        .lock()
-        .clones
-        .iter()
-        .map(|c| c.id.clone())
-        .collect();
-    assert_eq!(ids, ["a"]);
-    let kept = world.repository.library.lock().unwrap().clone();
-    assert_eq!(kept.ids(), ["a"]);
-    assert_eq!(kept.own, Some(own_voice()));
-    assert_eq!(
-        world.voice.view().effects.len(),
-        VoiceEffect::BUILT_IN.len() + 1
-    );
-}
-
-#[test]
-fn a_saved_clone_under_older_terms_starts_as_natural() {
-    let mut old = cloned_voice("old", "Old");
-    old.consent.terms_version = TERMS_VERSION - 1;
-    let library = VoiceLibrary {
-        own: Some(own_voice()),
-        clones: vec![old],
-        ..VoiceLibrary::default()
-    };
-    let mut voice = VoiceSettings::default();
-    voice.select_clone("old");
-
-    let world = VoiceWorld::resuming(voice, library, true);
-
-    assert_eq!(world.voice.view().active, VoiceEffect::Natural);
 }
 
 #[test]

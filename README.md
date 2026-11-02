@@ -120,18 +120,18 @@ An effect delays your voice by about 40 ms. **Natural** adds no delay.
 
 ### AI voices
 
-**Feminine AI** and cloned voices run an AI model on your own computer. Nothing you say leaves it. The first time, the app downloads the models, about 260 MB, and asks you to read for a few seconds so the AI learns your own voice. An AI voice delays your voice by about a quarter of a second, and it needs a recent processor. If your computer cannot keep up, the app warns you and keeps only the pitch part of the effect.
+**Feminine AI** and cloned voices run an AI model on your own computer. Nothing you say leaves it. The first time, the app downloads the models, about 180 MB, and asks you to read for a few seconds so the AI learns your own voice. An AI voice delays your voice by about a third of a second, and it needs a recent processor. If your computer cannot keep up, the app warns you and keeps only the pitch part of the effect.
 
 ### Cloning a voice
 
 The **+** key after the effects clones a voice, so you can speak with it in calls and games:
 
-1. The owner of the voice reads and accepts each clause of the terms and writes their name. Cloning someone needs their explicit consent.
-2. The owner records 20 seconds to 5 minutes of natural speech, alone in a quiet room, or you pick an audio file of their voice.
-3. The owner reads six random digits aloud. The app checks the digits and that the voice is the same one in the sample. A recording of someone else cannot pass this, because the digits did not exist before.
-4. You name the voice.
+1. You record 20 seconds to 5 minutes of natural speech, alone in a quiet room, or pick an audio file of the voice.
+2. You name the voice.
 
-The app keeps only the voiceprint and the consent record (name, date, version of the terms and a fingerprint of the sample). The recording itself is never stored. Select a cloned voice and click **Delete voice** to remove it, with its consent, at any time.
+The app keeps only the voiceprint. The recording itself is never stored. Select a cloned voice and click **Delete voice** to remove it at any time.
+
+The app does not check who a voice belongs to, so clone only your own voice or one whose owner agreed. Using someone's voice to pass yourself off as them can be a crime, and it is on you.
 
 #### Tips for a good clone
 
@@ -224,6 +224,5 @@ The AI voices download these models, which are not part of the app:
 
 - [ONNX Runtime](https://onnxruntime.ai) by Microsoft, under the MIT License.
 - The tone color converter of [OpenVoice V2](https://github.com/myshell-ai/OpenVoice) by MyShell, under the MIT License, in the [ONNX export by Hinotsuba](https://huggingface.co/Hinotsuba/OpenVoice-ONNX-v2).
-- [Whisper base](https://huggingface.co/openai/whisper-base) by OpenAI, under the Apache License 2.0, in the [ONNX export by ONNX Community](https://huggingface.co/onnx-community/whisper-base). It checks the digits read while cloning a voice.
 
 The voice of **Feminine AI** is the average of ten speakers of [LibriSpeech](https://www.openslr.org/12) (Panayotov et al., CC BY 4.0), so it is nobody's voice in particular.

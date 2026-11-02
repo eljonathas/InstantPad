@@ -1,0 +1,36 @@
+name: Publish release
+
+# Publishes the draft that `Release desktop` left, with the notes in docs/releases/<version>.md.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version of the draft, such as 2.1.0
+        required: true
+      commit:
+        description: Commit the draft was built from, which the tag points to
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --notes-file "docs/releases/$VERSION.md" --target "$COMMIT" --draft=false --latest

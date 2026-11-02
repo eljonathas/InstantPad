@@ -69,7 +69,7 @@ Pull requests are squash merged, so the title becomes the commit on `main`. CI r
 
 Write the description in the imperative mood, in lowercase, with no period at the end.
 
-Releases are started by hand with the `Release desktop` workflow, which leaves a draft to review. `main` must always be ready to ship.
+Releases are started by hand with the `Release desktop` workflow, which leaves a draft to review. Write the notes in `docs/releases/<version>.md` and run `Publish release` to publish it. `main` must always be ready to ship.
 
 ## Pull requests
 

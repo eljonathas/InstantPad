@@ -487,7 +487,6 @@ export function installMock() {
             : { kind: "downloading", percent: ai.percent },
         downloadMegabytes: AI_DOWNLOAD_MEGABYTES,
         calibration: ai.calibration,
-        minCalibrationSeconds: MIN_CALIBRATION_SECONDS,
         heardPercent: Math.floor(ai.heard),
         waiting: waitingName,
       },

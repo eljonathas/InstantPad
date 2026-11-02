@@ -89,7 +89,6 @@ export type AiView = {
 	status: AiStatus,
 	downloadMegabytes: number,
 	calibration: Calibration,
-	minCalibrationSeconds: number,
 	/**  How much of the talk the AI needs it has heard, from 0 to 100. */
 	heardPercent: number,
 	/**

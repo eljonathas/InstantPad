@@ -1,7 +1,6 @@
 {
   "AddToPad": "+ Pad",
   "AiCalibrationSaved": "Sua voz foi aprendida. As vozes de IA estão prontas.",
-  "AiCalibrationTooShort": "Curto demais para aprender sua voz. Fale por pelo menos {0} segundos.",
   "AiDelayNote": "As vozes de IA somam cerca de um terço de segundo de atraso.",
   "AiDownload": "Baixar",
   "AiDownloadFailed": "Não foi possível baixar as vozes de IA: {0}",

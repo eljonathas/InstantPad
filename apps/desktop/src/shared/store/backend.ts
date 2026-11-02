@@ -92,7 +92,6 @@ let state: BackendState = {
       downloadMegabytes: 0,
       calibration: "idle",
       waiting: null,
-      minCalibrationSeconds: 0,
       heardPercent: 0,
     },
   },

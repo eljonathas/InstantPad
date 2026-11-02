@@ -213,6 +213,8 @@ pub struct VoiceSession {
     calibration: Mutex<Calibration>,
     /// How much of the talk the AI needs it has heard, from 0 to 100.
     heard_percent: AtomicU8,
+    /// The talk heard before the recording started over, which only grows to what is needed.
+    carried: Mutex<Vec<f32>>,
     /// Set while the cloning dialog is open, which needs the microphone for itself.
     is_microphone_held: AtomicBool,
     waiting: Mutex<Option<Waiting>>,
@@ -239,6 +241,7 @@ impl VoiceSession {
             download: Mutex::new(None),
             calibration: Mutex::new(Calibration::Idle),
             heard_percent: AtomicU8::new(0),
+            carried: Mutex::new(Vec::new()),
             is_microphone_held: AtomicBool::new(false),
             waiting: Mutex::new(None),
             designer: Mutex::new(None),
@@ -303,7 +306,6 @@ impl VoiceSession {
                 status,
                 download_megabytes: self.models.download_megabytes(),
                 calibration: *self.calibration(),
-                min_calibration_seconds: MIN_CALIBRATION_SECONDS,
                 heard_percent: self.heard_percent.load(Ordering::Relaxed),
                 waiting,
             },
@@ -456,25 +458,34 @@ impl VoiceSession {
             return;
         }
         let mut calibration = self.calibration();
-        // The microphone may be busy, and the next call tries again.
-        if *calibration != Calibration::Idle || !self.recorder.start(Recording::Calibration) {
+        // Checked again under the lock: the cloning dialog may have taken the microphone since,
+        // and its `hold_microphone` waits for this lock to stop what it finds listening. The
+        // microphone may also be busy, and the next call tries again.
+        if *calibration != Calibration::Idle
+            || self.is_microphone_held.load(Ordering::Relaxed)
+            || !self.recorder.start(Recording::Calibration)
+        {
             return;
         }
         *calibration = Calibration::Listening;
-        drop(calibration);
+        self.carried.lock().expect("carried lock poisoned").clear();
         self.heard_percent.store(0, Ordering::Relaxed);
+        drop(calibration);
         self.publish();
     }
 
+    /// The recorder stops while the lock is held, so that no listening starts in between and has
+    /// its recording stopped from under it.
     fn stop_listening(&self) {
         let mut calibration = self.calibration();
         if *calibration != Calibration::Listening {
             return;
         }
-        *calibration = Calibration::Idle;
-        drop(calibration);
         self.recorder.stop(Recording::Calibration);
+        *calibration = Calibration::Idle;
+        self.carried.lock().expect("carried lock poisoned").clear();
         self.heard_percent.store(0, Ordering::Relaxed);
+        drop(calibration);
         self.publish();
     }
 
@@ -484,32 +495,47 @@ impl VoiceSession {
             return;
         }
         let heard = self.recorder.peek(Recording::Calibration);
-        let talk = voiced(&heard, SPEECH_RATE).len();
         let needed = MIN_CALIBRATION_SECONDS as usize * SPEECH_RATE;
+        let talk = self.carried.lock().expect("carried lock poisoned").len()
+            + voiced(&heard, SPEECH_RATE).len();
         if talk < needed {
-            let mut percent = (talk * 100 / needed) as u8;
-            if heard.len() > LISTEN_LIMIT_SECONDS * SPEECH_RATE {
-                self.recorder.start(Recording::Calibration);
-                percent = 0;
+            let percent = (talk * 100 / needed) as u8;
+            let calibration = self.calibration();
+            // Stopped or taken meanwhile, which is not for this call to undo.
+            if *calibration != Calibration::Listening {
+                return;
             }
-            if self.heard_percent.swap(percent, Ordering::Relaxed) != percent {
+            if heard.len() > LISTEN_LIMIT_SECONDS * SPEECH_RATE {
+                // The recording starts over so it stays small, and keeps the talk heard so far.
+                let speech = self.recorder.stop(Recording::Calibration);
+                self.carried
+                    .lock()
+                    .expect("carried lock poisoned")
+                    .extend(voiced(&speech, SPEECH_RATE));
+                self.recorder.start(Recording::Calibration);
+            }
+            let changed = self.heard_percent.swap(percent, Ordering::Relaxed) != percent;
+            drop(calibration);
+            if changed {
                 self.publish();
             }
             return;
         }
 
-        {
+        let speech = {
             let mut calibration = self.calibration();
             if *calibration != Calibration::Listening {
                 return;
             }
             *calibration = Calibration::Analyzing;
-        }
-        let speech = self.recorder.stop(Recording::Calibration);
+            self.recorder.stop(Recording::Calibration)
+        };
         self.heard_percent.store(100, Ordering::Relaxed);
         self.publish();
 
-        let result = self.learn_from(voiced(&speech, SPEECH_RATE)).await;
+        let mut talk = std::mem::take(&mut *self.carried.lock().expect("carried lock poisoned"));
+        talk.extend(voiced(&speech, SPEECH_RATE));
+        let result = self.learn_from(talk).await;
         *self.calibration() = Calibration::Idle;
         self.heard_percent.store(0, Ordering::Relaxed);
         match result {
@@ -527,8 +553,7 @@ impl VoiceSession {
         self.publish();
     }
 
-    /// Deletes a voice for good. A cloned one takes its consent record and the voices designed
-    /// from it along.
+    /// Deletes a voice for good. A cloned one takes the voices designed from it along.
     pub fn delete_clone(&self, id: &str) {
         let removed = match self.library.change(|library| library.remove(id)) {
             Ok(removed) => removed,

@@ -172,7 +172,6 @@ pub struct AiView {
     pub status: AiStatus,
     pub download_megabytes: u32,
     pub calibration: Calibration,
-    pub min_calibration_seconds: u32,
     /// How much of the talk the AI needs it has heard, from 0 to 100.
     pub heard_percent: u8,
     /// What the user asked for that waits for the AI to be set up. A voice then comes on by

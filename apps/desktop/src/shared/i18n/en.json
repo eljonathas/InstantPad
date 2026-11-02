@@ -1,7 +1,6 @@
 {
   "AddToPad": "+ Pad",
   "AiCalibrationSaved": "Your voice was learned. AI voices are ready.",
-  "AiCalibrationTooShort": "Too short to learn your voice. Speak for at least {0} seconds.",
   "AiDelayNote": "AI voices add about a third of a second of delay.",
   "AiDownload": "Download",
   "AiDownloadFailed": "Could not download the AI voices: {0}",

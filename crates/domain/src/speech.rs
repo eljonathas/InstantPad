@@ -15,7 +15,8 @@ const BRIDGED_FRAMES: usize = 8;
 /// second. The room is what the quietest tenth of the recording sounds like, so a fan or a
 /// steady hum is not taken for a voice, and neither are pauses or a click of the keyboard.
 pub fn voiced(speech: &[f32], rate: usize) -> Vec<f32> {
-    let frame = rate * FRAME_MILLISECONDS / 1000;
+    // A rate too low for a frame still makes one of a single sample, which never panics.
+    let frame = (rate * FRAME_MILLISECONDS / 1000).max(1);
     let frames: Vec<&[f32]> = speech.chunks_exact(frame).collect();
     if frames.is_empty() {
         return Vec::new();

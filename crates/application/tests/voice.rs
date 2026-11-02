@@ -1290,16 +1290,51 @@ async fn talk_in_pieces_with_silences_between_adds_up() {
 }
 
 #[tokio::test]
-async fn listening_that_hears_too_little_talk_for_too_long_starts_over() {
+async fn listening_that_hears_too_little_talk_for_too_long_starts_over_and_keeps_the_talk_heard() {
     let world = VoiceWorld::installed();
     world.voice.select(VoiceEffect::FeminineAi);
     assert_eq!(*world.recorder.starts.lock().unwrap(), 1);
 
-    *world.recorder.next.lock().unwrap() = speech(41);
+    *world.recorder.next.lock().unwrap() = [talking(4), speech(41)].concat();
     world.voice.learn().await;
 
     assert_eq!(*world.recorder.starts.lock().unwrap(), 2);
-    assert_eq!(world.voice.view().ai.calibration, Calibration::Listening);
+    let view = world.voice.view();
+    assert_eq!(view.ai.calibration, Calibration::Listening);
+    assert_eq!(view.ai.heard_percent, 50);
+    assert!(world.is_listening());
+}
+
+#[tokio::test]
+async fn the_talk_kept_through_a_restart_adds_up_with_the_talk_after_it() {
+    let world = VoiceWorld::installed();
+    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
+    world.voice.select(VoiceEffect::FeminineAi);
+    *world.recorder.next.lock().unwrap() = [talking(4), speech(41)].concat();
+    world.voice.learn().await;
+    assert_eq!(world.voice.view().ai.heard_percent, 50);
+
+    *world.recorder.next.lock().unwrap() = talking(4);
+    world.voice.learn().await;
+
+    assert_eq!(world.voice.view().active, VoiceEffect::FeminineAi);
+    assert_eq!(
+        world.repository.library.lock().unwrap().own,
+        Some(own_voice())
+    );
+}
+
+#[tokio::test]
+async fn the_talk_kept_is_forgotten_when_the_listening_stops() {
+    let world = VoiceWorld::installed();
+    world.voice.select(VoiceEffect::FeminineAi);
+    *world.recorder.next.lock().unwrap() = [talking(4), speech(41)].concat();
+    world.voice.learn().await;
+
+    world.voice.select(VoiceEffect::Thin);
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    assert_eq!(world.voice.view().ai.heard_percent, 0);
 }
 
 #[tokio::test]

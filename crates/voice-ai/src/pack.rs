@@ -20,10 +20,14 @@ pub(crate) const TONE_EXTRACT: &str = "tone_extract.onnx";
 pub(crate) const TONE_COLOR: &str = "tone_color.onnx";
 
 /// Files an earlier version downloaded and no version uses anymore.
-const RETIRED: [&str; 3] = [
+const RETIRED: [&str; 6] = [
     "whisper_encoder.onnx",
     "whisper_decoder.onnx",
     "tokenizer.json",
+    // What a download that was stopped halfway leaves behind.
+    "whisper_encoder.onnx.part",
+    "whisper_decoder.onnx.part",
+    "tokenizer.json.part",
 ];
 
 const STALLED_AFTER: Duration = Duration::from_secs(30);

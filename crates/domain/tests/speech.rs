@@ -101,3 +101,12 @@ fn someone_who_never_stops_talking_is_kept_whole() {
 
     assert!(voiced(&speech, RATE).len() >= 190 * FRAME);
 }
+
+#[test]
+fn a_rate_too_low_for_a_frame_does_not_panic() {
+    let speech = vec![0.5; 100];
+
+    for rate in [0, 1, 49] {
+        let _ = voiced(&speech, rate);
+    }
+}

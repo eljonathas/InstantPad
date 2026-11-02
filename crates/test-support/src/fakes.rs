@@ -307,6 +307,8 @@ impl SettingsRepository for InMemorySettings {
 pub struct FakeCatalog {
     pub page: Mutex<Option<CatalogPage>>,
     pub downloaded: Mutex<Vec<String>>,
+    /// The countries whose trending sounds were asked for.
+    pub trending_regions: Mutex<Vec<String>>,
 }
 
 #[async_trait]
@@ -319,7 +321,11 @@ impl SoundCatalog for FakeCatalog {
             .ok_or(Failure::text(TextKey::CatalogNoConnection))
     }
 
-    async fn trending(&self, page: u32) -> Result<CatalogPage, Failure> {
+    async fn trending(&self, region: &str, page: u32) -> Result<CatalogPage, Failure> {
+        self.trending_regions
+            .lock()
+            .unwrap()
+            .push(region.to_owned());
         self.search("", page).await
     }
 

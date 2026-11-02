@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { pickAudioFiles } from "../../shared/audioFiles";
 import { commands, type Failure, type SoundSource } from "../../shared/ipc";
+import { regionName } from "../../shared/i18n";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { holdHotkeys } from "../../shared/ui/hotkeyPause";
@@ -23,10 +25,11 @@ const SKELETONS_OF_MORE = 3;
 
 const NOTHING: Results = { search: null, sounds: [], page: 1, hasMore: false, status: { kind: "loading" } };
 
-/** The MyInstants screen: search, trending sounds and paging. */
+/** The MyInstants screen: search, trending sounds and paging, and sounds from the computer. */
 export function Browser() {
-  const { t, render } = useText();
+  const { t, render, language } = useText();
   const started = useBackend((state) => state.started);
+  const region = useBackend((state) => state.setup.trendingRegion);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(NOTHING);
   const input = useRef<HTMLInputElement>(null);
@@ -53,10 +56,10 @@ export function Browser() {
     );
   }, []);
 
-  // The first load waits for the backend to start.
+  // The first load waits for the backend to start, and a new country brings its trending sounds.
   useEffect(() => {
     if (started) void load(null, 1);
-  }, [started, load]);
+  }, [started, region, load]);
 
   function show(search: string | null, page: number) {
     setResults((before) => ({ ...before, search, page, hasMore: false, status: { kind: "loading" } }));
@@ -72,6 +75,11 @@ export function Browser() {
     if (query.trim()) show(query.trim(), 1);
   }
 
+  async function addFromComputer() {
+    const paths = await pickAudioFiles(t, true);
+    if (paths.length > 0) await commands.importFiles(paths, null);
+  }
+
   const { status, sounds, search: shown } = results;
   const isLoading = status.kind === "loading";
   const isNewList = isLoading && results.page === 1;
@@ -82,7 +90,7 @@ export function Browser() {
         ? render(status.reason)
         : sounds.length === 0
           ? t("NothingFound")
-          : `${shown ?? t("TrendingTitle")} (${sounds.length})`;
+          : `${shown ?? t("TrendingTitle", [regionName(language, region)])} (${sounds.length})`;
 
   return (
     <section className="browser" aria-label="MyInstants">
@@ -100,16 +108,29 @@ export function Browser() {
             holding.current = null;
           }}
         />
-        <button className="key" onClick={search}>
-          {t("Search")}
+        <button className="key key-bare browser-key" title={t("Search")} aria-label={t("Search")} onClick={search}>
+          <i className="icon icon-search" />
+        </button>
+        <button
+          className="key key-bare browser-key"
+          title={t("FromComputerHint")}
+          aria-label={t("FromComputer")}
+          onClick={() => void addFromComputer()}
+        >
+          <i className="icon icon-folder" />
         </button>
       </div>
       <div className="browser-status">
         <span className="screen-text browser-line" role="status">
           {line}
         </span>
-        <button className="key" onClick={() => show(null, 1)}>
-          {t("Trending")}
+        <button
+          className="key key-bare browser-key"
+          title={t("Trending")}
+          aria-label={t("Trending")}
+          onClick={() => show(null, 1)}
+        >
+          <i className="icon icon-trending" />
         </button>
       </div>
       <ul ref={list} className="sound-list" aria-busy={isLoading}>

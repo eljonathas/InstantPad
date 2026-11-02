@@ -87,6 +87,7 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
     let library = Arc::new(SoundLibrary::new(
         Arc::new(MyInstantsCatalog::new()),
         files.clone(),
+        settings.clone(),
     ));
     // A crash leaves them behind, so they also go when the app opens.
     library.clear_previews();

@@ -1,5 +1,6 @@
 use instantpad_domain::hotkeys::{Hotkey, NumericScheme};
 use instantpad_domain::sounds::SoundSource;
+use instantpad_domain::trending::TRENDING_REGIONS;
 use instantpad_domain::voice::{VoiceEffect, VoiceParam};
 use instantpad_domain::{board, palette};
 use serde::Serialize;
@@ -77,6 +78,10 @@ pub struct SetupView {
     pub is_system_output_on_cable: bool,
     pub game_microphone_name: String,
     pub language: Option<String>,
+    /// The country of the trending sounds, chosen or followed from the system.
+    pub trending_region: String,
+    /// `None` while the trending sounds follow the system.
+    pub chosen_trending_region: Option<String>,
     pub numeric_scheme: NumericScheme,
     /// First pad, last pad, next, previous and stop keys of the scheme. Empty when it is off.
     pub numeric_hint_keys: Vec<String>,
@@ -274,7 +279,8 @@ pub enum DisplayEvent {
 pub enum AppEvent {
     Board(BoardView),
     Favorites(Vec<SoundSource>),
-    Setup(SetupView),
+    // Boxed: far larger than the other events, which would all take its size.
+    Setup(Box<SetupView>),
     DriverStatus(Message),
     Update(UpdateView),
     Voice(VoiceView),
@@ -316,6 +322,8 @@ pub struct Limits {
     pub accent_colors: Vec<String>,
     pub max_rows: u32,
     pub max_columns: u32,
+    /// The countries whose trending sounds can be chosen.
+    pub trending_regions: Vec<String>,
     pub default_rows: u32,
     pub default_columns: u32,
     /// Where a double click puts each knob.
@@ -330,6 +338,7 @@ impl Limits {
             accent_colors: palette::ACCENTS.map(str::to_owned).to_vec(),
             max_rows: board::MAX_ROWS,
             max_columns: board::MAX_COLUMNS,
+            trending_regions: TRENDING_REGIONS.map(str::to_owned).to_vec(),
             default_rows: board::DEFAULT_ROWS,
             default_columns: board::DEFAULT_COLUMNS,
             default_mixer: MixerView {

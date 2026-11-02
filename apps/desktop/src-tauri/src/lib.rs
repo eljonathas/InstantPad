@@ -4,6 +4,7 @@ mod commands;
 mod composition;
 mod events;
 mod hotkeys;
+mod installer_step;
 mod updater;
 
 use std::sync::Arc;
@@ -30,7 +31,7 @@ fn specta_builder() -> Builder<Wry> {
             commands::board::configure_interface,
             commands::board::move_interface,
             commands::board::delete_interface,
-            commands::board::import_file,
+            commands::board::import_files,
             commands::board::swap_pads,
             commands::board::send_to_interface,
             commands::board::rename_pad,
@@ -63,6 +64,7 @@ fn specta_builder() -> Builder<Wry> {
             commands::setup::set_one_sound_at_a_time,
             commands::setup::set_press_again_to_stop,
             commands::setup::set_language,
+            commands::setup::set_trending_region,
             commands::setup::install_driver,
             commands::setup::open_sound_settings,
             commands::updates::restart_now,
@@ -112,6 +114,11 @@ fn show_main_window(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+/// For the installer, which runs the app with a step to do instead of opening it.
+pub fn run_installer_step(args: impl Iterator<Item = String>) -> Option<i32> {
+    installer_step::run(args)
 }
 
 pub fn run() {

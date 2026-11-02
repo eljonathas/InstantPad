@@ -396,16 +396,28 @@ impl BoardSession {
         Ok(())
     }
 
-    pub async fn import_file(&self, source_path: &str, slot: u32) {
-        let target = self.pad_on_screen(slot);
-        let placed = async {
-            let path = self.files.import(source_path)?;
-            let name = file_stem(source_path);
-            self.place(&target, &name, &path, palette::pad_color_for(slot))
-                .await
-        };
-        if let Err(Failure(reason)) = self.while_loading(&target, placed).await {
-            self.events.emit(AppEvent::error(reason));
+    /// Copies audio files from the computer onto pads, one after the other: the first to `slot`,
+    /// or to the pad a new sound goes to, and the rest to the next free pads.
+    pub async fn import_files(&self, source_paths: &[String], slot: Option<u32>) {
+        for (index, source_path) in source_paths.iter().enumerate() {
+            let target = match slot.filter(|_| index == 0) {
+                Some(slot) => Some(self.pad_on_screen(slot)),
+                None => self.pad_for_new_sound(),
+            };
+            let Some(target) = target else {
+                let hint = Message::text(TextKey::InterfaceFullHint);
+                self.events.emit(AppEvent::error(hint));
+                return;
+            };
+            let placed = async {
+                let path = self.files.import(source_path)?;
+                let name = file_stem(source_path);
+                let color = palette::pad_color_for(target.slot);
+                self.place(&target, &name, &path, color).await
+            };
+            if let Err(Failure(reason)) = self.while_loading(&target, placed).await {
+                self.events.emit(AppEvent::error(reason));
+            }
         }
     }
 

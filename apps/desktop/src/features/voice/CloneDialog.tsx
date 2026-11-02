@@ -1,11 +1,9 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { useState, type ReactNode } from "react";
-import { AUDIO_EXTENSIONS } from "../../shared/audioExtensions";
+import { pickAudioFiles } from "../../shared/audioFiles";
 import { commands, type CloneStep, type Message, type TextKey } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { Dialog, DialogLabel } from "../../shared/ui/Dialog";
-import { whileHeld } from "../../shared/ui/hotkeyPause";
 import { RecordKey } from "./RecordKey";
 import "./Clone.css";
 
@@ -77,8 +75,7 @@ function Sample({ step }: { step: Step<"sample"> }) {
   const { t } = useText();
 
   async function chooseFile() {
-    const filters = [{ name: t("AudioFileType"), extensions: AUDIO_EXTENSIONS }];
-    const path = await whileHeld(() => open({ filters }));
+    const [path] = await pickAudioFiles(t, false);
     if (path) await commands.importCloneSample(path);
   }
 

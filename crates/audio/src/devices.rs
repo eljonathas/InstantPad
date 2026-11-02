@@ -29,7 +29,8 @@ pub(crate) fn microphones() -> Vec<AudioDevice> {
     describe(cpal::default_host().input_devices())
 }
 
-pub(crate) fn outputs() -> Vec<AudioDevice> {
+/// The output devices, also for the installer, which only needs to know whether the cable is one.
+pub fn outputs() -> Vec<AudioDevice> {
     describe(cpal::default_host().output_devices())
 }
 

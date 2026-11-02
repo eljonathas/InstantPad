@@ -1,7 +1,7 @@
 import { audioDir, join } from "@tauri-apps/api/path";
-import { ask, open, save } from "@tauri-apps/plugin-dialog";
+import { ask, save } from "@tauri-apps/plugin-dialog";
 import type { MouseEvent } from "react";
-import { AUDIO_EXTENSIONS } from "../../shared/audioExtensions";
+import { pickAudioFiles } from "../../shared/audioFiles";
 import { commands, type InterfaceLayout, type InterfaceTab, type PadView, type SoundSource } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
@@ -53,12 +53,8 @@ export function useBoardActions() {
   }
 
   async function loadFile(slot: number) {
-    const filters = [
-      { name: t("AudioFileType"), extensions: AUDIO_EXTENSIONS },
-      { name: t("AllFiles"), extensions: ["*"] },
-    ];
-    const path = await whileHeld(() => open({ filters }));
-    if (path) await commands.importFile(path, slot);
+    const paths = await pickAudioFiles(t, false);
+    if (paths.length > 0) await commands.importFiles(paths, slot);
   }
 
   /** Saves a copy of the sound where the user chooses. The backend reports how it went. */

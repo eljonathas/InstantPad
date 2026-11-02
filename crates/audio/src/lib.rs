@@ -17,6 +17,7 @@ mod role;
 mod voice;
 mod worker;
 
+pub use devices::outputs;
 pub use engine::AudioEngine;
 
 #[cfg(test)]

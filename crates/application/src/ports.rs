@@ -245,7 +245,8 @@ pub struct CatalogPage {
 pub trait SoundCatalog: Send + Sync {
     async fn search(&self, query: &str, page: u32) -> Result<CatalogPage, Failure>;
 
-    async fn trending(&self, page: u32) -> Result<CatalogPage, Failure>;
+    /// The sounds trending in `region`, a lower-case country code such as "br".
+    async fn trending(&self, region: &str, page: u32) -> Result<CatalogPage, Failure>;
 
     async fn download(&self, sound_url: &str, destination: &str) -> Result<(), Failure>;
 }

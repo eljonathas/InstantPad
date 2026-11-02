@@ -27,8 +27,9 @@ export function useStartup() {
       await listenOnce();
 
       // The saved language is only known after `start`, so the first interface is named in the system's.
+      // The system's locale also tells the backend which country's sounds are trending.
       const language = resolveLanguage(null, navigator.language);
-      const view = await commands.start(translate(language, "DefaultInterfaceName"));
+      const view = await commands.start(translate(language, "DefaultInterfaceName"), navigator.language);
       if (leaving) return;
 
       loadStart(view);

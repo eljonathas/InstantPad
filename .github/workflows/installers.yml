@@ -1,0 +1,71 @@
+name: Installers
+
+# Builds the installers when a pull request changes them, so they can be tried before a release.
+on:
+  pull_request:
+    paths:
+      - apps/desktop/src-tauri/windows/**
+      - apps/desktop/src-tauri/macos/**
+      - apps/desktop/src-tauri/src/installer_step.rs
+      - apps/desktop/src-tauri/tauri.conf.json
+      - .github/workflows/installers.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build for ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows, os: windows-latest, target: x86_64-pc-windows-msvc, bundles: nsis }
+          - { name: macOS Apple silicon, os: macos-latest, target: aarch64-apple-darwin, bundles: app }
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Point bindgen at LLVM
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" >> "$GITHUB_ENV"
+
+      - name: Set up the toolchain
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Without the signing key of releases, so no updater files. Bash, because PowerShell drops the
+      # quotes inside the JSON.
+      - name: Build
+        working-directory: apps/desktop
+        shell: bash
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
+
+      - name: Build the installer package
+        if: runner.os == 'macOS'
+        run: apps/desktop/src-tauri/macos/build-pkg.sh "target/${{ matrix.target }}/release/bundle/macos/InstantPad.app" 0.0.0 arm64 InstantPad_aarch64.pkg
+
+      - name: Keep the installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            InstantPad_aarch64.pkg
+          if-no-files-found: error

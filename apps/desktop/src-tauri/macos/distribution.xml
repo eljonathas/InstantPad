@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Filled in by build-pkg.sh. The titles and descriptions are keys of the Localizable.strings in
+     resources. -->
+<installer-gui-script minSpecVersion="2">
+    <title>TITLE</title>
+    <options customize="always" require-scripts="false" hostArchitectures="@ARCH@"/>
+    <domains enable_localSystem="true"/>
+    <script><![CDATA[
+        // Ticked only when the cable is missing, so a second install leaves it alone.
+        function isCableMissing() {
+            return !system.files.fileExistsAtPath("/Library/Audio/Plug-Ins/HAL/BlackHole2ch.driver");
+        }
+    ]]></script>
+    <choices-outline>
+        <line choice="app"/>
+        <line choice="cable"/>
+    </choices-outline>
+    <choice id="app" title="APP_TITLE" description="APP_DESCRIPTION" enabled="false" selected="true">
+        <pkg-ref id="@IDENTIFIER@"/>
+    </choice>
+    <choice id="cable" title="CABLE_TITLE" description="CABLE_DESCRIPTION" selected="isCableMissing()" enabled="isCableMissing()">
+        <pkg-ref id="@IDENTIFIER@.blackhole"/>
+    </choice>
+    <pkg-ref id="@IDENTIFIER@">app.pkg</pkg-ref>
+    <pkg-ref id="@IDENTIFIER@.blackhole">blackhole.pkg</pkg-ref>
+</installer-gui-script>

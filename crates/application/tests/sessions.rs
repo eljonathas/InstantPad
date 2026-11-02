@@ -262,6 +262,20 @@ async fn catalog_results_point_at_the_store() {
     assert!(page.has_more);
 }
 
+#[tokio::test]
+async fn the_trending_sounds_follow_the_country_of_the_system() {
+    let world = World::new();
+    *world.catalog.page.lock().unwrap() = Some(CatalogPage {
+        sounds: Vec::new(),
+        has_more: false,
+    });
+    world.settings.set_system_locale("de-DE");
+
+    world.library.trending(1).await.unwrap();
+
+    assert_eq!(*world.catalog.trending_regions.lock().unwrap(), ["de"]);
+}
+
 fn mixer() -> (Arc<FakeMix>, MixerSession) {
     let mix = Arc::new(FakeMix::default());
     let settings = Arc::new(Settings::load(Arc::new(InMemorySettings::default())));
@@ -550,4 +564,45 @@ fn hearing_the_voice_always_starts_off() {
 
     assert!(*world.changer.is_hearing.lock().unwrap());
     assert!(world.voice.view().is_hearing);
+}
+
+#[tokio::test]
+async fn a_chosen_country_replaces_the_system_one_and_is_saved() {
+    let setup = setup();
+    setup.world.settings.set_system_locale("pt-BR");
+    assert_eq!(setup.session.view().trending_region, "br");
+
+    setup.session.set_trending_region(Some("fr".to_owned()));
+
+    let view = setup.session.view();
+    assert_eq!(view.trending_region, "fr");
+    assert_eq!(view.chosen_trending_region.as_deref(), Some("fr"));
+    assert_eq!(
+        setup.world.settings.lock().trending_region.as_deref(),
+        Some("fr")
+    );
+}
+
+#[test]
+fn following_the_system_again_drops_the_choice() {
+    let setup = setup();
+    setup.world.settings.set_system_locale("en-GB");
+    setup.session.set_trending_region(Some("jp".to_owned()));
+
+    setup.session.set_trending_region(None);
+
+    assert_eq!(setup.session.view().trending_region, "gb");
+    assert_eq!(setup.session.view().chosen_trending_region, None);
+}
+
+#[test]
+fn a_country_the_settings_do_not_offer_is_refused() {
+    let setup = setup();
+    setup.session.set_trending_region(Some("fr".to_owned()));
+
+    setup
+        .session
+        .set_trending_region(Some("../search".to_owned()));
+
+    assert_eq!(setup.session.view().trending_region, "fr");
 }

@@ -33,19 +33,23 @@ Download the file for your system from the [latest release](https://github.com/e
 
 ### Windows
 
-1. Download the `.exe` setup and run it. It installs for your user and does not ask for an administrator password. The app is not code signed yet, so Windows may show a warning the first time. Click **More info**, then **Run anyway**.
-2. Open InstantPad, go to **Settings** and click **Install VB-CABLE**. InstantPad downloads the driver from the official VB-Audio site and opens its installer. Click **Install Driver** in that window.
-3. Restart your PC. Windows reports the driver as working before the restart, but it does not work properly until you restart.
+1. Download the `.exe` setup and run it. The app is not code signed yet, so Windows may show a warning the first time. Click **More info**, then **Run anyway**.
+2. When the setup has copied the app, it checks for VB-CABLE, the virtual cable, and offers to install it if it is missing. Click **Yes**. Windows asks for administrator rights, only for the driver, and the VB-Audio window opens: click **Install Driver**. VB-CABLE is donationware from [VB-Audio](https://vb-cable.com).
+3. Choose **Reboot now** on the last page. The driver only works properly after a restart, and InstantPad opens by itself when you log in again.
 4. VB-CABLE sets itself as the Windows output device when it installs. Open the Windows sound settings and choose your headphones as the output again. **Settings** shows a warning, with an **Open sound settings** button, while the output is still on the cable.
 
-If you prefer not to install the app, download `InstantPad-portable.exe` instead. It runs on its own and does not update itself. You still need VB-CABLE, so follow steps 2 to 4.
+If you skipped the driver during setup, or removed it later, go to **Settings** and click **Install VB-CABLE**: it downloads the driver from the official VB-Audio site, checks its signature and opens its installer. Restart afterwards.
+
+If you prefer not to install the app, download `InstantPad-portable.exe` instead. It runs on its own and does not update itself, and it has no setup, so install VB-CABLE from **Settings**.
 
 ### macOS
 
-1. Download the `.dmg` that matches your Mac: the Apple silicon one for M1 and newer chips, the Intel one for older Macs. Open it and drag InstantPad to Applications.
-2. The app is not notarized yet, so macOS blocks it the first time. Try to open it once, then open **System Settings**, go to **Privacy & Security** and click **Open Anyway**.
-3. Allow the microphone when macOS asks.
-4. Install [BlackHole 2ch](https://existential.audio/blackhole/), the virtual cable. The **Install BlackHole** button in **Settings** opens its download page. InstantPad does not use VB-CABLE on macOS. After installing, click **Refresh devices**.
+1. Download the `.pkg` installer that matches your Mac: `aarch64` for Apple silicon (M1 and newer), `x64` for Intel Macs.
+2. InstantPad is not notarized yet, so macOS blocks the installer the first time. Open **System Settings**, go to **Privacy & Security** and click **Open Anyway**, then open it again.
+3. Keep **BlackHole 2ch (virtual audio cable)** ticked in the installation type step. The installer downloads the official BlackHole package from Existential Audio, checks it and installs it with the app. The choice is greyed out when BlackHole is already installed.
+4. Open InstantPad from Applications and allow the microphone when macOS asks.
+
+You can also download the `.dmg` and drag InstantPad to Applications. Then install [BlackHole 2ch](https://existential.audio/blackhole/) yourself: the **Install BlackHole** button in **Settings** opens its download page, and **Refresh devices** finds it afterwards. InstantPad does not use VB-CABLE on macOS.
 
 ### Linux
 
@@ -72,12 +76,12 @@ In Discord, set **Input Profile** to **Studio**. Voice Isolation removes everyth
 | To | Do this |
 | --- | --- |
 | Play a sound | Click its pad or press its shortcut |
-| Find sounds | Search MyInstants, or open **Trending** |
+| Find sounds | Search MyInstants, or open **Trending**, which shows what is popular in your country. **Settings** can pick another country |
 | Fill a pad | Click an empty pad, then **+ Pad** on a result, or drag a result onto the pad. The sound is downloaded and kept locally |
 | Try an online sound on your headphones | The play button on the result (**Listen on your headphones only**) |
 | Play an online sound in the game without saving it | **Mic** on the result (**Play in the game now**) |
 | Mark a favorite | The star on a result, or right-click a pad and choose **Add to favorites** |
-| Use your own file | Drag it from your file manager onto a pad, or right-click the pad and choose **Load audio file...** |
+| Use your own files | Click the folder key next to the search and pick one or more files: they go to the pad you clicked and the next free ones. You can also drag files from your file manager onto a pad, or right-click a pad and choose **Load audio file...** |
 | Save a copy of a sound elsewhere | Right-click its pad and choose **Download to computer...** |
 | Change a pad's shortcut, volume, color or name | Right-click the pad |
 | Rearrange pads | Hold Ctrl and drag |
@@ -200,7 +204,7 @@ pnpm dev
 
 On Windows the virtual device is VB-CABLE, from VB-Audio. Windows only loads audio drivers signed by Microsoft, so the app cannot create its own. It downloads the setup from the official site and runs it only if the digital signature belongs to VB-Audio. VB-CABLE is free, with an optional donation.
 
-On macOS the app is not notarized, and you install the virtual cable (BlackHole) yourself.
+On macOS the app and its installer are not notarized, so macOS asks you to allow them the first time. The `.pkg` installer downloads BlackHole for you; with the `.dmg` you install it yourself.
 
 MyInstants has no public API, so the app reads the site's HTML. If the site changes, [`parser.rs`](crates/catalog/src/parser.rs) is the file to fix.
 

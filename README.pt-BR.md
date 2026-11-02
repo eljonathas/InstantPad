@@ -127,7 +127,17 @@ A tecla **+** depois dos efeitos clona uma voz, para você falar com ela em cham
 3. A pessoa lê em voz alta seis números sorteados. O app confere os números e se a voz é a mesma da amostra. Uma gravação de outra pessoa não passa nessa etapa, porque os números não existiam antes.
 4. Você dá um nome à voz.
 
-O app guarda só a assinatura da voz e o registro do consentimento (nome, data, versão do termo e uma impressão digital da amostra). A gravação é apagada assim que a voz é criada. Selecione uma voz clonada e clique em **Excluir voz** para apagá-la, com o consentimento, quando quiser.
+O app guarda só a assinatura da voz e o registro do consentimento (nome, data, versão do termo e uma impressão digital da amostra). A gravação em si nunca é guardada. Selecione uma voz clonada e clique em **Excluir voz** para apagá-la, com o consentimento, quando quiser.
+
+#### Dicas para um bom clone
+
+A qualidade do clone depende quase toda da amostra. Grave num lugar silencioso e sem eco, com o microfone das chamadas a um palmo da boca. Fale com naturalidade e varie a entonação, como numa conversa. De 1 a 3 minutos de fala é o ideal, e menos de 30 segundos deixa a voz pobre. Se usar um arquivo, escolha um sem música de fundo e sem compressão forte, porque áudios de aplicativos de mensagem perdem detalhes. Na hora de usar, calibre a sua própria voz no mesmo microfone e ajuste o **Tom** até ficar perto da voz clonada. A IA copia o timbre, mas o ritmo e o jeito de falar continuam sendo seus.
+
+### Criar uma voz personalizada
+
+Depois que você tem uma voz clonada, a tecla depois de **Clonar uma voz** cria vozes novas a partir dela. Escolha a voz clonada de partida, leve o **Timbre** para uma voz mais grave ou mais aguda e, se quiser, misture outra voz clonada. Ligue **Ouvir prévia** para testar nos fones enquanto ajusta, depois dê um nome e salve. A voz personalizada guarda só a receita, então excluir uma voz clonada exclui também as vozes criadas a partir dela.
+
+Comece com pouca mistura, entre 20% e 40%, e mexa no timbre aos poucos, ouvindo a prévia.
 
 ### Opções de reprodução
 

@@ -127,7 +127,17 @@ The **+** key after the effects clones a voice, so you can speak with it in call
 3. The owner reads six random digits aloud. The app checks the digits and that the voice is the same one in the sample. A recording of someone else cannot pass this, because the digits did not exist before.
 4. You name the voice.
 
-The app keeps only the voiceprint and the consent record (name, date, version of the terms and a fingerprint of the sample). The recording is deleted as soon as the voice is created. Select a cloned voice and click **Delete voice** to remove it, with its consent, at any time.
+The app keeps only the voiceprint and the consent record (name, date, version of the terms and a fingerprint of the sample). The recording itself is never stored. Select a cloned voice and click **Delete voice** to remove it, with its consent, at any time.
+
+#### Tips for a good clone
+
+How good the clone sounds depends almost entirely on the sample. Record in a quiet room with no echo, with the microphone you call with a hand's width from your mouth. Speak naturally and let your tone move, as you would in a conversation. One to three minutes of speech is ideal, and under 30 seconds leaves the voice thin. If you use a file, pick one without background music or heavy compression, because voice messages from chat apps lose detail. When you use the voice, calibrate your own voice on the same microphone and turn the **Pitch** until it is close to the cloned voice. The AI copies the timbre, but the pace and the way of speaking are still yours.
+
+### Designing a voice
+
+Once you have a cloned voice, the key after **Clone a voice** designs new voices from it. Pick the cloned voice to start from, move the **Timbre** toward a deeper or a higher voice, and mix in another cloned voice if you want. Turn on **Hear preview** to try it on your headphones while you adjust, then name it and save. A designed voice keeps only its recipe, so deleting a cloned voice also deletes the voices designed from it.
+
+Start with a small blend, between 20% and 40%, and change the timbre a little at a time while you listen to the preview.
 
 ### Playback options
 

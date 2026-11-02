@@ -5,7 +5,7 @@ use std::process::Command;
 
 use serde_json::Value;
 
-const FORBIDDEN: [&str; 4] = ["tauri", "cpal", "reqwest", "windows"];
+const FORBIDDEN: [&str; 5] = ["tauri", "cpal", "reqwest", "windows", "ort"];
 
 fn metadata() -> Value {
     let output = Command::new(env!("CARGO"))

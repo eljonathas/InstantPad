@@ -4,12 +4,15 @@ use std::path::Path;
 use instantpad_application::message::{Failure, TextKey};
 use instantpad_application::ports::{
     BoardRepository, FavoritesRepository, SettingsRepository, SoundFileStore,
+    VoiceLibraryRepository,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
+use instantpad_domain::cloning::VoiceLibrary;
+use instantpad_domain::voice::VoiceEffect;
 use instantpad_storage::{
     AppDataFolder, FolderSoundStore, JsonBoardRepository, JsonFavoritesRepository,
-    JsonSettingsRepository,
+    JsonSettingsRepository, JsonVoiceLibraryRepository,
 };
 use instantpad_test_support::contract;
 use tempfile::TempDir;
@@ -42,6 +45,7 @@ fn the_repositories_keep_what_they_save() {
     contract::board_repository(&JsonBoardRepository::new(&folder));
     contract::favorites_repository(&JsonFavoritesRepository::new(&folder));
     contract::settings_repository(&JsonSettingsRepository::new(&folder));
+    contract::voice_library_repository(&JsonVoiceLibraryRepository::new(&folder));
 }
 
 #[test]
@@ -71,6 +75,10 @@ fn a_missing_file_gives_the_default() {
         JsonSettingsRepository::new(&folder).load(),
         AppSettings::default()
     );
+    assert_eq!(
+        JsonVoiceLibraryRepository::new(&folder).load(),
+        VoiceLibrary::default()
+    );
 }
 
 #[test]
@@ -85,6 +93,30 @@ fn a_damaged_file_is_kept_as_a_backup_and_gives_the_default() {
         fs::read_to_string(dir.path().join("settings.json.bak")).unwrap(),
         "{ not json"
     );
+}
+
+#[test]
+fn a_damaged_voice_library_is_kept_as_a_backup_and_gives_the_default() {
+    let (dir, folder) = folder();
+    fs::write(dir.path().join("voices.json"), "{ not json").unwrap();
+
+    let library = JsonVoiceLibraryRepository::new(&folder).load();
+
+    assert_eq!(library, VoiceLibrary::default());
+    assert_eq!(
+        fs::read_to_string(dir.path().join("voices.json.bak")).unwrap(),
+        "{ not json"
+    );
+}
+
+#[test]
+fn a_voice_library_with_absent_fields_takes_their_defaults() {
+    let (dir, folder) = folder();
+    fs::write(dir.path().join("voices.json"), "{}").unwrap();
+
+    let library = JsonVoiceLibraryRepository::new(&folder).load();
+
+    assert_eq!(library, VoiceLibrary::default());
 }
 
 #[test]
@@ -160,6 +192,21 @@ fn a_save_that_cannot_be_written_is_reported() {
         repository.save(&AppSettings::default()),
         TextKey::SaveFailed,
     );
+}
+
+#[test]
+fn settings_saved_before_the_new_voices_keep_working() {
+    let (dir, folder) = folder();
+    fs::write(
+        dir.path().join("settings.json"),
+        r#"{ "voice": { "effect": "deep", "lastEffect": "deep" } }"#,
+    )
+    .unwrap();
+
+    let voice = JsonSettingsRepository::new(&folder).load().voice;
+
+    assert_eq!(voice.effect, VoiceEffect::Deep);
+    assert_eq!(voice.clone_id, None);
 }
 
 #[test]

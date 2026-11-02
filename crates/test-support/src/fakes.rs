@@ -428,6 +428,8 @@ pub struct FakeRecorder {
     pub next: Mutex<Vec<f32>>,
     /// What a file decodes to, or `None` for a file that cannot be read.
     pub file: Mutex<Option<Vec<f32>>>,
+    /// Runs while a file is being read, for what the user does meanwhile.
+    pub meanwhile: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
 }
 
 #[async_trait]
@@ -442,6 +444,9 @@ impl VoiceRecorder for FakeRecorder {
     }
 
     async fn decode_file(&self, _path: &str) -> Result<Vec<f32>, Failure> {
+        if let Some(meanwhile) = &*self.meanwhile.lock().unwrap() {
+            meanwhile();
+        }
         self.file
             .lock()
             .unwrap()
@@ -483,6 +488,8 @@ impl VoiceModels for FakeModels {
 pub struct FakeAnalyzer {
     pub voiceprints: Mutex<Vec<Voiceprint>>,
     pub transcript: Mutex<String>,
+    /// Runs while a voiceprint is being taken, for what the user does meanwhile.
+    pub meanwhile: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
 }
 
 impl FakeAnalyzer {
@@ -495,6 +502,9 @@ impl FakeAnalyzer {
 #[async_trait]
 impl VoiceAnalyzer for FakeAnalyzer {
     async fn voiceprint(&self, _speech: Vec<f32>) -> Result<Voiceprint, Failure> {
+        if let Some(meanwhile) = &*self.meanwhile.lock().unwrap() {
+            meanwhile();
+        }
         let mut voiceprints = self.voiceprints.lock().unwrap();
         if voiceprints.is_empty() {
             return Err(Failure::text(TextKey::AiLoadFailed));
@@ -533,15 +543,22 @@ impl SpeechConverter for FakeConverter {
 }
 
 #[derive(Default)]
-pub struct InMemoryVoiceLibrary(pub Mutex<VoiceLibrary>);
+pub struct InMemoryVoiceLibrary {
+    pub library: Mutex<VoiceLibrary>,
+    /// Makes saving fail, like a disk that cannot be written.
+    pub fails: Mutex<bool>,
+}
 
 impl VoiceLibraryRepository for InMemoryVoiceLibrary {
     fn load(&self) -> VoiceLibrary {
-        self.0.lock().unwrap().clone()
+        self.library.lock().unwrap().clone()
     }
 
     fn save(&self, library: &VoiceLibrary) -> Result<(), Failure> {
-        *self.0.lock().unwrap() = library.clone();
+        if *self.fails.lock().unwrap() {
+            return Err(Failure::text(TextKey::SaveFailed));
+        }
+        *self.library.lock().unwrap() = library.clone();
         Ok(())
     }
 }

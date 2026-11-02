@@ -278,15 +278,15 @@ impl VoiceSession {
 
     /// Downloads the AI models, reporting the progress on the voice screen.
     pub async fn install_ai(&self) {
-        let is_busy = self
-            .download
-            .lock()
-            .expect("download lock poisoned")
-            .is_some();
-        if is_busy || self.models.is_installed() {
-            return;
+        {
+            // Checked and taken in one go, so a second press never starts a second download.
+            let mut download = self.download.lock().expect("download lock poisoned");
+            if download.is_some() || self.models.is_installed() {
+                return;
+            }
+            *download = Some(0);
         }
-        self.set_download(Some(0));
+        self.publish();
 
         let progress = |percent: u8| self.set_download(Some(percent));
         let result = self.models.install(&progress).await;

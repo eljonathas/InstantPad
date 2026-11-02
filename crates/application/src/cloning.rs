@@ -127,14 +127,14 @@ impl CloningSession {
     }
 
     pub fn accept_terms(&self, owner_name: &str) {
+        let mut state = self.state();
+        if !matches!(state.step, CloneStep::Terms { .. }) {
+            return;
+        }
         let owner_name = owner_name.trim();
         if owner_name.is_empty() {
             let reason = Message::text(TextKey::CloneMissingName);
             self.events.emit(AppEvent::error(reason));
-            return;
-        }
-        let mut state = self.state();
-        if !matches!(state.step, CloneStep::Terms { .. }) {
             return;
         }
         state.draft.owner_name = owner_name.to_owned();
@@ -280,8 +280,11 @@ impl CloningSession {
             }
         };
 
+        let id = voice.id.clone();
         self.library.lock().clones.push(voice);
         if let Err(Failure(reason)) = self.library.save() {
+            // Kept only in memory, a retry would add the voice twice.
+            self.library.lock().remove(&id);
             self.events.emit(AppEvent::error(reason));
             return;
         }
@@ -327,7 +330,14 @@ impl CloningSession {
             return;
         }
 
-        self.show_now(CloneStep::Analyzing);
+        {
+            let mut state = self.state();
+            // Closed while the file was being read.
+            if state.step == CloneStep::Closed {
+                return;
+            }
+            self.show(&mut state, CloneStep::Analyzing);
+        }
         let sample_sha256 = self.analyzer.fingerprint(&speech);
         let voiceprint = self.analyzer.voiceprint(speech).await;
 

@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use instantpad_domain::hotkeys::{Hotkey, NumericScheme};
+use instantpad_domain::trending;
 use instantpad_domain::voice::VoiceSettings;
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +29,8 @@ pub struct AppSettings {
     /// Pressing a pad that is playing stops it instead of starting it over.
     pub press_again_to_stop: bool,
     pub voice: VoiceSettings,
+    /// The country of the trending sounds. `None` follows the system.
+    pub trending_region: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -47,6 +50,7 @@ impl Default for AppSettings {
             one_sound_at_a_time: true,
             press_again_to_stop: false,
             voice: VoiceSettings::default(),
+            trending_region: None,
         }
     }
 }
@@ -55,6 +59,9 @@ impl Default for AppSettings {
 pub struct Settings {
     current: Mutex<AppSettings>,
     repository: Arc<dyn SettingsRepository>,
+    /// What the system says, which the settings follow until the user chooses. Not saved: the
+    /// user may change it in the system.
+    system_locale: Mutex<String>,
 }
 
 impl Settings {
@@ -62,6 +69,7 @@ impl Settings {
         Self {
             current: Mutex::new(repository.load()),
             repository,
+            system_locale: Mutex::default(),
         }
     }
 
@@ -71,5 +79,17 @@ impl Settings {
 
     pub fn save(&self) -> Result<(), Failure> {
         self.repository.save(&self.lock())
+    }
+
+    /// A locale such as "pt-BR", as the system reports it.
+    pub fn set_system_locale(&self, locale: &str) {
+        *self.system_locale.lock().expect("locale lock poisoned") = locale.to_owned();
+    }
+
+    /// The country whose trending sounds show.
+    pub fn trending_region(&self) -> String {
+        let chosen = self.lock().trending_region.clone();
+        let locale = self.system_locale.lock().expect("locale lock poisoned");
+        trending::trending_region(chosen.as_deref(), &locale)
     }
 }

@@ -29,6 +29,7 @@ const LIMITS = {
   accentColors: ACCENT_COLORS,
   maxRows: 8,
   maxColumns: 10,
+  trendingRegions: ["br", "de", "fr", "pt", "us"],
   defaultRows: 4,
   defaultColumns: 6,
   defaultMixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
@@ -220,6 +221,8 @@ function seed() {
       isSystemOutputOnCable: false,
       gameMicrophoneName: "CABLE Output",
       language: null,
+      trendingRegion: "us",
+      chosenTrendingRegion: null,
       numericScheme: "numpad",
       numericHintKeys: NUMERIC_HINT_KEYS.numpad,
       voiceKeys: VOICE_KEYS.numpad,
@@ -240,6 +243,8 @@ export function installMock() {
   let counter = 0;
   let startedAt = 0;
   let isFullscreen = false;
+  /** The country the system's locale names, which the trending sounds follow by default. */
+  let systemRegion = "us";
   const loading = new Set<number>();
 
   /** Shows `slot` as loading for a moment, like a sound that has to download. */
@@ -379,8 +384,10 @@ export function installMock() {
   }
 
   const handlers: Record<string, (args: Args) => unknown> = {
-    start: () => {
+    start: ({ systemLocale }) => {
       backend = seed();
+      systemRegion = /[-_]([a-z]{2})(?:[-_.]|$)/i.exec(systemLocale as string)?.[1].toLowerCase() ?? "us";
+      backend.setup.trendingRegion = systemRegion;
       playing = new Set();
       // The update line of the settings screen, once the listeners are in place.
       setTimeout(
@@ -580,6 +587,11 @@ export function installMock() {
     },
     set_language: ({ language }) => {
       backend.setup.language = language as string | null;
+      publishSetup();
+    },
+    set_trending_region: ({ region }) => {
+      backend.setup.chosenTrendingRegion = region as string | null;
+      backend.setup.trendingRegion = (region as string | null) ?? systemRegion;
       publishSetup();
     },
     install_driver: () => {

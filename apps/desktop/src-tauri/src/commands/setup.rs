@@ -63,6 +63,12 @@ pub fn set_language(core: State<'_, Core>, language: Option<String>) {
 
 #[tauri::command]
 #[specta::specta]
+pub fn set_trending_region(core: State<'_, Core>, region: Option<String>) {
+    core.setup.set_trending_region(region);
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn install_driver(core: State<'_, Core>) -> Result<(), ()> {
     core.setup.install_driver().await;
     Ok(())

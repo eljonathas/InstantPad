@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { regionName } from "../../shared/i18n";
 import { commands, type AudioDevice, type NumericScheme } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
@@ -40,11 +41,19 @@ function DeviceSelect({ title, devices, selected, onChoose }: DeviceSelectProps)
   );
 }
 
-/** Language, driver, audio routing and numeric keys. The app adds the update status at the end. */
+/** Language, trending country, driver, audio routing and numeric keys. The app adds the update status at the end. */
 export function Settings({ children }: { children: ReactNode }) {
-  const { t, render } = useText();
+  const { t, render, language } = useText();
   const askHotkey = useAskHotkey();
   const setup = useBackend((state) => state.setup);
+  const trendingRegions = useBackend((state) => state.limits.trendingRegions);
+  const regions = useMemo(
+    () =>
+      trendingRegions
+        .map((code) => ({ code, name: regionName(language, code) }))
+        .sort((a, b) => a.name.localeCompare(b.name, language)),
+    [trendingRegions, language],
+  );
   const driverStatus = useBackend((state) => state.driverStatus);
   const stopShortcut = useBackend((state) => state.board.stopShortcut);
   const [installing, setInstalling] = useState(false);
@@ -75,6 +84,22 @@ export function Settings({ children }: { children: ReactNode }) {
           <option value="">{t("LanguageSystem")}</option>
           <option value="pt">Português</option>
           <option value="en">English</option>
+        </select>
+      </label>
+
+      <label className="setting">
+        <span className="setting-title screen-text">{t("TrendingRegion")}</span>
+        <select
+          className="field"
+          value={setup.chosenTrendingRegion ?? ""}
+          onChange={(event) => commands.setTrendingRegion(event.target.value || null)}
+        >
+          <option value="">{t("TrendingRegionSystem")}</option>
+          {regions.map(({ code, name }) => (
+            <option key={code} value={code}>
+              {name}
+            </option>
+          ))}
         </select>
       </label>
 

@@ -38,7 +38,11 @@ impl World {
         let repository = Arc::new(InMemoryBoard::default());
         let events = Arc::new(RecordingEvents::default());
         let settings = Arc::new(Settings::load(Arc::new(InMemorySettings::default())));
-        let library = Arc::new(SoundLibrary::new(catalog.clone(), files.clone()));
+        let library = Arc::new(SoundLibrary::new(
+            catalog.clone(),
+            files.clone(),
+            settings.clone(),
+        ));
         let favorites = Arc::new(Favorites::new(
             Arc::new(InMemoryFavorites::default()),
             library.clone(),

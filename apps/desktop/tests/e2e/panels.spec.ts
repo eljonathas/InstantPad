@@ -4,7 +4,7 @@ import { openApp, row } from "./support";
 test.beforeEach(async ({ page }) => openApp(page));
 
 test("MyInstants shows the trending sounds first", async ({ page }) => {
-  await expect(page.getByRole("status").filter({ hasText: "Trending in Brazil (8)" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Trending in United States (8)" })).toBeVisible();
   await expect(page.locator(".sound-row:visible")).toHaveCount(8);
 });
 
@@ -118,4 +118,17 @@ test("the language switches every text without a restart", async ({ page }) => {
   await expect(page.locator(".lcd-main")).toHaveText("Nenhum áudio tocando");
   await page.getByLabel("Idioma").selectOption("en");
   await expect(page.locator(".lcd-main")).toHaveText("No audio playing");
+});
+
+test("the trending sounds follow the country chosen in the settings", async ({ page }) => {
+  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.getByLabel("Trending sounds from").selectOption("br");
+  await page.getByRole("tab", { name: "MyInstants" }).click();
+
+  await expect(page.getByRole("status").filter({ hasText: "Trending in Brazil (8)" })).toBeVisible();
+
+  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.getByLabel("Trending sounds from").selectOption("");
+  await page.getByRole("tab", { name: "MyInstants" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Trending in United States (8)" })).toBeVisible();
 });

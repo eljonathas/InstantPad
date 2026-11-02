@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { commands, type Failure, type SoundSource } from "../../shared/ipc";
+import { regionName } from "../../shared/i18n";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { holdHotkeys } from "../../shared/ui/hotkeyPause";
@@ -25,8 +26,9 @@ const NOTHING: Results = { search: null, sounds: [], page: 1, hasMore: false, st
 
 /** The MyInstants screen: search, trending sounds and paging. */
 export function Browser() {
-  const { t, render } = useText();
+  const { t, render, language } = useText();
   const started = useBackend((state) => state.started);
+  const region = useBackend((state) => state.setup.trendingRegion);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(NOTHING);
   const input = useRef<HTMLInputElement>(null);
@@ -53,10 +55,10 @@ export function Browser() {
     );
   }, []);
 
-  // The first load waits for the backend to start.
+  // The first load waits for the backend to start, and a new country brings its trending sounds.
   useEffect(() => {
     if (started) void load(null, 1);
-  }, [started, load]);
+  }, [started, region, load]);
 
   function show(search: string | null, page: number) {
     setResults((before) => ({ ...before, search, page, hasMore: false, status: { kind: "loading" } }));
@@ -82,7 +84,7 @@ export function Browser() {
         ? render(status.reason)
         : sounds.length === 0
           ? t("NothingFound")
-          : `${shown ?? t("TrendingTitle")} (${sounds.length})`;
+          : `${shown ?? t("TrendingTitle", [regionName(language, region)])} (${sounds.length})`;
 
   return (
     <section className="browser" aria-label="MyInstants">

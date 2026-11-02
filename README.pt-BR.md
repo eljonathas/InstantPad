@@ -72,7 +72,7 @@ No Discord, use o **Input Profile** **Studio**. O Voice Isolation remove tudo qu
 | Para | Faça isto |
 | --- | --- |
 | Tocar um som | Clique no pad ou aperte o atalho dele |
-| Encontrar sons | Busque no MyInstants ou abra **Em alta** |
+| Encontrar sons | Busque no MyInstants ou abra **Em alta**, que mostra o que está popular no seu país. Em **Ajustes** dá para escolher outro país |
 | Preencher um pad | Clique num pad vazio e depois em **+ Pad** num resultado, ou arraste o resultado até o pad. O som é baixado e fica salvo no seu computador |
 | Testar um som online nos fones | O botão de play do resultado (**Ouvir só nos fones**) |
 | Tocar um som online no jogo sem salvar | **Mic** no resultado (**Tocar no jogo agora**) |

@@ -50,9 +50,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Without the signing key of releases, so no updater files.
+      # Without the signing key of releases, so no updater files. Bash, because PowerShell drops the
+      # quotes inside the JSON.
       - name: Build
         working-directory: apps/desktop
+        shell: bash
         run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - name: Build the installer package

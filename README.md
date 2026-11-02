@@ -104,10 +104,30 @@ The **Voice** key under the logo opens InstantVoice, where you change your own v
 | Thin voice | **Intensity** and **Formant** |
 | Deep voice | **Intensity** and **Formant** |
 | Pitch cycle, which rises to a high pitch and falls to a low one | **Time**, **High** and **Low** |
+| Feminine, a higher voice with lifted resonances and highs | **Intensity** and **Formant** |
+| Ghost, a breathy whisper with a hollow echo | **Whisper**, **Echo** and **Pitch** |
+| Ogre, a low, growling voice | **Intensity**, **Growl** and **Formant** |
+| Feminine AI, which changes the timbre of your voice with AI | **Pitch** |
+| Each voice you clone | **Pitch** |
 
 Turn on **Hear my voice** to try an effect on your headphones. Use headphones for this, because speakers feed back into the mic.
 
 An effect delays your voice by about 40 ms. **Natural** adds no delay.
+
+### AI voices
+
+**Feminine AI** and cloned voices run an AI model on your own computer. Nothing you say leaves it. The first time, the app downloads the models, about 260 MB, and asks you to read for a few seconds so the AI learns your own voice. An AI voice delays your voice by about a quarter of a second, and it needs a recent processor. If your computer cannot keep up, the app warns you and keeps only the pitch part of the effect.
+
+### Cloning a voice
+
+The **+** key after the effects clones a voice, so you can speak with it in calls and games:
+
+1. The owner of the voice reads and accepts each clause of the terms and writes their name. Cloning someone needs their explicit consent.
+2. The owner records 20 seconds to 5 minutes of natural speech, alone in a quiet room, or you pick an audio file of their voice.
+3. The owner reads six random digits aloud. The app checks the digits and that the voice is the same one in the sample. A recording of someone else cannot pass this, because the digits did not exist before.
+4. You name the voice.
+
+The app keeps only the voiceprint and the consent record (name, date, version of the terms and a fingerprint of the sample). The recording is deleted as soon as the voice is created. Select a cloned voice and click **Delete voice** to remove it, with its consent, at any time.
 
 ### Playback options
 
@@ -180,6 +200,16 @@ Some keys of Brazilian ABNT2 keyboards, such as the `/` next to the right Shift,
 
 The virtual cable on Linux stays after you close the app, until you log out, and the next start reuses it.
 
+The AI voices run on Windows, macOS and 64-bit Intel or AMD Linux, on the processor only. They are not available on ARM Linux.
+
 ## License
 
 [MIT](LICENSE). The app uses the [Lexend](https://www.lexend.com/) font under the [SIL Open Font License](apps/desktop/src/shared/styles/fonts/OFL.txt).
+
+The AI voices download these models, which are not part of the app:
+
+- [ONNX Runtime](https://onnxruntime.ai) by Microsoft, under the MIT License.
+- The tone color converter of [OpenVoice V2](https://github.com/myshell-ai/OpenVoice) by MyShell, under the MIT License, in the [ONNX export by Hinotsuba](https://huggingface.co/Hinotsuba/OpenVoice-ONNX-v2).
+- [Whisper base](https://huggingface.co/openai/whisper-base) by OpenAI, under the Apache License 2.0, in the [ONNX export by ONNX Community](https://huggingface.co/onnx-community/whisper-base). It checks the digits read while cloning a voice.
+
+The voice of **Feminine AI** is the average of ten speakers of [LibriSpeech](https://www.openslr.org/12) (Panayotov et al., CC BY 4.0), so it is nobody's voice in particular.

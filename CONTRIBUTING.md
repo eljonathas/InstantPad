@@ -29,13 +29,13 @@ Dependencies only point inwards:
 
 | Folder | Holds | May depend on |
 | --- | --- | --- |
-| `crates/domain` | Pad board and hotkey rules | Nothing of ours |
+| `crates/domain` | Pad board, hotkey, voice and voice cloning rules | Nothing of ours |
 | `crates/application` | Use cases, ports and all app state | `domain` |
-| `crates/audio`, `catalog`, `storage`, `platform` | Adapters for the ports | `application` |
+| `crates/audio`, `catalog`, `storage`, `platform`, `voice-ai` | Adapters for the ports | `application` |
 | `apps/desktop/src-tauri` | Commands, events, composition root | Everything above |
 | `apps/desktop/src` | React interface | `src/shared/ipc` only |
 
-New behavior starts in `domain` or `application`, with tests. Code that talks to the outside world goes behind a port in `crates/application/src/ports.rs`, with the implementation in an adapter, wired up in `composition.rs`. A test fails if `domain` or `application` reach Tauri, cpal, reqwest or Windows. The interface draws what the backend sends and holds no rules of its own.
+New behavior starts in `domain` or `application`, with tests. Code that talks to the outside world goes behind a port in `crates/application/src/ports.rs`, with the implementation in an adapter, wired up in `composition.rs`. A test fails if `domain` or `application` reach Tauri, cpal, reqwest, Windows or ONNX Runtime. The interface draws what the backend sends and holds no rules of its own.
 
 The audio callbacks must not allocate, free, block or do I/O. A test with a counting allocator guards this.
 

@@ -104,10 +104,30 @@ A tecla **Voice** abaixo do logo abre o InstantVoice, onde você muda a própria
 | Voz fina | **Intensidade** e **Formante** |
 | Voz grossa | **Intensidade** e **Formante** |
 | Variação de pitch, que sobe até um tom alto e desce até um baixo | **Tempo**, **Alto** e **Baixo** |
+| Feminina, uma voz mais aguda, com ressonâncias e agudos realçados | **Intensidade** e **Formante** |
+| Fantasma, um sussurro com eco oco | **Sussurro**, **Eco** e **Tom** |
+| Ogro, uma voz grave e rosnada | **Intensidade**, **Rosnado** e **Formante** |
+| Feminina IA, que muda o timbre da sua voz com IA | **Tom** |
+| Cada voz que você clonar | **Tom** |
 
 Ligue **Ouvir minha voz** para testar um efeito nos fones. Use fones nesse teste, porque caixas de som realimentam o microfone.
 
 Um efeito atrasa sua voz em cerca de 40 ms. **Natural** não acrescenta atraso.
+
+### Vozes com IA
+
+**Feminina IA** e as vozes clonadas rodam um modelo de IA no seu próprio computador. Nada do que você fala sai dele. Na primeira vez, o app baixa os modelos, cerca de 260 MB, e pede que você leia por alguns segundos para a IA aprender a sua própria voz. Uma voz com IA atrasa sua voz em cerca de um quarto de segundo e precisa de um processador recente. Se o computador não acompanhar, o app avisa e mantém só a parte de tom do efeito.
+
+### Clonar uma voz
+
+A tecla **+** depois dos efeitos clona uma voz, para você falar com ela em chamadas e jogos:
+
+1. A pessoa dona da voz lê e aceita cada cláusula do termo e escreve o nome dela. Clonar alguém exige o consentimento explícito dessa pessoa.
+2. A pessoa grava de 20 segundos a 5 minutos de fala natural, sozinha num lugar silencioso, ou você escolhe um arquivo de áudio com a voz dela.
+3. A pessoa lê em voz alta seis números sorteados. O app confere os números e se a voz é a mesma da amostra. Uma gravação de outra pessoa não passa nessa etapa, porque os números não existiam antes.
+4. Você dá um nome à voz.
+
+O app guarda só a assinatura da voz e o registro do consentimento (nome, data, versão do termo e uma impressão digital da amostra). A gravação é apagada assim que a voz é criada. Selecione uma voz clonada e clique em **Excluir voz** para apagá-la, com o consentimento, quando quiser.
 
 ### Opções de reprodução
 
@@ -180,6 +200,16 @@ Algumas teclas dos teclados brasileiros ABNT2, como a `/` ao lado do Shift direi
 
 No Linux o cabo virtual continua depois que você fecha o app, até você encerrar a sessão, e a próxima abertura reaproveita o mesmo cabo.
 
+As vozes com IA rodam no Windows, no macOS e no Linux de 64 bits para Intel ou AMD, só no processador. Elas não estão disponíveis no Linux ARM.
+
 ## Licença
 
 [MIT](LICENSE). O app usa a fonte [Lexend](https://www.lexend.com/) sob a [SIL Open Font License](apps/desktop/src/shared/styles/fonts/OFL.txt).
+
+As vozes com IA baixam estes modelos, que não fazem parte do app:
+
+- [ONNX Runtime](https://onnxruntime.ai), da Microsoft, sob a licença MIT.
+- O conversor de timbre do [OpenVoice V2](https://github.com/myshell-ai/OpenVoice), da MyShell, sob a licença MIT, na [exportação ONNX de Hinotsuba](https://huggingface.co/Hinotsuba/OpenVoice-ONNX-v2).
+- O [Whisper base](https://huggingface.co/openai/whisper-base), da OpenAI, sob a Apache License 2.0, na [exportação ONNX da ONNX Community](https://huggingface.co/onnx-community/whisper-base). Ele confere os números lidos ao clonar uma voz.
+
+A voz da **Feminina IA** é a média de dez locutoras do [LibriSpeech](https://www.openslr.org/12) (Panayotov et al., CC BY 4.0), então não é a voz de nenhuma pessoa em particular.

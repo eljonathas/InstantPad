@@ -1,10 +1,10 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
 
 /// A key of the translated texts. The frontend owns the translations, so TypeScript refuses
 /// a variant that is missing from them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Type)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum TextKey {
     AiCalibrationSaved,
     AiCalibrationTooShort,
@@ -24,7 +24,9 @@ pub enum TextKey {
     CloneTermsNoMisuse,
     CloneTermsOwner,
     CloneTermsPresent,
+    CloneTermsRefused,
     CloneTermsRevoke,
+    CloneVoice,
     CloneWrongPhrase,
     DevelopmentVersion,
     DeviceUnavailable,

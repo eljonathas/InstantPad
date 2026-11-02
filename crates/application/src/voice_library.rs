@@ -12,9 +12,15 @@ pub struct VoiceLibraryStore {
 }
 
 impl VoiceLibraryStore {
+    /// Voices cloned under older terms are deleted for good as the library loads.
     pub fn load(repository: Arc<dyn VoiceLibraryRepository>) -> Self {
+        let mut library = repository.load();
+        // They are gone from memory either way, and a failed save tries again at the next start.
+        if library.drop_outdated() {
+            let _ = repository.save(&library);
+        }
         Self {
-            current: Mutex::new(repository.load()),
+            current: Mutex::new(library),
             repository,
         }
     }

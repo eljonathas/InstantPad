@@ -10,6 +10,7 @@ use instantpad_application::hotkeys::{HotkeyCommand, HotkeyService};
 use instantpad_application::library::SoundLibrary;
 use instantpad_application::mixer::MixerSession;
 use instantpad_application::ports::{EventSink, HotkeyHost};
+use instantpad_application::recorder::SharedRecorder;
 use instantpad_application::rows::SoundRows;
 use instantpad_application::settings::Settings;
 use instantpad_application::setup::SetupSession;
@@ -107,13 +108,14 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
     let voices = Arc::new(VoiceLibraryStore::load(Arc::new(
         JsonVoiceLibraryRepository::new(&folder),
     )));
+    let recorder = Arc::new(SharedRecorder::new(engine.clone()));
     let voice = Arc::new(VoiceSession::new(
         VoicePorts {
             changer: engine.clone(),
             models: ai.clone(),
             analyzer: ai.clone(),
-            recorder: engine.clone(),
         },
+        recorder.clone(),
         voices.clone(),
         settings.clone(),
         events.clone(),
@@ -122,7 +124,7 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
     Ok(Core {
         mixer: MixerSession::new(engine.clone(), settings.clone()),
         cloning: CloningSession::new(
-            engine.clone(),
+            recorder,
             ai.clone(),
             ai,
             voices,

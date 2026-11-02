@@ -209,7 +209,7 @@ fn a_cloned_voice_targets_its_clone() {
 
     settings.select_clone("a");
 
-    assert_eq!(settings.target(), Some(VoiceTarget::Clone("a".to_owned())));
+    assert_eq!(settings.target(), Some(VoiceTarget::Own("a".to_owned())));
 }
 
 #[test]
@@ -254,7 +254,7 @@ fn the_clone_is_kept_while_another_effect_is_on() {
 
     assert_eq!(settings.clone_id.as_deref(), Some("a"));
     settings.select(VoiceEffect::Cloned);
-    assert_eq!(settings.target(), Some(VoiceTarget::Clone("a".to_owned())));
+    assert_eq!(settings.target(), Some(VoiceTarget::Own("a".to_owned())));
 }
 
 #[test]
@@ -418,4 +418,18 @@ fn the_knobs_of_the_new_effects_read_in_their_own_units() {
     assert_eq!(read(VoiceParam::OgreFormant), "-4.5 st");
     assert_eq!(read(VoiceParam::FeminineAiPitch), "+4.0 st");
     assert_eq!(read(VoiceParam::ClonePitch), "+0.0 st");
+}
+
+#[test]
+fn the_voice_of_the_user_goes_through_a_pitch_alone_whatever_the_effect() {
+    let mut settings = with(VoiceEffect::Ogre);
+    settings.set(VoiceParam::ClonePitch, 1.0);
+
+    let chain = settings.own_voice_chain();
+
+    assert_eq!(chain.pitch, PitchShape::Fixed { semitones: 8.0 });
+    assert_eq!(chain.formant, 0.0);
+    assert_eq!(chain.color, Default::default());
+    settings.select_clone("a");
+    assert_eq!(settings.chain(), Some(chain));
 }

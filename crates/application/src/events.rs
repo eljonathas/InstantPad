@@ -111,6 +111,7 @@ pub enum VoiceIcon {
     Horns,
     Sparkles,
     Person,
+    Blend,
 }
 
 /// A knob of an effect. The interface draws whatever an effect lists here.
@@ -149,16 +150,34 @@ pub enum AiStatus {
     Ready,
 }
 
+/// Learning the user's own voice, which the AI must remove before adding another.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Calibration {
+    Idle,
+    Recording,
+    Analyzing,
+}
+
 /// What the AI voices need before they can speak.
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct AiView {
     pub status: AiStatus,
     pub download_megabytes: u32,
-    /// The AI knows the user's own voice, which it must remove before adding another.
     pub is_calibrated: bool,
-    pub is_calibrating: bool,
+    pub calibration: Calibration,
     pub min_calibration_seconds: u32,
+    /// What the user asked for that waits for the AI to be set up, which then happens on its own.
+    pub waiting: Option<Message>,
+}
+
+/// A cloned voice, which a designed voice can start from or mix in.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ClonedVoiceView {
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
@@ -170,11 +189,16 @@ pub struct VoiceView {
     pub effects: Vec<EffectView>,
     pub is_hearing: bool,
     pub ai: AiView,
+    pub cloned_voices: Vec<ClonedVoiceView>,
 }
 
 /// Where the user is in cloning a voice. Each step only opens once the one before is done.
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
-#[serde(tag = "step", rename_all = "camelCase")]
+#[serde(
+    tag = "step",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum CloneStep {
     Closed,
     /// The owner of the voice reads and accepts each clause.

@@ -3,14 +3,15 @@ mod support;
 use std::sync::Arc;
 
 use instantpad_application::cloning::CloningSession;
-use instantpad_application::events::{AppEvent, CloneStep};
+use instantpad_application::events::{AppEvent, Calibration, CloneStep};
 use instantpad_application::message::{Message, TextKey};
 use instantpad_domain::cloning::{
-    MAX_PHRASE_SECONDS, MAX_SAMPLE_SECONDS, MIN_SAMPLE_SECONDS, TERMS_VERSION,
+    MAX_PHRASE_SECONDS, MAX_SAMPLE_SECONDS, MIN_CALIBRATION_SECONDS, MIN_SAMPLE_SECONDS,
+    TERMS_VERSION,
 };
 use instantpad_domain::voice::VoiceEffect;
 use instantpad_test_support::fakes::FakeAnalyzer;
-use support::{VoiceWorld, speech};
+use support::{VoiceWorld, own_voice, poll_once, speech};
 
 struct Cloning {
     world: VoiceWorld,
@@ -22,7 +23,7 @@ impl Cloning {
     fn new() -> Self {
         let world = VoiceWorld::ready();
         let session = Arc::new(CloningSession::new(
-            world.recorder.clone(),
+            world.microphone.clone(),
             world.analyzer.clone(),
             world.models.clone(),
             world.library.clone(),
@@ -44,6 +45,14 @@ impl Cloning {
             .lock()
             .unwrap()
             .push(voiceprint);
+    }
+
+    /// Accepts every clause of the terms, as the dialog does when all are ticked.
+    fn accepts(&self, owner_name: &str) {
+        let CloneStep::Terms { clauses } = self.step() else {
+            panic!("expected the terms");
+        };
+        self.session.accept_terms(owner_name, &clauses);
     }
 
     fn say(&self, words: &str) {
@@ -92,7 +101,7 @@ impl Cloning {
     /// Goes through the terms and the sample, arriving at the phrase.
     async fn arrives_at_the_phrase(&self) {
         self.session.open();
-        self.session.accept_terms("Ana");
+        self.accepts("Ana");
         self.gives_sample(30, [1.0, 0.0]).await;
     }
 
@@ -128,13 +137,25 @@ fn error(key: TextKey) -> AppEvent {
     AppEvent::error(Message::text(key))
 }
 
+/// A recording that broke a limit, with the seconds the limit allows.
+fn limit(key: TextKey, seconds: u32) -> Message {
+    Message::with(key, [Message::plain(seconds.to_string())])
+}
+
+fn cannot_hear() -> Message {
+    Message::with(
+        TextKey::AiLoadFailed,
+        [Message::plain("no voiceprint prepared")],
+    )
+}
+
 #[test]
 fn cloning_starts_closed() {
     assert_eq!(Cloning::new().step(), CloneStep::Closed);
 }
 
 #[test]
-fn opening_without_the_models_is_refused() {
+fn opening_without_the_models_is_refused_and_waits_for_the_install() {
     let cloning = Cloning::new();
     *cloning.world.models.is_installed.lock().unwrap() = false;
 
@@ -142,6 +163,24 @@ fn opening_without_the_models_is_refused() {
 
     assert_eq!(cloning.step(), CloneStep::Closed);
     assert!(cloning.world.saw(&error(TextKey::AiNotInstalled)));
+    assert_eq!(
+        cloning.world.voice.view().ai.waiting,
+        Some(Message::text(TextKey::CloneVoice))
+    );
+}
+
+#[tokio::test]
+async fn the_install_ends_the_wait_but_the_user_opens_the_dialog_again() {
+    let cloning = Cloning::new();
+    *cloning.world.models.is_installed.lock().unwrap() = false;
+    cloning.session.open();
+
+    cloning.world.voice.install_ai().await;
+
+    assert_eq!(cloning.world.voice.view().ai.waiting, None);
+    assert_eq!(cloning.step(), CloneStep::Closed);
+    cloning.session.open();
+    assert!(matches!(cloning.step(), CloneStep::Terms { .. }));
 }
 
 #[test]
@@ -162,7 +201,7 @@ fn the_terms_need_the_name_of_the_owner() {
     let cloning = Cloning::new();
     cloning.session.open();
 
-    cloning.session.accept_terms("   ");
+    cloning.accepts("   ");
 
     assert!(matches!(cloning.step(), CloneStep::Terms { .. }));
     assert!(cloning.world.saw(&error(TextKey::CloneMissingName)));
@@ -173,7 +212,7 @@ fn accepting_the_terms_moves_to_the_sample() {
     let cloning = Cloning::new();
     cloning.session.open();
 
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
 
     assert_eq!(
         cloning.step(),
@@ -202,7 +241,7 @@ fn nothing_can_be_recorded_before_the_terms_are_accepted() {
 fn recording_the_sample_shows_it_is_recording() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
 
     cloning.session.start_sample();
 
@@ -220,7 +259,7 @@ fn recording_the_sample_shows_it_is_recording() {
 async fn a_sample_that_is_too_short_is_refused_and_nothing_is_analyzed() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
 
     cloning
         .gives_sample(MIN_SAMPLE_SECONDS - 1, [1.0, 0.0])
@@ -228,7 +267,7 @@ async fn a_sample_that_is_too_short_is_refused_and_nothing_is_analyzed() {
 
     assert_eq!(
         cloning.problem(),
-        Some(Message::text(TextKey::SampleTooShort))
+        Some(limit(TextKey::SampleTooShort, MIN_SAMPLE_SECONDS))
     );
     assert!(matches!(
         cloning.step(),
@@ -244,7 +283,7 @@ async fn a_sample_that_is_too_short_is_refused_and_nothing_is_analyzed() {
 async fn a_sample_that_is_too_long_is_refused() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
 
     cloning
         .gives_sample(MAX_SAMPLE_SECONDS + 1, [1.0, 0.0])
@@ -252,7 +291,7 @@ async fn a_sample_that_is_too_long_is_refused() {
 
     assert_eq!(
         cloning.problem(),
-        Some(Message::text(TextKey::SampleTooLong))
+        Some(limit(TextKey::SampleTooLong, MAX_SAMPLE_SECONDS))
     );
     assert_eq!(cloning.unused_voiceprints(), 1);
 }
@@ -261,23 +300,20 @@ async fn a_sample_that_is_too_long_is_refused() {
 async fn a_sample_the_ai_cannot_hear_shows_why() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
     cloning.session.start_sample();
     cloning.records(30);
 
     cloning.session.finish_sample().await;
 
-    assert_eq!(
-        cloning.problem(),
-        Some(Message::text(TextKey::AiLoadFailed))
-    );
+    assert_eq!(cloning.problem(), Some(cannot_hear()));
 }
 
 #[tokio::test]
 async fn a_good_sample_moves_to_a_phrase_of_six_digits() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
 
     cloning.gives_sample(MIN_SAMPLE_SECONDS, [1.0, 0.0]).await;
 
@@ -301,7 +337,7 @@ async fn a_good_sample_moves_to_a_phrase_of_six_digits() {
 async fn a_file_of_the_voice_is_as_good_as_a_recording() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
     *cloning.world.recorder.file.lock().unwrap() = Some(speech(40));
     cloning.hears([1.0, 0.0]);
 
@@ -314,7 +350,7 @@ async fn a_file_of_the_voice_is_as_good_as_a_recording() {
 async fn a_file_that_cannot_be_read_shows_why() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
 
     cloning.session.import_sample("broken.wav").await;
 
@@ -380,7 +416,7 @@ async fn a_phrase_that_goes_on_too_long_asks_for_new_digits() {
 
     assert_eq!(
         cloning.problem(),
-        Some(Message::text(TextKey::PhraseTooLong))
+        Some(limit(TextKey::PhraseTooLong, MAX_PHRASE_SECONDS))
     );
     assert_eq!(cloning.unused_voiceprints(), 1);
 }
@@ -394,10 +430,7 @@ async fn a_phrase_the_ai_cannot_hear_asks_for_new_digits() {
 
     cloning.session.finish_phrase().await;
 
-    assert_eq!(
-        cloning.problem(),
-        Some(Message::text(TextKey::AiLoadFailed))
-    );
+    assert_eq!(cloning.problem(), Some(cannot_hear()));
     assert!(matches!(cloning.step(), CloneStep::Phrase { .. }));
 }
 
@@ -417,7 +450,7 @@ async fn the_right_phrase_from_the_same_speaker_moves_to_the_name() {
 async fn saving_keeps_the_voice_with_its_consent_and_closes() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("  Ana Souza ");
+    cloning.accepts("  Ana Souza ");
     cloning.gives_sample(30, [1.0, 0.0]).await;
     cloning.reads_the_digits();
     cloning.speaks_phrase([1.0, 0.0]).await;
@@ -515,7 +548,7 @@ async fn closing_at_the_terms_forgets_everything() {
 async fn closing_while_recording_stops_the_recording() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
     cloning.session.start_sample();
     assert!(cloning.is_recording());
 
@@ -585,7 +618,7 @@ async fn opening_again_starts_over_from_the_terms() {
 async fn finishing_a_recording_after_closing_does_nothing() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
     cloning.session.start_sample();
     cloning.records(30);
     cloning.hears([1.0, 0.0]);
@@ -616,7 +649,7 @@ async fn finishing_a_phrase_after_closing_does_nothing() {
 async fn closing_while_the_ai_listens_to_the_sample_drops_the_result() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
     let session = cloning.session.clone();
     *cloning.world.analyzer.meanwhile.lock().unwrap() = Some(Box::new(move || session.close()));
 
@@ -684,7 +717,7 @@ async fn a_voice_that_could_not_be_saved_is_not_kept_in_memory_and_can_be_saved_
 fn accepting_the_terms_outside_the_terms_shows_no_error() {
     let cloning = Cloning::new();
 
-    cloning.session.accept_terms("");
+    cloning.session.accept_terms("", &[]);
 
     assert_eq!(cloning.step(), CloneStep::Closed);
     assert!(cloning.world.events.0.lock().unwrap().is_empty());
@@ -694,7 +727,7 @@ fn accepting_the_terms_outside_the_terms_shows_no_error() {
 async fn closing_while_a_file_is_read_analyzes_nothing() {
     let cloning = Cloning::new();
     cloning.session.open();
-    cloning.session.accept_terms("Ana");
+    cloning.accepts("Ana");
     *cloning.world.recorder.file.lock().unwrap() = Some(speech(40));
     cloning.hears([1.0, 0.0]);
     let session = cloning.session.clone();
@@ -705,4 +738,243 @@ async fn closing_while_a_file_is_read_analyzes_nothing() {
     assert_eq!(cloning.step(), CloneStep::Closed);
     assert_eq!(cloning.last_step_told(), Some(CloneStep::Closed));
     assert_eq!(cloning.unused_voiceprints(), 1);
+}
+
+#[test]
+fn a_clause_left_out_refuses_the_terms() {
+    let cloning = Cloning::new();
+    cloning.session.open();
+    let CloneStep::Terms { clauses } = cloning.step() else {
+        panic!("expected the terms");
+    };
+
+    for accepted in [&clauses[1..], &clauses[..4], &[][..]] {
+        cloning.session.accept_terms("Ana", accepted);
+
+        assert!(matches!(cloning.step(), CloneStep::Terms { .. }));
+    }
+
+    let refusals = cloning
+        .world
+        .events
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|event| **event == error(TextKey::CloneTermsRefused))
+        .count();
+    assert_eq!(refusals, 3);
+}
+
+#[test]
+fn the_clauses_are_checked_before_the_name() {
+    let cloning = Cloning::new();
+    cloning.session.open();
+
+    cloning.session.accept_terms("", &[]);
+
+    assert!(cloning.world.saw(&error(TextKey::CloneTermsRefused)));
+    assert!(!cloning.world.saw(&error(TextKey::CloneMissingName)));
+}
+
+#[test]
+fn calibration_and_cloning_cannot_record_at_once() {
+    let cloning = Cloning::new();
+    cloning.world.voice.start_calibration();
+    cloning.session.open();
+    cloning.accepts("Ana");
+
+    cloning.session.start_sample();
+
+    assert!(matches!(
+        cloning.step(),
+        CloneStep::Sample {
+            is_recording: false,
+            ..
+        }
+    ));
+    assert_eq!(
+        cloning.world.voice.view().ai.calibration,
+        Calibration::Recording
+    );
+}
+
+#[test]
+fn cloning_that_records_keeps_the_calibration_from_starting() {
+    let cloning = Cloning::new();
+    cloning.session.open();
+    cloning.accepts("Ana");
+    cloning.session.start_sample();
+
+    cloning.world.voice.start_calibration();
+
+    assert_eq!(cloning.world.voice.view().ai.calibration, Calibration::Idle);
+    assert!(matches!(
+        cloning.step(),
+        CloneStep::Sample {
+            is_recording: true,
+            ..
+        }
+    ));
+}
+
+#[tokio::test]
+async fn closing_the_dialog_does_not_stop_a_calibration_recording() {
+    let cloning = Cloning::new();
+    cloning.world.voice.start_calibration();
+    cloning.session.open();
+    cloning.accepts("Ana");
+
+    cloning.session.close();
+
+    assert!(cloning.is_recording());
+    assert_eq!(
+        cloning.world.voice.view().ai.calibration,
+        Calibration::Recording
+    );
+    cloning
+        .world
+        .analyzer
+        .voiceprints
+        .lock()
+        .unwrap()
+        .push(own_voice());
+    cloning.records(MIN_CALIBRATION_SECONDS);
+    cloning.world.voice.finish_calibration().await;
+    assert!(cloning.world.voice.view().ai.is_calibrated);
+}
+
+#[tokio::test]
+async fn a_second_stop_of_the_sample_does_nothing() {
+    let cloning = Cloning::new();
+    cloning.session.open();
+    cloning.accepts("Ana");
+    let session = cloning.session.clone();
+    *cloning.world.analyzer.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        assert_eq!(session.step(), CloneStep::Analyzing);
+        assert!(poll_once(session.finish_sample()).is_some());
+        assert_eq!(session.step(), CloneStep::Analyzing);
+    }));
+
+    cloning.gives_sample(30, [1.0, 0.0]).await;
+
+    assert!(matches!(
+        cloning.step(),
+        CloneStep::Phrase { problem: None, .. }
+    ));
+}
+
+#[tokio::test]
+async fn a_second_stop_of_the_phrase_does_nothing() {
+    let cloning = Cloning::new();
+    cloning.arrives_at_the_phrase().await;
+    cloning.reads_the_digits();
+    let session = cloning.session.clone();
+    *cloning.world.analyzer.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        assert_eq!(session.step(), CloneStep::Analyzing);
+        assert!(poll_once(session.finish_phrase()).is_some());
+        assert_eq!(session.step(), CloneStep::Analyzing);
+    }));
+
+    cloning.speaks_phrase([1.0, 0.0]).await;
+
+    assert_eq!(cloning.step(), CloneStep::Name);
+}
+
+#[tokio::test]
+async fn importing_a_file_twice_at_once_reads_only_the_first() {
+    let cloning = Cloning::new();
+    cloning.session.open();
+    cloning.accepts("Ana");
+    *cloning.world.recorder.file.lock().unwrap() = Some(speech(40));
+    cloning.hears([1.0, 0.0]);
+    let session = cloning.session.clone();
+    *cloning.world.recorder.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        assert_eq!(session.step(), CloneStep::Analyzing);
+        assert!(poll_once(session.import_sample("again.wav")).is_some());
+    }));
+
+    cloning.session.import_sample("voice.wav").await;
+
+    assert!(matches!(cloning.step(), CloneStep::Phrase { .. }));
+    assert_eq!(cloning.unused_voiceprints(), 0);
+}
+
+#[tokio::test]
+async fn closing_and_opening_again_while_a_file_is_read_drops_the_old_result() {
+    let cloning = Cloning::new();
+    cloning.session.open();
+    cloning.accepts("Ana");
+    *cloning.world.recorder.file.lock().unwrap() = Some(speech(40));
+    cloning.hears([1.0, 0.0]);
+    let session = cloning.session.clone();
+    *cloning.world.recorder.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        session.close();
+        session.open();
+    }));
+
+    cloning.session.import_sample("voice.wav").await;
+
+    assert!(matches!(cloning.step(), CloneStep::Terms { .. }));
+    assert_eq!(cloning.last_step_told(), Some(cloning.step()));
+    assert_eq!(cloning.unused_voiceprints(), 1);
+}
+
+#[tokio::test]
+async fn closing_and_opening_again_while_a_file_fails_to_read_stays_on_the_terms() {
+    let cloning = Cloning::new();
+    cloning.session.open();
+    cloning.accepts("Ana");
+    let session = cloning.session.clone();
+    *cloning.world.recorder.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        session.close();
+        session.open();
+    }));
+
+    cloning.session.import_sample("broken.wav").await;
+
+    assert!(matches!(cloning.step(), CloneStep::Terms { .. }));
+}
+
+#[tokio::test]
+async fn closing_and_opening_again_while_the_sample_is_analyzed_stays_on_the_terms() {
+    let cloning = Cloning::new();
+    cloning.session.open();
+    cloning.accepts("Ana");
+    let session = cloning.session.clone();
+    *cloning.world.analyzer.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        session.close();
+        session.open();
+    }));
+
+    cloning.gives_sample(30, [1.0, 0.0]).await;
+
+    assert!(matches!(cloning.step(), CloneStep::Terms { .. }));
+}
+
+#[tokio::test]
+async fn closing_and_opening_again_while_the_phrase_is_analyzed_stays_on_the_terms() {
+    let cloning = Cloning::new();
+    cloning.arrives_at_the_phrase().await;
+    cloning.reads_the_digits();
+    let session = cloning.session.clone();
+    *cloning.world.analyzer.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        session.close();
+        session.open();
+    }));
+
+    cloning.speaks_phrase([1.0, 0.0]).await;
+
+    assert!(matches!(cloning.step(), CloneStep::Terms { .. }));
+    cloning.session.save("My voice");
+    assert!(
+        cloning
+            .world
+            .repository
+            .library
+            .lock()
+            .unwrap()
+            .clones
+            .is_empty()
+    );
 }

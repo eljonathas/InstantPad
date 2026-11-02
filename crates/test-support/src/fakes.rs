@@ -474,7 +474,7 @@ impl VoiceModels for FakeModels {
 
     async fn install(&self, progress: &(dyn Fn(u8) + Send + Sync)) -> Result<(), Failure> {
         if *self.is_offline.lock().unwrap() {
-            return Err(Failure::text(TextKey::AiDownloadFailed));
+            return Err(Failure::because(TextKey::AiDownloadFailed, "offline"));
         }
         progress(50);
         progress(100);
@@ -486,6 +486,7 @@ impl VoiceModels for FakeModels {
 /// Hears the voiceprint and words that tests prepare, whatever the speech.
 #[derive(Default)]
 pub struct FakeAnalyzer {
+    /// What the next calls to `voiceprint` give, one each. The analyzer fails when it runs out.
     pub voiceprints: Mutex<Vec<Voiceprint>>,
     pub transcript: Mutex<String>,
     /// Runs while a voiceprint is being taken, for what the user does meanwhile.
@@ -493,7 +494,7 @@ pub struct FakeAnalyzer {
 }
 
 impl FakeAnalyzer {
-    /// A voice the analyzer will hear, one per call to `voiceprint`.
+    /// A voiceprint of two numbers, enough to tell voices apart in tests.
     pub fn voice(values: [f32; 2]) -> Voiceprint {
         Voiceprint::new(values.to_vec())
     }
@@ -507,7 +508,10 @@ impl VoiceAnalyzer for FakeAnalyzer {
         }
         let mut voiceprints = self.voiceprints.lock().unwrap();
         if voiceprints.is_empty() {
-            return Err(Failure::text(TextKey::AiLoadFailed));
+            return Err(Failure::because(
+                TextKey::AiLoadFailed,
+                "no voiceprint prepared",
+            ));
         }
         Ok(voiceprints.remove(0))
     }
@@ -516,8 +520,11 @@ impl VoiceAnalyzer for FakeAnalyzer {
         Ok(self.transcript.lock().unwrap().clone())
     }
 
-    fn preset(&self, _preset: VoicePreset) -> Voiceprint {
-        Self::voice([0.0, 1.0])
+    fn preset(&self, preset: VoicePreset) -> Voiceprint {
+        match preset {
+            VoicePreset::Feminine => Self::voice([0.0, 1.0]),
+            VoicePreset::Masculine => Self::voice([0.0, -1.0]),
+        }
     }
 
     fn fingerprint(&self, speech: &[f32]) -> String {

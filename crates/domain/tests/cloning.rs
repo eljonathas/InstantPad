@@ -1,7 +1,8 @@
 use instantpad_domain::cloning::{
-    Challenge, CloneRefusal, CloneRequest, ClonedVoice, Consent, TERMS_VERSION, VoiceLibrary,
-    Voiceprint,
+    Challenge, CloneRefusal, CloneRequest, ClonedVoice, Consent, DesignRefusal, TERMS_VERSION,
+    VoiceLibrary, VoiceRecipe, Voiceprint,
 };
+use instantpad_domain::voice::VoicePreset;
 
 fn voice(values: &[f32]) -> Voiceprint {
     Voiceprint::new(values.to_vec())
@@ -334,7 +335,7 @@ fn a_cloned_voice_records_the_consent() {
     assert_eq!(cloned.consent.accepted_at, 1_700_000_000);
     assert_eq!(cloned.consent.sample_sha256, "abc123");
     assert_eq!(cloned.consent.similarity, sample.similarity(&phrase));
-    assert!(cloned.is_usable());
+    assert!(cloned.has_current_consent());
 }
 
 #[test]
@@ -353,49 +354,355 @@ fn every_cloned_voice_gets_an_id_of_its_own() {
 }
 
 #[test]
-fn a_voice_cloned_under_older_terms_cannot_be_used() {
-    assert!(cloned("a", TERMS_VERSION).is_usable());
-    assert!(!cloned("a", TERMS_VERSION - 1).is_usable());
+fn a_voice_cloned_under_older_terms_has_no_current_consent() {
+    assert!(cloned("a", TERMS_VERSION).has_current_consent());
+    assert!(!cloned("a", TERMS_VERSION - 1).has_current_consent());
+}
+
+/// Two cloned voices that point in unrelated directions.
+fn library() -> VoiceLibrary {
+    VoiceLibrary {
+        clones: vec![cloned("a", TERMS_VERSION), cloned_toward("b", [0.0, 1.0])],
+        ..VoiceLibrary::default()
+    }
+}
+
+fn cloned_toward(id: &str, values: [f32; 2]) -> ClonedVoice {
+    ClonedVoice {
+        voiceprint: voice(&values),
+        ..cloned(id, TERMS_VERSION)
+    }
+}
+
+/// Presets far from the cloned voices and from each other.
+fn preset(preset: VoicePreset) -> Voiceprint {
+    match preset {
+        VoicePreset::Feminine => voice(&[10.0, 0.0]),
+        VoicePreset::Masculine => voice(&[-10.0, 0.0]),
+    }
+}
+
+fn recipe(base: &str) -> VoiceRecipe {
+    VoiceRecipe {
+        base_id: base.to_owned(),
+        timbre: 0.0,
+        blend_id: None,
+        blend: 0.0,
+    }
+}
+
+fn blended(base: &str, with: &str, blend: f32) -> VoiceRecipe {
+    VoiceRecipe {
+        blend_id: Some(with.to_owned()),
+        blend,
+        ..recipe(base)
+    }
+}
+
+fn assert_close(heard: &Voiceprint, expected: &[f32]) {
+    assert_eq!(heard.values().len(), expected.len());
+    for (heard, expected) in heard.values().iter().zip(expected) {
+        assert!((heard - expected).abs() < 1e-5, "{heard} is not {expected}");
+    }
+}
+
+/// Designs a voice and adds it to the library, returning its id.
+fn design(library: &mut VoiceLibrary, name: &str, recipe: VoiceRecipe) -> String {
+    let designed = library.design_voice(name, recipe).unwrap();
+    let id = designed.id.clone();
+    library.designs.push(designed);
+    id
 }
 
 #[test]
-fn the_library_finds_a_voice_by_its_id() {
-    let library = VoiceLibrary {
-        own: None,
-        clones: vec![cloned("a", TERMS_VERSION), cloned("b", TERMS_VERSION)],
+fn moving_toward_a_voice_goes_that_part_of_the_way() {
+    let (from, to) = (voice(&[1.0, 0.0]), voice(&[0.0, 1.0]));
+
+    assert_close(&from.toward(&to, 0.0), &[1.0, 0.0]);
+    assert_close(&from.toward(&to, 0.25), &[0.75, 0.25]);
+    assert_close(&from.toward(&to, 1.0), &[0.0, 1.0]);
+}
+
+#[test]
+fn moving_toward_a_voice_never_goes_past_either_end() {
+    let (from, to) = (voice(&[1.0, 0.0]), voice(&[0.0, 1.0]));
+
+    assert_close(&from.toward(&to, 3.0), &[0.0, 1.0]);
+    assert_close(&from.toward(&to, -3.0), &[1.0, 0.0]);
+}
+
+#[test]
+fn a_designed_voice_without_changes_sounds_like_its_base() {
+    let library = library();
+
+    let heard = library.design_voiceprint(&recipe("a"), preset).unwrap();
+
+    assert_close(&heard, &[1.0, 0.0]);
+}
+
+#[test]
+fn a_blend_moves_the_voice_toward_the_other_one() {
+    let library = library();
+
+    let heard = library
+        .design_voiceprint(&blended("a", "b", 0.25), preset)
+        .unwrap();
+
+    assert_close(&heard, &[0.75, 0.25]);
+}
+
+#[test]
+fn an_amount_of_blend_without_a_voice_to_blend_changes_nothing() {
+    let library = library();
+    let lonely = VoiceRecipe {
+        blend: 0.9,
+        ..recipe("a")
     };
 
-    assert_eq!(
-        library.find("b").map(|voice| voice.name.as_str()),
-        Some("voice b")
-    );
-    assert_eq!(library.find("c"), None);
+    let heard = library.design_voiceprint(&lonely, preset).unwrap();
+
+    assert_close(&heard, &[1.0, 0.0]);
 }
 
 #[test]
-fn the_voices_that_can_speak_are_listed_in_the_order_they_were_cloned() {
-    let library = VoiceLibrary {
-        own: None,
+fn a_higher_timbre_moves_the_voice_toward_the_feminine_preset() {
+    let library = library();
+    let high = VoiceRecipe {
+        timbre: 0.5,
+        ..recipe("a")
+    };
+
+    let heard = library.design_voiceprint(&high, preset).unwrap();
+
+    // Half of the range is 0.3 of the way to the preset.
+    assert_close(&heard, &[0.7 + 3.0, 0.0]);
+}
+
+#[test]
+fn a_deeper_timbre_moves_the_voice_toward_the_masculine_preset() {
+    let library = library();
+    let deep = VoiceRecipe {
+        timbre: -0.5,
+        ..recipe("a")
+    };
+
+    let heard = library.design_voiceprint(&deep, preset).unwrap();
+
+    assert_close(&heard, &[0.7 - 3.0, 0.0]);
+}
+
+#[test]
+fn the_timbre_comes_after_the_blend() {
+    let library = library();
+    let both = VoiceRecipe {
+        timbre: 1.0,
+        ..blended("a", "b", 0.5)
+    };
+
+    let heard = library.design_voiceprint(&both, preset).unwrap();
+
+    // The middle of the two voices, 0.6 of the way to the feminine preset.
+    assert_close(&heard, &[0.5 + (10.0 - 0.5) * 0.6, 0.5 - 0.5 * 0.6]);
+}
+
+#[test]
+fn a_recipe_with_a_voice_that_is_gone_sounds_like_nobody() {
+    let library = library();
+
+    assert_eq!(library.design_voiceprint(&recipe("gone"), preset), None);
+    assert_eq!(
+        library.design_voiceprint(&blended("a", "gone", 0.5), preset),
+        None
+    );
+}
+
+#[test]
+fn the_library_tells_who_a_cloned_or_a_designed_voice_sounds_like() {
+    let mut library = library();
+    let id = design(&mut library, "Mix", blended("a", "b", 0.5));
+
+    let cloned = library.voiceprint("b", preset).unwrap();
+    let designed = library.voiceprint(&id, preset).unwrap();
+
+    assert_close(&cloned, &[0.0, 1.0]);
+    assert_close(&designed, &[0.5, 0.5]);
+    assert_eq!(library.voiceprint("gone", preset), None);
+}
+
+#[test]
+fn a_voice_is_found_by_name_whether_it_is_cloned_or_designed() {
+    let mut library = library();
+    let id = design(&mut library, "Mix", recipe("a"));
+
+    assert_eq!(library.name("a"), Some("voice a"));
+    assert_eq!(library.name(&id), Some("Mix"));
+    assert_eq!(library.name("gone"), None);
+}
+
+#[test]
+fn the_cloned_voices_are_listed_before_the_designed_ones() {
+    let mut library = library();
+    let first = design(&mut library, "One", recipe("a"));
+    let second = design(&mut library, "Two", recipe("b"));
+
+    assert_eq!(library.ids(), ["a", "b", &first, &second]);
+}
+
+#[test]
+fn a_designed_voice_is_named_and_gets_an_id_of_its_own() {
+    let library = library();
+
+    let first = library.design_voice("  Mix ", recipe("a")).unwrap();
+    let second = library.design_voice("Mix", recipe("a")).unwrap();
+
+    assert_eq!(first.name, "Mix");
+    assert_eq!(first.recipe, recipe("a"));
+    assert!(!first.id.is_empty());
+    assert_ne!(first.id, second.id);
+}
+
+#[test]
+fn a_designed_voice_without_a_name_is_refused() {
+    assert_eq!(
+        library().design_voice("   ", recipe("a")),
+        Err(DesignRefusal::MissingName)
+    );
+}
+
+#[test]
+fn a_designed_voice_from_a_voice_that_is_not_there_is_refused() {
+    let library = library();
+
+    assert_eq!(
+        library.design_voice("Mix", recipe("gone")),
+        Err(DesignRefusal::UnknownVoice)
+    );
+    assert_eq!(
+        library.design_voice("Mix", blended("a", "gone", 0.5)),
+        Err(DesignRefusal::UnknownVoice)
+    );
+}
+
+#[test]
+fn the_name_is_checked_before_the_voices() {
+    assert_eq!(
+        library().design_voice("", recipe("gone")),
+        Err(DesignRefusal::MissingName)
+    );
+}
+
+#[test]
+fn a_designed_voice_keeps_its_settings_inside_their_range() {
+    let wild = VoiceRecipe {
+        timbre: 5.0,
+        blend: -2.0,
+        ..blended("a", "b", 0.0)
+    };
+    let library = library();
+
+    let low = library.design_voice("Mix", wild.clone()).unwrap().recipe;
+    let high = library
+        .design_voice(
+            "Mix",
+            VoiceRecipe {
+                timbre: -5.0,
+                blend: 2.0,
+                ..wild
+            },
+        )
+        .unwrap()
+        .recipe;
+
+    assert_eq!((low.timbre, low.blend), (1.0, 0.0));
+    assert_eq!((high.timbre, high.blend), (-1.0, 1.0));
+}
+
+#[test]
+fn voices_cloned_under_older_terms_are_dropped() {
+    let mut library = VoiceLibrary {
+        own: Some(voice(&[1.0])),
         clones: vec![
             cloned("a", TERMS_VERSION),
             cloned("old", TERMS_VERSION - 1),
             cloned("b", TERMS_VERSION),
         ],
+        ..VoiceLibrary::default()
     };
 
-    assert_eq!(library.usable_ids(), ["a", "b"]);
+    assert!(library.drop_outdated());
+
+    assert_eq!(library.ids(), ["a", "b"]);
+    assert!(library.own.is_some());
+    assert!(!library.drop_outdated());
 }
 
 #[test]
-fn removing_a_voice_says_whether_it_was_there() {
+fn dropping_the_outdated_voices_drops_the_designs_made_from_them() {
+    let mut library = VoiceLibrary {
+        clones: vec![
+            cloned("a", TERMS_VERSION),
+            cloned("old", TERMS_VERSION - 1),
+            cloned("b", TERMS_VERSION),
+        ],
+        ..VoiceLibrary::default()
+    };
+    let from_old = design(&mut library, "From old", recipe("old"));
+    let blends_old = design(&mut library, "Blends old", blended("a", "old", 0.5));
+    let kept = design(&mut library, "Kept", blended("a", "b", 0.5));
+
+    assert!(library.drop_outdated());
+
+    assert_eq!(library.ids(), ["a", "b", kept.as_str()]);
+    assert_eq!(library.name(&from_old), None);
+    assert_eq!(library.name(&blends_old), None);
+}
+
+#[test]
+fn removing_a_voice_says_which_voices_went() {
     let mut library = VoiceLibrary {
         own: Some(voice(&[1.0])),
         clones: vec![cloned("a", TERMS_VERSION), cloned("b", TERMS_VERSION)],
+        ..VoiceLibrary::default()
     };
 
-    assert!(library.remove("a"));
-    assert!(!library.remove("a"));
+    assert_eq!(library.remove("a"), ["a"]);
+    assert!(library.remove("a").is_empty());
 
-    assert_eq!(library.usable_ids(), ["b"]);
+    assert_eq!(library.ids(), ["b"]);
     assert!(library.own.is_some());
+}
+
+#[test]
+fn removing_a_cloned_voice_removes_the_designs_that_start_from_it() {
+    let mut library = library();
+    let from_a = design(&mut library, "From a", recipe("a"));
+    let from_b = design(&mut library, "From b", recipe("b"));
+
+    let removed = library.remove("a");
+
+    assert_eq!(removed, ["a", from_a.as_str()]);
+    assert_eq!(library.ids(), ["b", from_b.as_str()]);
+}
+
+#[test]
+fn removing_a_cloned_voice_removes_the_designs_that_blend_it_in() {
+    let mut library = library();
+    let mixes_b = design(&mut library, "Mixes b", blended("a", "b", 0.5));
+    let plain_a = design(&mut library, "Plain a", recipe("a"));
+
+    let removed = library.remove("b");
+
+    assert_eq!(removed, ["b", mixes_b.as_str()]);
+    assert_eq!(library.ids(), ["a", plain_a.as_str()]);
+}
+
+#[test]
+fn removing_a_designed_voice_keeps_the_cloned_voices_it_is_made_of() {
+    let mut library = library();
+    let mix = design(&mut library, "Mix", blended("a", "b", 0.5));
+
+    let removed = library.remove(&mix);
+
+    assert_eq!(removed, [mix]);
+    assert_eq!(library.ids(), ["a", "b"]);
 }

@@ -7,7 +7,9 @@ use instantpad_application::ports::{
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
-use instantpad_domain::cloning::{ClonedVoice, Consent, TERMS_VERSION, VoiceLibrary, Voiceprint};
+use instantpad_domain::cloning::{
+    ClonedVoice, Consent, DesignedVoice, TERMS_VERSION, VoiceLibrary, VoiceRecipe, Voiceprint,
+};
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
 use instantpad_domain::sounds::SoundSource;
 
@@ -97,6 +99,16 @@ pub fn voice_library_repository(repository: &dyn VoiceLibraryRepository) {
                 accepted_at: 1_700_000_000,
                 similarity: 0.875,
                 sample_sha256: "abc123".to_owned(),
+            },
+        }],
+        designs: vec![DesignedVoice {
+            id: "d".to_owned(),
+            name: "Mix".to_owned(),
+            recipe: VoiceRecipe {
+                base_id: "a".to_owned(),
+                timbre: -0.5,
+                blend_id: Some("b".to_owned()),
+                blend: 0.25,
             },
         }],
     };

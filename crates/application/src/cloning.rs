@@ -8,7 +8,8 @@ use instantpad_domain::cloning::{
 
 use crate::events::{AppEvent, CloneStep};
 use crate::message::{Failure, Message, TextKey};
-use crate::ports::{EventSink, VoiceAnalyzer, VoiceModels, VoiceRecorder};
+use crate::ports::{EventSink, VoiceAnalyzer, VoiceModels};
+use crate::recorder::{Recording, SharedRecorder};
 use crate::voice::{SPEECH_RATE, VoiceSession};
 use crate::voice_library::VoiceLibraryStore;
 
@@ -34,6 +35,9 @@ struct Draft {
 struct State {
     step: CloneStep,
     draft: Draft,
+    /// Counts the times the dialog opened or closed, so what the AI hears for a dialog that is
+    /// gone is dropped, even when another one opened meanwhile.
+    generation: u64,
 }
 
 fn sample_step(is_recording: bool, problem: Option<Message>) -> CloneStep {
@@ -62,6 +66,11 @@ fn refusal_text(refusal: CloneRefusal) -> Message {
     })
 }
 
+/// A limit the recording broke, with the number of seconds it allows.
+fn limit(key: TextKey, seconds: u32) -> Message {
+    Message::with(key, [Message::plain(seconds.to_string())])
+}
+
 fn seconds(speech: &[f32]) -> usize {
     speech.len() / SPEECH_RATE
 }
@@ -75,7 +84,7 @@ fn now() -> u64 {
 /// Clones a voice in steps: the terms, a sample, the phrase that proves the owner is present,
 /// and a name. Only the voiceprint and the consent record are kept.
 pub struct CloningSession {
-    recorder: Arc<dyn VoiceRecorder>,
+    recorder: Arc<SharedRecorder>,
     analyzer: Arc<dyn VoiceAnalyzer>,
     models: Arc<dyn VoiceModels>,
     library: Arc<VoiceLibraryStore>,
@@ -86,7 +95,7 @@ pub struct CloningSession {
 
 impl CloningSession {
     pub fn new(
-        recorder: Arc<dyn VoiceRecorder>,
+        recorder: Arc<SharedRecorder>,
         analyzer: Arc<dyn VoiceAnalyzer>,
         models: Arc<dyn VoiceModels>,
         library: Arc<VoiceLibraryStore>,
@@ -103,6 +112,7 @@ impl CloningSession {
             state: Mutex::new(State {
                 step: CloneStep::Closed,
                 draft: Draft::default(),
+                generation: 0,
             }),
         }
     }
@@ -114,27 +124,34 @@ impl CloningSession {
     /// Cloning listens with the AI, so the models must be there first.
     pub fn open(&self) {
         if !self.models.is_installed() {
-            let reason = Message::text(TextKey::AiNotInstalled);
-            self.events.emit(AppEvent::error(reason));
+            self.voice.wait_for_cloning();
             return;
         }
-        self.set(
-            CloneStep::Terms {
-                clauses: CLAUSES.to_vec(),
-            },
-            Draft::default(),
-        );
+        let mut state = self.state();
+        state.generation += 1;
+        state.draft = Draft::default();
+        let terms = CloneStep::Terms {
+            clauses: CLAUSES.to_vec(),
+        };
+        self.show(&mut state, terms);
     }
 
-    pub fn accept_terms(&self, owner_name: &str) {
+    /// The owner must accept every clause, and sign with their name.
+    pub fn accept_terms(&self, owner_name: &str, accepted: &[TextKey]) {
         let mut state = self.state();
         if !matches!(state.step, CloneStep::Terms { .. }) {
             return;
         }
         let owner_name = owner_name.trim();
-        if owner_name.is_empty() {
-            let reason = Message::text(TextKey::CloneMissingName);
-            self.events.emit(AppEvent::error(reason));
+        let refusal = if !CLAUSES.iter().all(|clause| accepted.contains(clause)) {
+            Some(TextKey::CloneTermsRefused)
+        } else if owner_name.is_empty() {
+            Some(TextKey::CloneMissingName)
+        } else {
+            None
+        };
+        if let Some(refusal) = refusal {
+            self.events.emit(AppEvent::error(Message::text(refusal)));
             return;
         }
         state.draft.owner_name = owner_name.to_owned();
@@ -143,88 +160,107 @@ impl CloningSession {
 
     pub fn start_sample(&self) {
         let mut state = self.state();
-        if !matches!(state.step, CloneStep::Sample { .. }) {
-            return;
-        }
-        self.recorder.start_recording();
-        self.show(&mut state, sample_step(true, None));
-    }
-
-    pub async fn finish_sample(&self) {
-        if !matches!(
-            self.step(),
-            CloneStep::Sample {
-                is_recording: true,
-                ..
-            }
-        ) {
-            return;
-        }
-        let speech = self.recorder.stop_recording();
-        self.take_sample(speech).await;
-    }
-
-    pub async fn import_sample(&self, path: &str) {
-        if !matches!(
-            self.step(),
+        let is_ready = matches!(
+            state.step,
             CloneStep::Sample {
                 is_recording: false,
                 ..
             }
-        ) {
-            return;
+        );
+        if is_ready && self.recorder.start(Recording::Cloning) {
+            self.show(&mut state, sample_step(true, None));
         }
+    }
+
+    pub async fn finish_sample(&self) {
+        let is_recording = |step: &CloneStep| {
+            matches!(
+                step,
+                CloneStep::Sample {
+                    is_recording: true,
+                    ..
+                }
+            )
+        };
+        let Some(generation) = self.listen(is_recording) else {
+            return;
+        };
+        let speech = self.recorder.stop(Recording::Cloning);
+        self.take_sample(generation, speech).await;
+    }
+
+    pub async fn import_sample(&self, path: &str) {
+        let is_waiting = |step: &CloneStep| {
+            matches!(
+                step,
+                CloneStep::Sample {
+                    is_recording: false,
+                    ..
+                }
+            )
+        };
+        let Some(generation) = self.listen(is_waiting) else {
+            return;
+        };
         match self.recorder.decode_file(path).await {
-            Ok(speech) => self.take_sample(speech).await,
-            Err(Failure(reason)) => self.show_now(sample_step(false, Some(reason))),
+            Ok(speech) => self.take_sample(generation, speech).await,
+            Err(Failure(reason)) => {
+                self.show_if_current(generation, sample_step(false, Some(reason)));
+            }
         }
     }
 
     pub fn start_phrase(&self) {
         let mut state = self.state();
-        if !matches!(state.step, CloneStep::Phrase { .. }) {
-            return;
+        let is_ready = matches!(
+            state.step,
+            CloneStep::Phrase {
+                is_recording: false,
+                ..
+            }
+        );
+        if is_ready && self.recorder.start(Recording::Cloning) {
+            let step = phrase_step(&state.draft.challenge, true, None);
+            self.show(&mut state, step);
         }
-        self.recorder.start_recording();
-        let step = phrase_step(&state.draft.challenge, true, None);
-        self.show(&mut state, step);
     }
 
     pub async fn finish_phrase(&self) {
-        if !matches!(
-            self.step(),
-            CloneStep::Phrase {
-                is_recording: true,
-                ..
-            }
-        ) {
+        let is_recording = |step: &CloneStep| {
+            matches!(
+                step,
+                CloneStep::Phrase {
+                    is_recording: true,
+                    ..
+                }
+            )
+        };
+        let Some(generation) = self.listen(is_recording) else {
             return;
-        }
-        let speech = self.recorder.stop_recording();
+        };
+        let speech = self.recorder.stop(Recording::Cloning);
         if seconds(&speech) > MAX_PHRASE_SECONDS as usize {
-            self.retry_phrase(Message::text(TextKey::PhraseTooLong));
+            let problem = limit(TextKey::PhraseTooLong, MAX_PHRASE_SECONDS);
+            self.retry_phrase(generation, problem);
             return;
         }
 
-        self.show_now(CloneStep::Analyzing);
         let heard = tokio::try_join!(
             self.analyzer.voiceprint(speech.clone()),
             self.analyzer.transcribe(speech),
         );
-
-        let mut state = self.state();
-        // Closed while the AI was listening.
-        if state.step != CloneStep::Analyzing {
-            return;
-        }
         let (phrase, transcript) = match heard {
             Ok(heard) => heard,
             Err(Failure(reason)) => {
-                drop(state);
-                self.retry_phrase(reason);
+                self.retry_phrase(generation, reason);
                 return;
             }
         };
+
+        let mut state = self.state();
+        if state.generation != generation {
+            return;
+        }
         let Some((sample, sample_sha256)) = &state.draft.sample else {
             return;
         };
@@ -245,7 +281,7 @@ impl CloningSession {
             }
             Err(refusal) => {
                 drop(state);
-                self.retry_phrase(refusal_text(refusal));
+                self.retry_phrase(generation, refusal_text(refusal));
             }
         }
     }
@@ -288,8 +324,7 @@ impl CloningSession {
             self.events.emit(AppEvent::error(reason));
             return;
         }
-        self.show(&mut state, CloneStep::Closed);
-        state.draft = Draft::default();
+        self.end(&mut state);
         drop(state);
         self.events
             .emit(AppEvent::show(Message::text(TextKey::CloneSaved)));
@@ -299,50 +334,43 @@ impl CloningSession {
     /// Gives up, forgetting everything gathered so far.
     pub fn close(&self) {
         let mut state = self.state();
-        let is_recording = matches!(
-            state.step,
-            CloneStep::Sample {
-                is_recording: true,
-                ..
-            } | CloneStep::Phrase {
-                is_recording: true,
-                ..
-            }
-        );
-        if is_recording {
-            self.recorder.stop_recording();
-        }
-        state.draft = Draft::default();
-        self.show(&mut state, CloneStep::Closed);
+        self.end(&mut state);
     }
 
-    async fn take_sample(&self, speech: Vec<f32>) {
+    /// Moves to the analysis when `step` allows it, and returns the dialog it belongs to. In one
+    /// go, so a second press of Stop finds the analysis already running.
+    fn listen(&self, step: impl Fn(&CloneStep) -> bool) -> Option<u64> {
+        let mut state = self.state();
+        if !step(&state.step) {
+            return None;
+        }
+        self.show(&mut state, CloneStep::Analyzing);
+        Some(state.generation)
+    }
+
+    async fn take_sample(&self, generation: u64, speech: Vec<f32>) {
         let length = seconds(&speech);
         let problem = if length < MIN_SAMPLE_SECONDS as usize {
-            Some(TextKey::SampleTooShort)
+            Some(limit(TextKey::SampleTooShort, MIN_SAMPLE_SECONDS))
         } else if length > MAX_SAMPLE_SECONDS as usize {
-            Some(TextKey::SampleTooLong)
+            Some(limit(TextKey::SampleTooLong, MAX_SAMPLE_SECONDS))
         } else {
             None
         };
-        if let Some(problem) = problem {
-            self.show_now(sample_step(false, Some(Message::text(problem))));
+        if problem.is_some() {
+            self.show_if_current(generation, sample_step(false, problem));
+            return;
+        }
+        // Closed while the file was being read.
+        if self.state().generation != generation {
             return;
         }
 
-        {
-            let mut state = self.state();
-            // Closed while the file was being read.
-            if state.step == CloneStep::Closed {
-                return;
-            }
-            self.show(&mut state, CloneStep::Analyzing);
-        }
         let sample_sha256 = self.analyzer.fingerprint(&speech);
         let voiceprint = self.analyzer.voiceprint(speech).await;
 
         let mut state = self.state();
-        if state.step != CloneStep::Analyzing {
+        if state.generation != generation {
             return;
         }
         match voiceprint {
@@ -357,9 +385,9 @@ impl CloningSession {
     }
 
     /// Asks for new digits, so a recording of the old ones cannot be played back.
-    fn retry_phrase(&self, problem: Message) {
+    fn retry_phrase(&self, generation: u64, problem: Message) {
         let mut state = self.state();
-        if matches!(state.step, CloneStep::Closed) {
+        if state.generation != generation {
             return;
         }
         state.draft.challenge = Challenge::new();
@@ -367,18 +395,19 @@ impl CloningSession {
         self.show(&mut state, step);
     }
 
-    fn set(&self, step: CloneStep, draft: Draft) {
+    fn show_if_current(&self, generation: u64, step: CloneStep) {
         let mut state = self.state();
-        state.draft = draft;
-        self.show(&mut state, step);
-    }
-
-    /// Moves on, unless the user closed the dialog while a recording was being read.
-    fn show_now(&self, step: CloneStep) {
-        let mut state = self.state();
-        if state.step != CloneStep::Closed {
+        if state.generation == generation {
             self.show(&mut state, step);
         }
+    }
+
+    /// Closes the dialog, and drops whatever the AI is still listening to for it.
+    fn end(&self, state: &mut MutexGuard<'_, State>) {
+        self.recorder.stop(Recording::Cloning);
+        state.generation += 1;
+        state.draft = Draft::default();
+        self.show(state, CloneStep::Closed);
     }
 
     fn show(&self, state: &mut MutexGuard<'_, State>, step: CloneStep) {

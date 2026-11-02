@@ -37,7 +37,7 @@ pub enum VoiceEffect {
     Ghost,
     Ogre,
     FeminineAi,
-    /// One of the voices the user cloned, named by [`VoiceSettings::clone_id`].
+    /// One of the user's voices, cloned or designed, named by [`VoiceSettings::clone_id`].
     Cloned,
 }
 
@@ -131,17 +131,19 @@ pub struct VoiceChain {
     pub color: VoiceColor,
 }
 
-/// A voice the app ships for the AI to speak with.
+/// A voice the app ships for the AI. The masculine one only moves the timbre of designed voices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VoicePreset {
     Feminine,
+    Masculine,
 }
 
 /// Whose voice the AI turns the user's into.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VoiceTarget {
     Preset(VoicePreset),
-    Clone(String),
+    /// One of the user's voices, cloned or designed.
+    Own(String),
 }
 
 /// The speakers the AI converts between.
@@ -313,18 +315,25 @@ impl VoiceSettings {
                 fixed(semitones(AI_SEMITONES, VoiceParam::FeminineAiPitch)),
                 0.0,
             ),
-            VoiceEffect::Cloned => plain(
-                fixed(semitones(CLONE_SEMITONES, VoiceParam::ClonePitch)),
-                0.0,
-            ),
+            VoiceEffect::Cloned => self.own_voice_chain(),
         })
+    }
+
+    /// What the engine does before the AI speaks with one of the user's voices.
+    pub fn own_voice_chain(&self) -> VoiceChain {
+        let semitones = along(CLONE_SEMITONES, self.get(VoiceParam::ClonePitch)) as f32;
+        VoiceChain {
+            pitch: PitchShape::Fixed { semitones },
+            formant: 0.0,
+            color: VoiceColor::default(),
+        }
     }
 
     /// Whose voice the AI speaks with, or `None` when the effect needs no AI.
     pub fn target(&self) -> Option<VoiceTarget> {
         match self.effect {
             VoiceEffect::FeminineAi => Some(VoiceTarget::Preset(VoicePreset::Feminine)),
-            VoiceEffect::Cloned => self.clone_id.clone().map(VoiceTarget::Clone),
+            VoiceEffect::Cloned => self.clone_id.clone().map(VoiceTarget::Own),
             _ => None,
         }
     }

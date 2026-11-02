@@ -1,3 +1,4 @@
+use instantpad_domain::cloning::VoiceRecipe;
 use instantpad_domain::voice::{VoiceEffect, VoiceParam};
 use tauri::State;
 
@@ -51,4 +52,22 @@ pub async fn finish_calibration(core: State<'_, Core>) -> Result<(), ()> {
 #[specta::specta]
 pub fn delete_cloned_voice(core: State<'_, Core>, id: String) {
     core.voice.delete_clone(&id);
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn preview_designed_voice(core: State<'_, Core>, recipe: VoiceRecipe) {
+    core.voice.preview_design(recipe);
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn end_voice_preview(core: State<'_, Core>) {
+    core.voice.end_preview();
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn save_designed_voice(core: State<'_, Core>, name: String, recipe: VoiceRecipe) {
+    core.voice.save_design(&name, recipe);
 }

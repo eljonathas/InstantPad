@@ -1,10 +1,14 @@
 //! Rules for cloning a voice: only with the consent of its owner, who proves it by speaking a
-//! random phrase into the microphone, and only from a sample long enough to be faithful.
+//! random phrase into the microphone, and only from a sample long enough to be faithful. Voices
+//! designed from cloned ones live and die with them.
 
 use serde::{Deserialize, Serialize};
+use specta::Type;
 use uuid::Uuid;
 
-/// Raise it when the terms change, so every voice cloned under older terms asks again.
+use crate::voice::VoicePreset;
+
+/// Raise it when the terms change, which deletes every voice cloned under older terms.
 pub const TERMS_VERSION: u32 = 1;
 /// Below this, the sample is too short for the AI to catch the voice.
 pub const MIN_SAMPLE_SECONDS: u32 = 20;
@@ -19,6 +23,9 @@ const CHALLENGE_LENGTH: usize = 6;
 const SAME_SPEAKER: f32 = 0.80;
 /// A digit the speech recognition missed or misheard is forgiven.
 const PHRASE_TOLERANCE: usize = 1;
+/// How far the timbre of a designed voice moves toward the deep or the high preset at the end of
+/// its range. Further, nothing is left of the voice it started from.
+const TIMBRE_REACH: f32 = 0.6;
 
 /// What the AI hears as the identity of a voice.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -43,6 +50,13 @@ impl Voiceprint {
 
     pub fn is_same_speaker(&self, other: &Self) -> bool {
         self.similarity(other) >= SAME_SPEAKER
+    }
+
+    /// `amount` of the way from this voice to `other`, from 0 to 1.
+    pub fn toward(&self, other: &Self, amount: f32) -> Self {
+        let amount = amount.clamp(0.0, 1.0);
+        let values = self.0.iter().zip(&other.0);
+        Self(values.map(|(a, b)| a + (b - a) * amount).collect())
     }
 }
 
@@ -70,40 +84,178 @@ pub struct ClonedVoice {
 }
 
 impl ClonedVoice {
-    /// A voice cloned under older terms stays saved but cannot speak until it is cloned again.
-    pub fn is_usable(&self) -> bool {
+    /// The owner agreed to the terms in force.
+    pub fn has_current_consent(&self) -> bool {
         self.consent.terms_version == TERMS_VERSION
     }
 }
 
-/// The voices the AI knows: the user's own and the ones they cloned.
+/// How a voice is designed from the cloned ones.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceRecipe {
+    /// The cloned voice it starts from.
+    pub base_id: String,
+    /// From -1, deeper, to 1, higher.
+    #[specta(type = u32)]
+    pub timbre: f32,
+    /// Another cloned voice mixed in.
+    pub blend_id: Option<String>,
+    /// How much of the blended voice, from 0 to 1.
+    #[specta(type = u32)]
+    pub blend: f32,
+}
+
+/// A voice designed from cloned ones. It keeps the recipe rather than a voiceprint, so it
+/// follows the consent of the voices it is made of.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesignedVoice {
+    pub id: String,
+    pub name: String,
+    pub recipe: VoiceRecipe,
+}
+
+impl DesignedVoice {
+    fn uses(&self, clone_id: &str) -> bool {
+        let recipe = &self.recipe;
+        recipe.base_id == clone_id || recipe.blend_id.as_deref() == Some(clone_id)
+    }
+}
+
+/// Why a voice could not be designed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DesignRefusal {
+    MissingName,
+    /// The recipe names a cloned voice that is not there.
+    UnknownVoice,
+}
+
+/// The voices the AI knows: the user's own, the ones they cloned and the ones they designed.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct VoiceLibrary {
     /// The user's voice, which the AI removes before adding another.
     pub own: Option<Voiceprint>,
     pub clones: Vec<ClonedVoice>,
+    pub designs: Vec<DesignedVoice>,
 }
 
 impl VoiceLibrary {
-    pub fn find(&self, id: &str) -> Option<&ClonedVoice> {
+    fn clone_voice(&self, id: &str) -> Option<&ClonedVoice> {
         self.clones.iter().find(|voice| voice.id == id)
     }
 
-    /// The ids of the voices that can speak, in the order they were cloned.
-    pub fn usable_ids(&self) -> Vec<&str> {
-        self.clones
-            .iter()
-            .filter(|voice| voice.is_usable())
-            .map(|voice| voice.id.as_str())
+    fn design(&self, id: &str) -> Option<&DesignedVoice> {
+        self.designs.iter().find(|voice| voice.id == id)
+    }
+
+    /// The name of a cloned or designed voice.
+    pub fn name(&self, id: &str) -> Option<&str> {
+        let cloned = self.clone_voice(id).map(|voice| &voice.name);
+        cloned
+            .or_else(|| self.design(id).map(|voice| &voice.name))
+            .map(String::as_str)
+    }
+
+    /// Who a cloned or designed voice sounds like. `preset` gives the voices that ship with the
+    /// app, which move the timbre of a designed voice.
+    pub fn voiceprint(
+        &self,
+        id: &str,
+        preset: impl Fn(VoicePreset) -> Voiceprint,
+    ) -> Option<Voiceprint> {
+        match self.clone_voice(id) {
+            Some(voice) => Some(voice.voiceprint.clone()),
+            None => self.design_voiceprint(&self.design(id)?.recipe, preset),
+        }
+    }
+
+    /// Who a recipe sounds like, or `None` when it names a cloned voice that is not there.
+    pub fn design_voiceprint(
+        &self,
+        recipe: &VoiceRecipe,
+        preset: impl Fn(VoicePreset) -> Voiceprint,
+    ) -> Option<Voiceprint> {
+        let mut voiceprint = self.clone_voice(&recipe.base_id)?.voiceprint.clone();
+        if let Some(blend_id) = &recipe.blend_id {
+            let blended = &self.clone_voice(blend_id)?.voiceprint;
+            voiceprint = voiceprint.toward(blended, recipe.blend);
+        }
+        let toward = if recipe.timbre < 0.0 {
+            VoicePreset::Masculine
+        } else {
+            VoicePreset::Feminine
+        };
+        Some(voiceprint.toward(&preset(toward), recipe.timbre.abs() * TIMBRE_REACH))
+    }
+
+    /// The cloned voices, then the designed ones, each in the order it was made.
+    pub fn ids(&self) -> Vec<&str> {
+        let cloned = self.clones.iter().map(|voice| voice.id.as_str());
+        cloned
+            .chain(self.designs.iter().map(|voice| voice.id.as_str()))
             .collect()
     }
 
-    /// Returns false when there was no such voice.
-    pub fn remove(&mut self, id: &str) -> bool {
-        let before = self.clones.len();
+    /// Checks a recipe and names the voice. The caller adds it to `designs`.
+    pub fn design_voice(
+        &self,
+        name: &str,
+        recipe: VoiceRecipe,
+    ) -> Result<DesignedVoice, DesignRefusal> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(DesignRefusal::MissingName);
+        }
+        let blend_is_known = recipe
+            .blend_id
+            .as_deref()
+            .is_none_or(|id| self.clone_voice(id).is_some());
+        if self.clone_voice(&recipe.base_id).is_none() || !blend_is_known {
+            return Err(DesignRefusal::UnknownVoice);
+        }
+        Ok(DesignedVoice {
+            id: Uuid::new_v4().simple().to_string(),
+            name: name.to_owned(),
+            recipe: VoiceRecipe {
+                timbre: recipe.timbre.clamp(-1.0, 1.0),
+                blend: recipe.blend.clamp(0.0, 1.0),
+                ..recipe
+            },
+        })
+    }
+
+    /// Deletes the voices cloned under older terms, since their owners never agreed to the new
+    /// ones, and the voices designed from them. Returns whether any was deleted.
+    pub fn drop_outdated(&mut self) -> bool {
+        let outdated: Vec<String> = self
+            .clones
+            .iter()
+            .filter(|voice| !voice.has_current_consent())
+            .map(|voice| voice.id.clone())
+            .collect();
+        for id in &outdated {
+            self.remove(id);
+        }
+        !outdated.is_empty()
+    }
+
+    /// Deletes a voice and every voice designed from it. Returns the ids of all that went.
+    pub fn remove(&mut self, id: &str) -> Vec<String> {
+        let mut removed = Vec::new();
+        if self.clone_voice(id).is_some() {
+            removed.push(id.to_owned());
+        }
         self.clones.retain(|voice| voice.id != id);
-        self.clones.len() != before
+        self.designs.retain(|voice| {
+            let goes = voice.id == id || voice.uses(id);
+            if goes {
+                removed.push(voice.id.clone());
+            }
+            !goes
+        });
+        removed
     }
 }
 

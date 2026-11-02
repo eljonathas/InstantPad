@@ -1,3 +1,4 @@
+use instantpad_application::message::TextKey;
 use tauri::State;
 
 use crate::composition::Core;
@@ -10,8 +11,8 @@ pub fn open_cloning(core: State<'_, Core>) {
 
 #[tauri::command]
 #[specta::specta]
-pub fn accept_clone_terms(core: State<'_, Core>, owner_name: String) {
-    core.cloning.accept_terms(&owner_name);
+pub fn accept_clone_terms(core: State<'_, Core>, owner_name: String, accepted: Vec<TextKey>) {
+    core.cloning.accept_terms(&owner_name, &accepted);
 }
 
 #[tauri::command]

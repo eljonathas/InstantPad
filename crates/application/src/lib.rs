@@ -9,6 +9,7 @@ pub mod library;
 pub mod message;
 pub mod mixer;
 pub mod ports;
+pub mod recorder;
 pub mod routing;
 pub mod rows;
 pub mod settings;

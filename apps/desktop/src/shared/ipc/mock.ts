@@ -5,6 +5,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type {
   AppEvent,
   BoardView,
+  Calibration,
   CloneStep,
   EffectView,
   Hotkey,
@@ -20,6 +21,7 @@ import type {
   VoiceEffect,
   VoiceIcon,
   VoiceParam,
+  VoiceRecipe,
   VoiceView,
 } from "./bindings";
 
@@ -47,7 +49,13 @@ const VOICE_KEYS: Record<NumericScheme, string[]> = {
 
 const MOCK_PEAKS = Array.from({ length: 44 }, (_, index) => 0.25 + 0.75 * Math.abs(Math.sin(index * 0.7)));
 
-const text = (key: TextKey, args: Message[] = []): Message => ({ kind: "text", key, args });
+const text = (key: TextKey): Message => ({ kind: "text", key, args: [] });
+/** A limit the recording broke, with the number of seconds it allows. */
+const limit = (key: TextKey, seconds: number): Message => ({
+  kind: "text",
+  key,
+  args: [{ kind: "plain", text: String(seconds) }],
+});
 
 interface BuiltIn {
   effect: VoiceEffect;
@@ -133,6 +141,8 @@ const BUILT_IN: BuiltIn[] = [
   },
 ];
 
+type Waiting = { kind: "voice"; effect: VoiceEffect; cloneId: string | null } | { kind: "cloning" } | null;
+
 const CLONE_PITCH: [VoiceParam, TextKey][] = [["clonePitch", "ParamPitch"]];
 const AI_DOWNLOAD_MEGABYTES = 255;
 const AI_STEP_MS = 60;
@@ -159,8 +169,16 @@ function seedVoice() {
     /** Where each knob stands, by its param. A knob that was never turned is at its default. */
     values: new Map<VoiceParam, number>(),
     clones: [] as { id: string; name: string }[],
+    designs: [] as { id: string; name: string; recipe: VoiceRecipe }[],
     // The AI as the backend reports it: nothing downloaded, and it does not know the user yet.
-    ai: { isInstalled: false, percent: null as number | null, isCalibrated: false, isCalibrating: false },
+    ai: {
+      isInstalled: false,
+      percent: null as number | null,
+      isCalibrated: false,
+      calibration: "idle" as Calibration,
+    },
+    /** What the user asked for that the AI setup holds back. */
+    waiting: null as Waiting,
   };
 }
 
@@ -409,7 +427,7 @@ export function installMock() {
   }
 
   function voiceView(): VoiceView {
-    const { values, clones, ai } = backend.voice;
+    const { values, clones, designs, ai, waiting } = backend.voice;
     const params = (list: [VoiceParam, TextKey][]) =>
       list.map(([param, label]) => {
         const value = values.get(param) ?? 0.5;
@@ -424,19 +442,31 @@ export function installMock() {
       needsAi: !!item.needsAi,
       params: params(item.params),
     }));
-    const cloned: EffectView[] = clones.map((clone) => ({
+    const ownVoice = (voice: { id: string; name: string }, icon: VoiceIcon): EffectView => ({
       effect: "cloned",
-      cloneId: clone.id,
-      name: plain(clone.name),
-      icon: "person",
+      cloneId: voice.id,
+      name: plain(voice.name),
+      icon,
       color: PAD_COLORS[2],
       needsAi: true,
       params: params(CLONE_PITCH),
-    }));
+    });
+    const cloned = [
+      ...clones.map((clone) => ownVoice(clone, "person")),
+      ...designs.map((design) => ownVoice(design, "blend")),
+    ];
+    const waitingName = !waiting
+      ? null
+      : waiting.kind === "cloning"
+        ? text("CloneVoice")
+        : [...built, ...cloned].find(
+            (item) => item.effect === waiting.effect && item.cloneId === waiting.cloneId,
+          )!.name;
     return {
       active: backend.voice.active,
       activeCloneId: backend.voice.activeCloneId,
       effects: [...built, ...cloned],
+      clonedVoices: clones,
       isHearing: backend.voice.isHearing,
       ai: {
         status: ai.isInstalled
@@ -446,40 +476,65 @@ export function installMock() {
             : { kind: "downloading", percent: ai.percent },
         downloadMegabytes: AI_DOWNLOAD_MEGABYTES,
         isCalibrated: ai.isCalibrated,
-        isCalibrating: ai.isCalibrating,
+        calibration: ai.calibration,
         minCalibrationSeconds: MIN_CALIBRATION_SECONDS,
+        waiting: waitingName,
       },
     };
   }
 
   const publishVoice = () => send({ kind: "voice", data: voiceView() });
 
-  /** Like the backend, an AI voice stays off until the models and the user's own voice are there. */
+  /** Like the backend, an AI voice waits for the models and the user's own voice, then comes on. */
   function switchTo(effect: VoiceEffect, cloneId: string | null, needsAi: boolean) {
     const { ai } = backend.voice;
-    if (needsAi && !ai.isInstalled) return fail(text("AiNotInstalled"));
-    if (needsAi && !ai.isCalibrated) return fail(text("AiNotCalibrated"));
-    backend.voice = { ...backend.voice, active: effect, activeCloneId: cloneId };
+    const unready = !needsAi ? null : !ai.isInstalled ? "AiNotInstalled" : !ai.isCalibrated ? "AiNotCalibrated" : null;
+    if (unready) {
+      backend.voice.waiting = { kind: "voice", effect, cloneId };
+      fail(text(unready));
+    } else {
+      backend.voice = { ...backend.voice, active: effect, activeCloneId: cloneId, waiting: null };
+    }
     publishVoice();
   }
+
+  /** Takes what waited for the AI, once it can run. */
+  function resume() {
+    const { waiting } = backend.voice;
+    backend.voice.waiting = null;
+    if (waiting?.kind !== "voice") return;
+    if (backend.voice.ai.isCalibrated) switchTo(waiting.effect, waiting.cloneId, true);
+    else backend.voice.waiting = waiting;
+  }
+
+  // When each recording began, so Stop knows how long it was.
+  const recordings = new Map<string, number>();
+  const record = (name: string) => recordings.set(name, Date.now());
+  const recordedSeconds = (name: string) => Math.floor((Date.now() - (recordings.get(name) ?? Date.now())) / 1000);
 
   const showCloning = (step: CloneStep) => send({ kind: "cloning", data: step });
 
   const sampleStep = (isRecording: boolean, problem: Message | null = null): CloneStep => ({
     step: "sample",
-    is_recording: isRecording,
-    min_seconds: MIN_SAMPLE_SECONDS,
-    max_seconds: MAX_SAMPLE_SECONDS,
+    isRecording,
+    minSeconds: MIN_SAMPLE_SECONDS,
+    maxSeconds: MAX_SAMPLE_SECONDS,
     problem,
   });
 
-  const phraseStep = (isRecording: boolean): CloneStep => ({
+  const phraseStep = (isRecording: boolean, problem: Message | null = null): CloneStep => ({
     step: "phrase",
     digits: MOCK_DIGITS,
-    is_recording: isRecording,
-    max_seconds: MAX_PHRASE_SECONDS,
-    problem: null,
+    isRecording,
+    maxSeconds: MAX_PHRASE_SECONDS,
+    problem,
   });
+
+  /** The AI listens for a moment, then `next` says where the dialog goes. */
+  function analyze(next: () => CloneStep) {
+    showCloning({ step: "analyzing" });
+    setTimeout(() => showCloning(next()), ANALYZE_MS);
+  }
 
   function activate(id: string) {
     backend.activeId = id;
@@ -718,49 +773,107 @@ export function installMock() {
             ai.percent = null;
             ai.isInstalled = true;
             show(text("AiInstalled"));
+            resume();
             done(null);
           }
           publishVoice();
         }, AI_STEP_MS);
       }),
     start_calibration: () => {
-      backend.voice.ai.isCalibrating = true;
+      const { ai } = backend.voice;
+      if (!ai.isInstalled) return fail(text("AiNotInstalled"));
+      if (ai.calibration !== "idle") return;
+      record("calibration");
+      ai.calibration = "recording";
       publishVoice();
     },
     finish_calibration: () => {
-      Object.assign(backend.voice.ai, { isCalibrating: false, isCalibrated: true });
-      show(text("AiCalibrationSaved"));
+      const { ai } = backend.voice;
+      if (ai.calibration !== "recording") return;
+      const seconds = recordedSeconds("calibration");
+      ai.calibration = "analyzing";
       publishVoice();
+      setTimeout(() => {
+        ai.calibration = "idle";
+        if (seconds < MIN_CALIBRATION_SECONDS) {
+          fail(limit("AiCalibrationTooShort", MIN_CALIBRATION_SECONDS));
+        } else {
+          ai.isCalibrated = true;
+          show(text("AiCalibrationSaved"));
+          resume();
+        }
+        publishVoice();
+      }, ANALYZE_MS);
     },
     delete_cloned_voice: ({ id }) => {
-      backend.voice.clones = backend.voice.clones.filter((clone) => clone.id !== id);
-      if (backend.voice.activeCloneId === id) {
+      // A cloned voice takes the voices designed from it along.
+      const { clones, designs, activeCloneId } = backend.voice;
+      const isMadeFrom = ({ recipe }: { recipe: VoiceRecipe }) => recipe.baseId === id || recipe.blendId === id;
+      const gone = new Set([id, ...designs.filter(isMadeFrom).map((design) => design.id)]);
+      backend.voice.clones = clones.filter((clone) => !gone.has(clone.id));
+      backend.voice.designs = designs.filter((design) => !gone.has(design.id));
+      if (activeCloneId && gone.has(activeCloneId)) {
         backend.voice = { ...backend.voice, active: "natural", activeCloneId: null };
       }
       show(text("CloneDeleted"));
       publishVoice();
     },
     open_cloning: () => {
-      if (!backend.voice.ai.isInstalled) return fail(text("AiNotInstalled"));
+      if (!backend.voice.ai.isInstalled) {
+        backend.voice.waiting = { kind: "cloning" };
+        fail(text("AiNotInstalled"));
+        return publishVoice();
+      }
       showCloning({ step: "terms", clauses: CLAUSES });
     },
-    accept_clone_terms: ({ ownerName }) => {
+    accept_clone_terms: ({ ownerName, accepted }) => {
+      if (!CLAUSES.every((clause) => (accepted as TextKey[]).includes(clause))) {
+        return fail(text("CloneTermsRefused"));
+      }
       if (!(ownerName as string).trim()) return fail(text("CloneMissingName"));
       showCloning(sampleStep(false));
     },
-    start_clone_sample: () => showCloning(sampleStep(true)),
-    finish_clone_sample: () => showCloning(phraseStep(false)),
-    import_clone_sample: () => showCloning(phraseStep(false)),
-    start_clone_phrase: () => showCloning(phraseStep(true)),
+    start_clone_sample: () => {
+      record("sample");
+      showCloning(sampleStep(true));
+    },
+    finish_clone_sample: () => {
+      const seconds = recordedSeconds("sample");
+      analyze(() =>
+        seconds < MIN_SAMPLE_SECONDS
+          ? sampleStep(false, limit("SampleTooShort", MIN_SAMPLE_SECONDS))
+          : seconds > MAX_SAMPLE_SECONDS
+            ? sampleStep(false, limit("SampleTooLong", MAX_SAMPLE_SECONDS))
+            : phraseStep(false),
+      );
+    },
+    // A file is as long as a good sample needs, whatever it holds.
+    import_clone_sample: () => analyze(() => phraseStep(false)),
+    start_clone_phrase: () => {
+      record("phrase");
+      showCloning(phraseStep(true));
+    },
     finish_clone_phrase: () => {
-      showCloning({ step: "analyzing" });
-      setTimeout(() => showCloning({ step: "name" }), ANALYZE_MS);
+      const seconds = recordedSeconds("phrase");
+      analyze(() =>
+        seconds > MAX_PHRASE_SECONDS ? phraseStep(false, limit("PhraseTooLong", MAX_PHRASE_SECONDS)) : { step: "name" },
+      );
     },
     save_cloned_voice: ({ name }) => {
       backend.voice.clones.push({ id: `clone-${++counter}`, name: name as string });
       showCloning({ step: "closed" });
       show(text("CloneSaved"));
       publishVoice();
+    },
+    // The mock has no audio to preview, so the commands only have to be heard.
+    preview_designed_voice: () => undefined,
+    end_voice_preview: () => undefined,
+    save_designed_voice: ({ name, recipe }) => {
+      if (!(name as string).trim()) return fail(text("CloneMissingName"));
+      const id = `design-${++counter}`;
+      backend.voice.designs.push({ id, name: name as string, recipe: recipe as VoiceRecipe });
+      show(text("CloneSaved"));
+      switchTo("cloned", id, true);
     },
     close_cloning: () => showCloning({ step: "closed" }),
     set_one_sound_at_a_time: ({ enabled }) => {

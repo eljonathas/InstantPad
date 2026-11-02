@@ -24,7 +24,7 @@
   accent-color: var(--color-accent);
 }
 
-.clone-owner {
+.clone-field {
   margin-bottom: var(--space-7);
 }
 
@@ -47,4 +47,29 @@
   align-items: center;
   gap: var(--space-4);
   margin-bottom: var(--space-7);
+}
+
+.clone-tips-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-dialog-label);
+  font-weight: var(--weight-semibold);
+  color: var(--color-silk);
+}
+
+.clone-tips {
+  margin: 0 0 var(--space-7);
+  padding-left: var(--list-indent);
+  color: var(--color-dialog-label);
+  font-size: var(--font-status);
+}
+
+.clone-tips li + li {
+  margin-top: var(--space-2);
+}
+
+.clone-tip {
+  margin: 0 0 var(--space-7);
+  color: var(--color-dialog-label);
+  font-size: var(--font-status);
+  text-align: center;
 }

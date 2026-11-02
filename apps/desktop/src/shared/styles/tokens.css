@@ -148,8 +148,11 @@
   --effect-badge-offset: -2px;
   --effect-badge-padding: 1px 4px;
   --radius-badge: 3px;
+  --line-height-badge: 1.2;
   --ai-progress-height: 8px;
   --record-gap: 12px;
+  --list-indent: 18px;
+  --design-ends-width: 160px;
   --clone-digits-size: 40px;
   --clone-digits-spacing: 0.3em;
   --effect-gap: 16px 6px;

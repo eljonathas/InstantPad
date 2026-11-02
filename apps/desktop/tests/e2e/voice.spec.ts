@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { lcd, openApp, pad, readyTheAi } from "./support";
+import { lcd, openApp, pad, readyTheAi, recordFor } from "./support";
 
 test.beforeEach(async ({ page }) => {
+  await page.clock.install();
   await openApp(page);
   await page.getByRole("tab", { name: "Voice" }).click();
 });
@@ -101,8 +102,11 @@ test("an AI voice asks for the download, then for the user's own voice, then sho
 
   await page.getByRole("button", { name: "Record" }).click();
   await expect(page.locator(".record-time")).toContainText("s");
+  await page.clock.fastForward(8000);
   await page.getByRole("button", { name: "Stop" }).click();
+  await expect(page.getByText("Learning your voice", { exact: false })).toBeVisible();
 
+  // The backend turns the voice on by itself once it knows the user.
   await expect(feminineAi).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("slider", { name: "Pitch" })).toBeVisible();
   await expect(page.getByText("about a quarter of a second of delay")).toBeVisible();
@@ -116,6 +120,32 @@ test("choosing another effect leaves the AI setup", async ({ page }) => {
 
   await expect(page.getByRole("button", { name: "Download" })).toHaveCount(0);
   await expect(page.getByRole("slider", { name: "Intensity" })).toBeVisible();
+});
+
+test("a calibration that is running keeps its Stop key whatever effect is picked", async ({ page }) => {
+  await page.getByRole("button", { name: "Feminine AI", exact: true }).dispatchEvent("pointerdown");
+  await page.getByRole("button", { name: "Download" }).click();
+  await page.getByRole("button", { name: "Record" }).click();
+
+  await page.getByRole("button", { name: "Thin voice" }).dispatchEvent("pointerdown");
+
+  await expect(page.getByRole("button", { name: "Thin voice" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".voice-title")).toHaveText("Thin voice");
+  await page.clock.fastForward(8000);
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(page.getByRole("button", { name: "Stop" })).toHaveCount(0);
+  await expect(page.getByRole("slider", { name: "Intensity" })).toBeVisible();
+});
+
+test("a calibration that is too short is refused and asked again", async ({ page }) => {
+  await page.getByRole("button", { name: "Feminine AI", exact: true }).dispatchEvent("pointerdown");
+  await page.getByRole("button", { name: "Download" }).click();
+
+  await recordFor(page, 2);
+
+  await expect(lcd(page)).toHaveText("Error");
+  await expect(page.getByText("Speak for at least 8 seconds")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Record" })).toBeVisible();
 });
 
 test("with the AI ready, an AI voice goes on at the first press", async ({ page }) => {

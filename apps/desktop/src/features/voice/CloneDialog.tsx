@@ -9,6 +9,8 @@ import { whileHeld } from "../../shared/ui/hotkeyPause";
 import { RecordKey } from "./RecordKey";
 import "./Clone.css";
 
+const SAMPLE_TIPS = ["CloneTip1", "CloneTip2", "CloneTip3", "CloneTip4", "CloneTip5", "CloneTip6"] as const;
+
 type Step<Name extends CloneStep["step"]> = Extract<CloneStep, { step: Name }>;
 
 function Problem({ message }: { message: Message | null }) {
@@ -52,7 +54,7 @@ function Terms({ clauses }: { clauses: TextKey[] }) {
       </ul>
       <DialogLabel>{t("CloneOwnerName")}</DialogLabel>
       <input
-        className="field clone-owner"
+        className="field clone-field"
         aria-label={t("CloneOwnerName")}
         value={ownerName}
         onChange={(event) => setOwnerName(event.target.value)}
@@ -62,7 +64,7 @@ function Terms({ clauses }: { clauses: TextKey[] }) {
           type="button"
           className="key"
           disabled={!isComplete}
-          onClick={() => void commands.acceptCloneTerms(name)}
+          onClick={() => void commands.acceptCloneTerms(name, accepted)}
         >
           {t("Continue")}
         </button>
@@ -82,20 +84,26 @@ function Sample({ step }: { step: Step<"sample"> }) {
 
   return (
     <>
-      <p className="clone-text">{t("CloneSampleIntro", [String(step.min_seconds), String(step.max_seconds)])}</p>
+      <p className="clone-text">{t("CloneSampleIntro", [String(step.minSeconds), String(step.maxSeconds)])}</p>
       <Problem message={step.problem} />
       <div className="clone-actions">
         <RecordKey
-          isRecording={step.is_recording}
+          isRecording={step.isRecording}
           onStart={() => void commands.startCloneSample()}
           onStop={() => void commands.finishCloneSample()}
         />
-        {!step.is_recording && (
+        {!step.isRecording && (
           <button type="button" className="key" onClick={() => void chooseFile()}>
             {t("ChooseFile")}
           </button>
         )}
       </div>
+      <h3 className="clone-tips-title">{t("CloneTipsTitle")}</h3>
+      <ol className="clone-tips">
+        {SAMPLE_TIPS.map((tip) => (
+          <li key={tip}>{t(tip)}</li>
+        ))}
+      </ol>
       <Buttons />
     </>
   );
@@ -106,12 +114,13 @@ function Phrase({ step }: { step: Step<"phrase"> }) {
 
   return (
     <>
-      <p className="clone-text">{t("ClonePhraseIntro", [String(step.max_seconds)])}</p>
+      <p className="clone-text">{t("ClonePhraseIntro", [String(step.maxSeconds)])}</p>
       <p className="clone-digits">{step.digits}</p>
+      <p className="clone-tip">{t("ClonePhraseTip")}</p>
       <Problem message={step.problem} />
       <div className="clone-actions">
         <RecordKey
-          isRecording={step.is_recording}
+          isRecording={step.isRecording}
           onStart={() => void commands.startClonePhrase()}
           onStop={() => void commands.finishClonePhrase()}
         />
@@ -142,7 +151,7 @@ function NameVoice() {
       <p className="clone-text">{t("CloneNameIntro")}</p>
       <DialogLabel>{t("Name")}</DialogLabel>
       <input
-        className="field clone-owner"
+        className="field clone-field"
         aria-label={t("Name")}
         value={name}
         autoFocus

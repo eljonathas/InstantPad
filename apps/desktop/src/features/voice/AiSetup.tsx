@@ -27,11 +27,13 @@ export function AiSetup({ ai }: { ai: AiView }) {
     );
   }
 
+  if (ai.calibration === "analyzing") return <p className="screen-text ai-text">{t("AiLearning")}</p>;
+
   return (
     <>
       <p className="screen-text ai-text">{t("AiCalibratePrompt", [String(ai.minCalibrationSeconds)])}</p>
       <RecordKey
-        isRecording={ai.isCalibrating}
+        isRecording={ai.calibration === "recording"}
         onStart={() => void commands.startCalibration()}
         onStop={() => void commands.finishCalibration()}
       />

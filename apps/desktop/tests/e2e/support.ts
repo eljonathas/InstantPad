@@ -52,11 +52,28 @@ export async function recordCommands(page: Page) {
   return () => page.evaluate(() => (window as unknown as { __calls: string[] }).__calls);
 }
 
-/** Picks Feminine AI, downloads the AI and teaches it the user's voice, which leaves it on. */
+/**
+ * Lets the mock's recordings last as long as a test wants without waiting: the page's clock
+ * jumps ahead while the recording runs.
+ */
+export async function recordFor(page: Page, seconds: number, within: Locator = page.locator("body")) {
+  await within.getByRole("button", { name: "Record" }).click();
+  await page.clock.fastForward(seconds * 1000);
+  await within.getByRole("button", { name: "Stop" }).click();
+}
+
+/** Downloads the AI, which is all that cloning a voice asks for. */
+export async function installTheAi(page: Page) {
+  await page.getByRole("button", { name: "Clone a voice" }).click();
+  await page.getByRole("button", { name: "Download" }).click();
+  await expect(page.getByRole("button", { name: "Download" })).toHaveCount(0);
+  await expect(page.locator(".lcd-main")).toHaveText("AI voices installed.");
+}
+
+/** Picks Feminine AI, downloads the AI and teaches it the user's voice, which then turns it on. */
 export async function readyTheAi(page: Page) {
   await page.getByRole("button", { name: "Feminine AI", exact: true }).dispatchEvent("pointerdown");
   await page.getByRole("button", { name: "Download" }).click();
-  await page.getByRole("button", { name: "Record" }).click();
-  await page.getByRole("button", { name: "Stop" }).click();
+  await recordFor(page, 8);
   await expect(page.getByRole("slider", { name: "Pitch" })).toBeVisible();
 }

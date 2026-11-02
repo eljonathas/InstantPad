@@ -59,8 +59,11 @@ export const commands = {
 	startCalibration: () => __TAURI_INVOKE<void>("start_calibration"),
 	finishCalibration: () => typedError<null, null>(__TAURI_INVOKE("finish_calibration")),
 	deleteClonedVoice: (id: string) => __TAURI_INVOKE<void>("delete_cloned_voice", { id }),
+	previewDesignedVoice: (recipe: VoiceRecipe) => __TAURI_INVOKE<void>("preview_designed_voice", { recipe }),
+	endVoicePreview: () => __TAURI_INVOKE<void>("end_voice_preview"),
+	saveDesignedVoice: (name: string, recipe: VoiceRecipe) => __TAURI_INVOKE<void>("save_designed_voice", { name, recipe }),
 	openCloning: () => __TAURI_INVOKE<void>("open_cloning"),
-	acceptCloneTerms: (ownerName: string) => __TAURI_INVOKE<void>("accept_clone_terms", { ownerName }),
+	acceptCloneTerms: (ownerName: string, accepted: TextKey[]) => __TAURI_INVOKE<void>("accept_clone_terms", { ownerName, accepted }),
 	startCloneSample: () => __TAURI_INVOKE<void>("start_clone_sample"),
 	finishCloneSample: () => typedError<null, null>(__TAURI_INVOKE("finish_clone_sample")),
 	importCloneSample: (path: string) => typedError<null, null>(__TAURI_INVOKE("import_clone_sample", { path })),
@@ -83,10 +86,11 @@ export type AiStatus = { kind: "missing" } | { kind: "downloading"; percent: num
 export type AiView = {
 	status: AiStatus,
 	downloadMegabytes: number,
-	/**  The AI knows the user's own voice, which it must remove before adding another. */
 	isCalibrated: boolean,
-	isCalibrating: boolean,
+	calibration: Calibration,
 	minCalibrationSeconds: number,
+	/**  What the user asked for that waits for the AI to be set up, which then happens on its own. */
+	waiting: Message | null,
 };
 
 export type AppEvent = { kind: "board"; data: BoardView } | { kind: "favorites"; data: SoundSource[] } | { kind: "setup"; data: SetupView } | { kind: "driverStatus"; data: Message } | { kind: "update"; data: UpdateView } | { kind: "voice"; data: VoiceView } | { kind: "cloning"; data: CloneStep } | { kind: "display"; data: DisplayEvent };
@@ -110,18 +114,27 @@ export type BoardView = {
 	nextAccent: string,
 };
 
+/**  Learning the user's own voice, which the AI must remove before adding another. */
+export type Calibration = "idle" | "recording" | "analyzing";
+
 /**  Where the user is in cloning a voice. Each step only opens once the one before is done. */
 export type CloneStep = { step: "closed" } | 
 /**  The owner of the voice reads and accepts each clause. */
 { step: "terms"; clauses: TextKey[] } | 
 /**  The owner records a long sample, or picks a file of their voice. */
-{ step: "sample"; is_recording: boolean; min_seconds: number; max_seconds: number; problem: Message | null } | 
+{ step: "sample"; isRecording: boolean; minSeconds: number; maxSeconds: number; problem: Message | null } | 
 /**  The owner reads the digits aloud, which proves they are at the microphone. */
-{ step: "phrase"; digits: string; is_recording: boolean; max_seconds: number; problem: Message | null } | 
+{ step: "phrase"; digits: string; isRecording: boolean; maxSeconds: number; problem: Message | null } | 
 /**  The AI is listening to a recording. */
 { step: "analyzing" } | 
 /**  The voice passed every check and only needs a name. */
 { step: "name" };
+
+/**  A cloned voice, which a designed voice can start from or mix in. */
+export type ClonedVoiceView = {
+	id: string,
+	name: string,
+};
 
 /**  The LCD at the top of the device. */
 export type DisplayEvent = { kind: "show"; message: Message } | 
@@ -302,7 +315,7 @@ export type StartView = {
  *  A key of the translated texts. The frontend owns the translations, so TypeScript refuses
  *  a variant that is missing from them.
  */
-export type TextKey = "AiCalibrationSaved" | "AiCalibrationTooShort" | "AiDownloadFailed" | "AiInstalled" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneNotTheSameSpeaker" | "CloneSaved" | "CloneTermsBiometric" | "CloneTermsNoMisuse" | "CloneTermsOwner" | "CloneTermsPresent" | "CloneTermsRevoke" | "CloneWrongPhrase" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "PhraseTooLong" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
+export type TextKey = "AiCalibrationSaved" | "AiCalibrationTooShort" | "AiDownloadFailed" | "AiInstalled" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneNotTheSameSpeaker" | "CloneSaved" | "CloneTermsBiometric" | "CloneTermsNoMisuse" | "CloneTermsOwner" | "CloneTermsPresent" | "CloneTermsRefused" | "CloneTermsRevoke" | "CloneVoice" | "CloneWrongPhrase" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "PhraseTooLong" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
 
 export type UpdateView = {
 	status: Message,
@@ -310,13 +323,25 @@ export type UpdateView = {
 };
 
 export type VoiceEffect = "natural" | "thin" | "deep" | "pitchCycle" | "feminine" | "ghost" | "ogre" | "feminineAi" | 
-/**  One of the voices the user cloned, named by [`VoiceSettings::clone_id`]. */
+/**  One of the user's voices, cloned or designed, named by [`VoiceSettings::clone_id`]. */
 "cloned";
 
-export type VoiceIcon = "mic" | "feather" | "mountain" | "wave" | "flower" | "ghost" | "horns" | "sparkles" | "person";
+export type VoiceIcon = "mic" | "feather" | "mountain" | "wave" | "flower" | "ghost" | "horns" | "sparkles" | "person" | "blend";
 
 /**  A setting of an effect. Every value goes from 0 to 1, which is what a knob gives. */
 export type VoiceParam = "thinIntensity" | "thinFormant" | "deepIntensity" | "deepFormant" | "cycleTime" | "cycleHigh" | "cycleLow" | "feminineIntensity" | "feminineFormant" | "ghostWhisper" | "ghostEcho" | "ghostPitch" | "ogreDepth" | "ogreGrowl" | "ogreFormant" | "feminineAiPitch" | "clonePitch";
+
+/**  How a voice is designed from the cloned ones. */
+export type VoiceRecipe = {
+	/**  The cloned voice it starts from. */
+	baseId: string,
+	/**  From -1, deeper, to 1, higher. */
+	timbre: number,
+	/**  Another cloned voice mixed in. */
+	blendId: string | null,
+	/**  How much of the blended voice, from 0 to 1. */
+	blend: number,
+};
 
 export type VoiceView = {
 	active: VoiceEffect,
@@ -325,6 +350,7 @@ export type VoiceView = {
 	effects: EffectView[],
 	isHearing: boolean,
 	ai: AiView,
+	clonedVoices: ClonedVoiceView[],
 };
 
 /* Tauri Specta runtime */

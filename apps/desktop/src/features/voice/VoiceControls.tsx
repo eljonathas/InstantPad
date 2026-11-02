@@ -1,5 +1,4 @@
 import { ask } from "@tauri-apps/plugin-dialog";
-import { useEffect } from "react";
 import { commands, type Message } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
@@ -7,38 +6,27 @@ import { whileHeld } from "../../shared/ui/hotkeyPause";
 import { Knob } from "../../shared/ui/Knob";
 import { ToggleKey } from "../../shared/ui/ToggleKey";
 import { AiSetup } from "./AiSetup";
-import { isAiReady, type PendingAi } from "./ai";
 import "./Voice.css";
 
-interface VoiceControlsProps {
-  pending: PendingAi | null;
-  onPending: (pending: PendingAi | null) => void;
-}
-
 /** The settings of the effect in use, as knobs on the built-in screen. */
-export function VoiceControls({ pending, onPending }: VoiceControlsProps) {
+export function VoiceControls() {
   const { t, render } = useText();
-  const { active, activeCloneId, effects, isHearing, ai } = useBackend((state) => state.voice);
+  const { active, activeCloneId, effects, isHearing, ai, clonedVoices } = useBackend((state) => state.voice);
   const keys = useBackend((state) => state.setup.voiceKeys);
   const effect = effects.find((item) => item.effect === active && item.cloneId === activeCloneId);
-  const isReady = isAiReady(ai);
-
-  // The setup is done, so the voice the user asked for goes on now.
-  useEffect(() => {
-    if (!pending || !isReady) return;
-    pending.apply();
-    onPending(null);
-  }, [pending, isReady, onPending]);
 
   async function deleteVoice(id: string, name: Message) {
-    const question = t("DeleteVoiceQuestion", [render(name)]);
+    // Deleting a cloned voice takes the voices designed from it along, which the question says.
+    const isCloned = clonedVoices.some((voice) => voice.id === id);
+    const question = t(isCloned ? "DeleteClonedVoiceQuestion" : "DeleteVoiceQuestion", [render(name)]);
     const confirmed = await whileHeld(() => ask(question, { title: t("DeleteVoice"), kind: "warning" }));
     if (confirmed) await commands.deleteClonedVoice(id);
   }
 
   const cloneId = effect?.cloneId;
-  const isSettingUp = pending !== null && !isReady;
-  const title = isSettingUp ? pending.name : effect?.name;
+  // Whatever the AI still needs, or the calibration that is running, takes the panel until it is done.
+  const isSettingUp = ai.waiting !== null || ai.calibration !== "idle";
+  const title = ai.waiting ?? effect?.name;
 
   return (
     <div className="voice-controls">
@@ -66,6 +54,7 @@ export function VoiceControls({ pending, onPending }: VoiceControlsProps) {
         </div>
       )}
       {!isSettingUp && effect?.needsAi && <p className="screen-text voice-note">{t("AiDelayNote")}</p>}
+      {!isSettingUp && cloneId && <p className="screen-text voice-note">{t("CloneUsageTip")}</p>}
       {!isSettingUp && effect && cloneId && (
         <button
           type="button"

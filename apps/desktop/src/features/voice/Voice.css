@@ -166,7 +166,7 @@
   color: var(--gray-4);
   font-size: var(--font-pad-shortcut);
   font-weight: var(--weight-bold);
-  line-height: 1.2;
+  line-height: var(--line-height-badge);
 }
 
 .effect-plus {
@@ -230,5 +230,5 @@
 .voice-delete {
   flex: none;
   height: var(--mic-toggle-height);
-  margin-bottom: var(--space-4);
+  margin: var(--space-4) 0;
 }

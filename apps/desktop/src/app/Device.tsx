@@ -5,7 +5,6 @@ import { PadGrid } from "../features/board/PadGrid";
 import { useBoardActions } from "../features/board/useBoardActions";
 import { Lcd } from "../features/display/Lcd";
 import { MixerStrip } from "../features/mixer/MixerStrip";
-import type { PendingAi } from "../features/voice/ai";
 import { EffectList } from "../features/voice/EffectList";
 import { VoiceControls } from "../features/voice/VoiceControls";
 import { useBackend } from "../shared/store/backend";
@@ -52,7 +51,6 @@ function dragWindow(event: MouseEvent) {
 export function Device() {
   const [screen, setScreen] = useState<"pad" | "voice">("pad");
   const isVoice = screen === "voice";
-  const [pendingAi, setPendingAi] = useState<PendingAi | null>(null);
   const isChangingVoice = useBackend((state) => state.voice.active !== "natural");
 
   const { t } = useText();
@@ -116,7 +114,7 @@ export function Device() {
             <div className="centre">
               <Lcd />
               {isVoice ? (
-                <EffectList onPending={setPendingAi} />
+                <EffectList />
               ) : (
                 <>
                   <InterfaceBar actions={actions} />
@@ -131,7 +129,7 @@ export function Device() {
               </div>
               {isVoice && (
                 <div className="panel-screen side-page">
-                  <VoiceControls pending={pendingAi} onPending={setPendingAi} />
+                  <VoiceControls />
                 </div>
               )}
             </div>

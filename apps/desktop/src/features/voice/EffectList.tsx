@@ -2,26 +2,19 @@ import type { CSSProperties } from "react";
 import { commands, type EffectView } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
-import { isAiReady, selectEffect, type PendingAi } from "./ai";
+import { useOverlay } from "../../shared/ui/overlay";
+import { DesignDialog } from "./DesignDialog";
 import { EffectIcon } from "./EffectIcon";
 import "./Voice.css";
 
 /** The voices, each a round key that stays down while its effect is on. */
-export function EffectList({ onPending }: { onPending: (pending: PendingAi | null) => void }) {
+export function EffectList() {
   const { t, render } = useText();
-  const { active, activeCloneId, effects, ai } = useBackend((state) => state.voice);
-  const isReady = isAiReady(ai);
+  const { active, activeCloneId, effects, clonedVoices } = useBackend((state) => state.voice);
+  const overlay = useOverlay();
 
-  function pick(item: EffectView) {
-    void selectEffect(item);
-    onPending(item.needsAi && !isReady ? { name: item.name, apply: () => void selectEffect(item) } : null);
-  }
-
-  function cloneVoice() {
-    void commands.openCloning();
-    // Cloning needs the models, not the user's own voice, so only a missing download waits.
-    onPending(ai.status.kind === "ready" ? null : { name: "CloneVoice", apply: () => void commands.openCloning() });
-  }
+  const pick = ({ effect, cloneId }: EffectView) =>
+    void (cloneId === null ? commands.selectVoiceEffect(effect) : commands.selectClonedVoice(cloneId));
 
   return (
     <div className="effect-screen">
@@ -51,7 +44,7 @@ export function EffectList({ onPending }: { onPending: (pending: PendingAi | nul
           </li>
         ))}
         <li>
-          <button type="button" className="effect" onClick={cloneVoice}>
+          <button type="button" className="effect" onClick={() => void commands.openCloning()}>
             <span className="effect-well">
               <span className="effect-cap">
                 <i className="icon icon-plus effect-plus" />
@@ -60,6 +53,22 @@ export function EffectList({ onPending }: { onPending: (pending: PendingAi | nul
             <span className="screen-text effect-name">{t("CloneVoice")}</span>
           </button>
         </li>
+        {clonedVoices.length > 0 && (
+          <li>
+            <button
+              type="button"
+              className="effect"
+              onClick={() => void overlay.dialog<null>((done) => <DesignDialog onDone={() => done(null)} />)}
+            >
+              <span className="effect-well">
+                <span className="effect-cap">
+                  <EffectIcon name="blend" />
+                </span>
+              </span>
+              <span className="screen-text effect-name">{t("DesignVoice")}</span>
+            </button>
+          </li>
+        )}
       </ul>
     </div>
   );

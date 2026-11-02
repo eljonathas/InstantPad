@@ -77,7 +77,7 @@ No Discord, use o **Input Profile** **Studio**. O Voice Isolation remove tudo qu
 | Testar um som online nos fones | O botão de play do resultado (**Ouvir só nos fones**) |
 | Tocar um som online no jogo sem salvar | **Mic** no resultado (**Tocar no jogo agora**) |
 | Favoritar | A estrela no resultado, ou botão direito num pad e **Favoritar** |
-| Usar um arquivo seu | Arraste do gerenciador de arquivos até um pad, ou clique com o botão direito no pad e escolha **Carregar arquivo de áudio...** |
+| Usar arquivos seus | Clique em **Do computador...** acima da lista de sons e escolha um ou mais arquivos: eles vão para o pad que você clicou e para os próximos livres. Você também pode arrastar arquivos do gerenciador de arquivos até um pad, ou clicar com o botão direito num pad e escolher **Carregar arquivo de áudio...** |
 | Guardar uma cópia do som em outro lugar | Botão direito no pad e **Baixar no computador...** |
 | Mudar atalho, volume, cor ou nome de um pad | Botão direito no pad |
 | Reorganizar os pads | Segure Ctrl e arraste |

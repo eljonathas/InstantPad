@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { pickAudioFiles } from "../../shared/audioFiles";
 import { commands, type Failure, type SoundSource } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
@@ -23,7 +24,7 @@ const SKELETONS_OF_MORE = 3;
 
 const NOTHING: Results = { search: null, sounds: [], page: 1, hasMore: false, status: { kind: "loading" } };
 
-/** The MyInstants screen: search, trending sounds and paging. */
+/** The MyInstants screen: search, trending sounds and paging, and sounds from the computer. */
 export function Browser() {
   const { t, render } = useText();
   const started = useBackend((state) => state.started);
@@ -72,6 +73,11 @@ export function Browser() {
     if (query.trim()) show(query.trim(), 1);
   }
 
+  async function addFromComputer() {
+    const paths = await pickAudioFiles(t, true);
+    if (paths.length > 0) await commands.importFiles(paths, null);
+  }
+
   const { status, sounds, search: shown } = results;
   const isLoading = status.kind === "loading";
   const isNewList = isLoading && results.page === 1;
@@ -110,6 +116,9 @@ export function Browser() {
         </span>
         <button className="key" onClick={() => show(null, 1)}>
           {t("Trending")}
+        </button>
+        <button className="key" title={t("FromComputerHint")} onClick={() => void addFromComputer()}>
+          {t("FromComputer")}
         </button>
       </div>
       <ul ref={list} className="sound-list" aria-busy={isLoading}>

@@ -96,8 +96,9 @@ impl SoundCatalog for MyInstantsCatalog {
             .await
     }
 
-    async fn trending(&self, page: u32) -> Result<CatalogPage, Failure> {
-        self.fetch_page("/en/index/br/", &[], page).await
+    async fn trending(&self, region: &str, page: u32) -> Result<CatalogPage, Failure> {
+        self.fetch_page(&format!("/en/index/{region}/"), &[], page)
+            .await
     }
 
     async fn download(&self, sound_url: &str, destination: &str) -> Result<(), Failure> {
@@ -151,7 +152,7 @@ mod tests {
         let (address, _) = serve("404 Not Found", b"");
 
         let page = MyInstantsCatalog::with_base_url(&address)
-            .trending(99)
+            .trending("br", 99)
             .await
             .unwrap();
 
@@ -164,7 +165,7 @@ mod tests {
         let (address, _) = serve("500 Internal Server Error", b"");
 
         let failure = MyInstantsCatalog::with_base_url(&address)
-            .trending(1)
+            .trending("br", 1)
             .await
             .unwrap_err();
 
@@ -183,6 +184,22 @@ mod tests {
         let request = request.join().unwrap();
         assert!(request.contains("name=a%26b%3Dc+d&page=1"), "{request}");
         assert_eq!(page.sounds.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn the_trending_sounds_come_from_the_page_of_the_country() {
+        let (address, request) = serve("200 OK", include_bytes!("../tests/fixtures/results.html"));
+
+        MyInstantsCatalog::with_base_url(&address)
+            .trending("fr", 2)
+            .await
+            .unwrap();
+
+        let request = request.join().unwrap();
+        assert!(
+            request.starts_with("GET /en/index/fr/?page=2 "),
+            "{request}"
+        );
     }
 
     #[tokio::test]

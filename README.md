@@ -72,7 +72,7 @@ In Discord, set **Input Profile** to **Studio**. Voice Isolation removes everyth
 | To | Do this |
 | --- | --- |
 | Play a sound | Click its pad or press its shortcut |
-| Find sounds | Search MyInstants, or open **Trending** |
+| Find sounds | Search MyInstants, or open **Trending**, which shows what is popular in your country. **Settings** can pick another country |
 | Fill a pad | Click an empty pad, then **+ Pad** on a result, or drag a result onto the pad. The sound is downloaded and kept locally |
 | Try an online sound on your headphones | The play button on the result (**Listen on your headphones only**) |
 | Play an online sound in the game without saving it | **Mic** on the result (**Play in the game now**) |

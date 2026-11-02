@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use instantpad_domain::hotkeys::{Hotkey, NumericLayout, NumericScheme};
+use instantpad_domain::trending;
 
 use crate::board::BoardSession;
 use crate::events::{AppEvent, DisplayEvent, SetupView};
@@ -49,6 +50,8 @@ impl SetupSession {
             .expect("device lock poisoned")
             .clone();
         let outputs = self.outputs.lock().expect("device lock poisoned").clone();
+        // Before the lock below, which working it out takes too.
+        let trending_region = self.settings.trending_region();
         let settings = self.settings.lock();
 
         let cable = &*self.cable;
@@ -72,6 +75,8 @@ impl SetupSession {
             is_system_output_on_cable: system_output.is_some_and(|device| cable.is_virtual(device)),
             game_microphone_name: cable.game_microphone_name(game_output),
             language: settings.language.clone(),
+            trending_region,
+            chosen_trending_region: settings.trending_region.clone(),
             numeric_scheme: settings.numeric_scheme,
             numeric_hint_keys: numeric_hint_keys(settings.numeric_scheme),
             voice_keys: voice_keys(settings.numeric_scheme),
@@ -144,6 +149,19 @@ impl SetupSession {
         self.publish();
     }
 
+    /// `None` follows the system. A country the settings do not offer is ignored.
+    pub fn set_trending_region(&self, region: Option<String>) {
+        if region
+            .as_deref()
+            .is_some_and(|region| !trending::is_trending_region(region))
+        {
+            return;
+        }
+        self.settings.lock().trending_region = region;
+        self.save();
+        self.publish();
+    }
+
     pub async fn install_driver(&self) {
         let events = self.events.clone();
         let progress = move |message| events.emit(AppEvent::DriverStatus(message));
@@ -206,7 +224,7 @@ impl SetupSession {
     fn publish(&self) {
         let view = self.view();
         self.events.emit(AppEvent::Display(routing_display(&view)));
-        self.events.emit(AppEvent::Setup(view));
+        self.events.emit(AppEvent::Setup(Box::new(view)));
     }
 
     fn save(&self) {

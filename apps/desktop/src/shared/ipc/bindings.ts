@@ -5,8 +5,11 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	/**  Called once the interface knows its language. The rest loads in the background. */
-	start: (defaultInterfaceName: string) => __TAURI_INVOKE<StartView>("start", { defaultInterfaceName }),
+	/**
+	 *  Called once the interface knows its language and the system's locale. The rest loads in the
+	 *  background.
+	 */
+	start: (defaultInterfaceName: string, systemLocale: string) => __TAURI_INVOKE<StartView>("start", { defaultInterfaceName, systemLocale }),
 	pressPad: (slot: number) => typedError<null, null>(__TAURI_INVOKE("press_pad", { slot })),
 	selectInterface: (id: string) => __TAURI_INVOKE<void>("select_interface", { id }),
 	stepInterface: (offset: number) => __TAURI_INVOKE<void>("step_interface", { offset }),
@@ -48,6 +51,7 @@ export const commands = {
 	setOneSoundAtATime: (enabled: boolean) => __TAURI_INVOKE<void>("set_one_sound_at_a_time", { enabled }),
 	setPressAgainToStop: (enabled: boolean) => __TAURI_INVOKE<void>("set_press_again_to_stop", { enabled }),
 	setLanguage: (language: string | null) => __TAURI_INVOKE<void>("set_language", { language }),
+	setTrendingRegion: (region: string | null) => __TAURI_INVOKE<void>("set_trending_region", { region }),
 	installDriver: () => typedError<null, null>(__TAURI_INVOKE("install_driver")),
 	openSoundSettings: () => __TAURI_INVOKE<void>("open_sound_settings"),
 	restartNow: () => __TAURI_INVOKE<void>("restart_now"),
@@ -138,6 +142,8 @@ export type Limits = {
 	accentColors: string[],
 	maxRows: number,
 	maxColumns: number,
+	/**  The countries whose trending sounds can be chosen. */
+	trendingRegions: string[],
 	defaultRows: number,
 	defaultColumns: number,
 	/**  Where a double click puts each knob. */
@@ -209,6 +215,10 @@ export type SetupView = {
 	isSystemOutputOnCable: boolean,
 	gameMicrophoneName: string,
 	language: string | null,
+	/**  The country of the trending sounds, chosen or followed from the system. */
+	trendingRegion: string,
+	/**  `None` while the trending sounds follow the system. */
+	chosenTrendingRegion: string | null,
 	numericScheme: NumericScheme,
 	/**  First pad, last pad, next, previous and stop keys of the scheme. Empty when it is off. */
 	numericHintKeys: string[],

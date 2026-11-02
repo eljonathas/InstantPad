@@ -6,6 +6,7 @@ use specta::Type;
 
 use crate::message::{Failure, TextKey};
 use crate::ports::{CatalogPage, CatalogSound, SoundCatalog, SoundFileStore};
+use crate::settings::Settings;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -18,19 +19,30 @@ pub struct SoundPage {
 pub struct SoundLibrary {
     catalog: Arc<dyn SoundCatalog>,
     files: Arc<dyn SoundFileStore>,
+    settings: Arc<Settings>,
 }
 
 impl SoundLibrary {
-    pub fn new(catalog: Arc<dyn SoundCatalog>, files: Arc<dyn SoundFileStore>) -> Self {
-        Self { catalog, files }
+    pub fn new(
+        catalog: Arc<dyn SoundCatalog>,
+        files: Arc<dyn SoundFileStore>,
+        settings: Arc<Settings>,
+    ) -> Self {
+        Self {
+            catalog,
+            files,
+            settings,
+        }
     }
 
     pub async fn search(&self, query: &str, page: u32) -> Result<SoundPage, Failure> {
         Ok(self.to_page(self.catalog.search(query, page).await?))
     }
 
+    /// The sounds trending in the country the settings point to.
     pub async fn trending(&self, page: u32) -> Result<SoundPage, Failure> {
-        Ok(self.to_page(self.catalog.trending(page).await?))
+        let region = self.settings.trending_region();
+        Ok(self.to_page(self.catalog.trending(&region, page).await?))
     }
 
     /// Gives the sound a permanent file, reusing the one it may have from being tried out.

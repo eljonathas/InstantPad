@@ -1,0 +1,7 @@
+[package]
+name = "vfx"
+version = "0.1.0"
+edition = "2021"
+[dependencies]
+signalsmith-stretch = "0.1.3"
+[workspace]

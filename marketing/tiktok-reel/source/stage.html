@@ -1,0 +1,121 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:L;src:url(/__a/Lexend-SemiBold.ttf);font-weight:600}
+@font-face{font-family:L;src:url(/__a/Lexend-Bold.ttf);font-weight:700}
+@font-face{font-family:L;src:url(/__a/Lexend-Black.ttf);font-weight:900}
+*{box-sizing:border-box;margin:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#141518}
+body{font-family:L;color:#fff;position:relative}
+.bg{position:absolute;inset:0;background:
+ radial-gradient(900px 700px at 50% 6%, rgba(255,176,58,.22), transparent 70%),
+ radial-gradient(800px 800px at 50% 100%, rgba(80,120,255,.12), transparent 70%),
+ linear-gradient(#17181c,#202127 60%,#17181c)}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 2px,transparent 2px),linear-gradient(90deg,rgba(255,255,255,.035) 2px,transparent 2px);background-size:72px 72px}
+#cam{position:absolute;left:0;top:0;width:1320px;height:800px;transform-origin:0 0;will-change:transform;border-radius:22px;box-shadow:0 40px 120px rgba(0,0,0,.65), 0 0 0 2px rgba(255,255,255,.06)}
+#app{width:1320px;height:800px;border:0;border-radius:22px;display:block;background:#202127}
+.shade{position:absolute;left:0;right:0;pointer-events:none}
+.shade.top{top:0;height:330px;background:linear-gradient(#17181cf2 55%,#17181c00)}
+.shade.bot{bottom:0;height:560px;background:linear-gradient(#17181c00,#17181ce8 45%,#17181cf8)}
+.brand{position:absolute;top:150px;left:0;right:0;display:flex;gap:22px;align-items:center;justify-content:center}
+.brand img{width:84px}
+.word{font-weight:900;font-size:64px;letter-spacing:-1px}
+.word b,.title b{color:#ffb03a;font-weight:900}
+.ov{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .22s ease}
+.ov.on{opacity:1}
+.ov .bg,.ov .grid{position:absolute;inset:0}
+.center{position:absolute;left:60px;right:60px;top:300px;height:1060px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.pop{opacity:0;transform:scale(.6) translateY(30px);transition:transform .38s cubic-bezier(.2,1.6,.4,1),opacity .2s}
+.pop.in{opacity:1;transform:none}
+.logo-big{width:380px;filter:drop-shadow(0 0 70px rgba(255,176,58,.5))}
+.title{font-weight:900;font-size:140px;letter-spacing:-3px;margin-top:28px}
+.tag{font-size:46px;font-weight:600;color:#c9cbd3;margin-top:18px}
+.node{background:#2b2d34;border:3px solid #474a55;border-radius:28px;padding:26px 36px;font-size:48px;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.node.hot{border-color:#ffb03a;color:#ffb03a;font-size:62px;padding:30px 54px;box-shadow:0 0 60px rgba(255,176,58,.35)}
+.node.game{border-color:#5ef08a;color:#5ef08a}
+.row{display:flex;gap:30px;justify-content:center}
+.flow{width:12px;height:96px;margin:10px 0;background:repeating-linear-gradient(#5ef08a 0 14px,transparent 14px 28px);background-size:12px 28px;animation:flow .5s linear infinite;border-radius:6px}
+@keyframes flow{to{background-position:0 28px}}
+.pill{display:inline-block;background:#ffb03a;color:#17181c;font-weight:900;font-size:92px;border-radius:34px;padding:22px 54px;margin:20px 0;}
+.pill.in{transform:rotate(-3deg)}
+.feat{font-size:78px;font-weight:900;margin:22px 0}
+.os{display:flex;gap:22px;margin-top:26px}
+.os span{background:#2b2d34;border:3px solid #474a55;border-radius:22px;padding:20px 30px;font-size:50px;font-weight:700}
+.url{font-size:46px;font-weight:700;color:#ffb03a;margin-top:26px}
+.cta{font-weight:900;font-size:104px;letter-spacing:-2px;margin-top:36px}
+#flash{position:absolute;inset:0;background:#ffb03a;opacity:0;pointer-events:none}
+</style></head><body>
+<div class="bg"></div><div class="grid"></div>
+<div id="cam"><iframe id="app" src="/"></iframe></div>
+<div class="shade top"></div><div class="shade bot"></div>
+<div class="brand" id="brand"><img src="/__a/logo.svg"><div class="word">Instant<b>Pad</b></div></div>
+
+<div class="ov" id="intro"><div class="bg"></div><div class="grid"></div>
+ <div class="center"><img class="logo-big pop" data-at="0" src="/__a/logo.svg"><div class="title pop" data-at="0.15">Instant<b>Pad</b></div><div class="tag pop" data-at="0.5">O soundboard pro Discord e pros jogos</div></div></div>
+
+<div class="ov" id="diagram"><div class="bg"></div><div class="grid"></div>
+ <div class="brand"><img src="/__a/logo.svg"><div class="word">Instant<b>Pad</b></div></div>
+ <div class="center">
+  <div class="row"><div class="node pop" data-at="1.88">🎙 Sua voz</div><div class="node pop" data-at="0">🔊 Os sons</div></div>
+  <div class="flow pop" data-at="0.25"></div>
+  <div class="node hot pop" data-at="0.35">InstantPad</div>
+  <div class="flow pop" data-at="2.88"></div>
+  <div class="node pop" data-at="2.95">Cabo virtual</div>
+  <div class="flow pop" data-at="3.25"></div>
+  <div class="node game pop" data-at="3.35">Discord ou o jogo</div></div></div>
+
+<div class="ov" id="feats"><div class="bg"></div><div class="grid"></div>
+ <div class="brand"><img src="/__a/logo.svg"><div class="word">Instant<b>Pad</b></div></div>
+ <div class="center">
+  <img class="pop" data-at="0" src="/__a/logo.svg" style="width:230px;margin-bottom:30px;filter:drop-shadow(0 0 50px rgba(255,176,58,.45))">
+  <div class="pill pop" data-at="1.25">É DE GRAÇA</div>
+  <div class="feat pop" data-at="2.37">Código aberto</div>
+  <div class="os"><span class="pop" data-at="3.57">Windows</span><span class="pop" data-at="4.21">macOS</span><span class="pop" data-at="4.97">Linux</span></div></div></div>
+
+<div class="ov" id="cta"><div class="bg"></div><div class="grid"></div>
+ <div class="center">
+  <img id="ctalogo" class="logo-big pop" data-at="0" src="/__a/logo.svg" style="width:330px">
+  <div class="title pop" data-at="0.12" style="font-size:124px">Instant<b>Pad</b></div>
+  <div class="cta pop" data-at="0.3">Baixe grátis</div>
+  <div class="url pop" data-at="0.45">github.com/eljonathas/InstantPad</div>
+  <div class="tag pop" data-at="0.6" style="margin-top:30px">Link na bio</div></div></div>
+<div id="flash"></div>
+<script>window.__K=[[0,660,400,0.8]];
+// Camera keyframes: [t, focusX, focusY (app px), scale]. The focus point lands at (540, CY).
+const CY = 900;
+const KK = () => window.__K || [];
+const OV = window.__OV || [];      // [id, from, to]
+const PUNCH = window.__PUNCH || []; // [t, amount]
+const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * x * (x * (6 * x - 15) + 10);
+function cam(t) { const K = KK(); if (!K.length) return [0, 0, 1];
+  let i = 0; while (i < K.length - 1 && K[i + 1][0] <= t) i++;
+  const a = K[i], b = K[Math.min(i + 1, K.length - 1)];
+  const x = b[0] === a[0] ? 1 : ease((t - a[0]) / (b[0] - a[0]));
+  let [fx, fy, s] = [1, 2, 3].map(j => a[j] + (b[j] - a[j]) * x);
+  let dx = 0, dy = 0;
+  for (const [pt, amt] of PUNCH) {
+    const d = t - pt; if (d < 0 || d > 0.45) continue;
+    const k = Math.exp(-d * 9);
+    s *= 1 + amt * k;
+    dx += Math.sin(d * 70) * 14 * k * amt * 8; dy += Math.cos(d * 55) * 10 * k * amt * 8;
+  }
+  return [540 - fx * s + dx, CY - fy * s + dy, s];
+}
+let start = null;
+window.__start = () => { start = performance.now(); };
+window.__now = () => start === null ? -1 : (performance.now() - start) / 1000;
+function tick() {
+  const t = start === null ? 0 : (performance.now() - start) / 1000;
+  const [x, y, s] = cam(t);
+  document.getElementById('cam').style.transform = `translate(${x}px,${y}px) scale(${s})`;
+  for (const [id, a, b] of OV) {
+    const el = document.getElementById(id), on = t >= a && t < b;
+    el.classList.toggle('on', on);
+    el.querySelectorAll('.pop').forEach(p => p.classList.toggle('in', on && t - a >= +p.dataset.at));
+  }
+  const slam = window.__SLAM || 1e9, d = t - slam;
+  const logo = document.getElementById('ctalogo');
+  if (d >= 0 && d < 0.6) { logo.style.transform = `scale(${1 + 0.35 * Math.exp(-d * 7)}) rotate(${Math.sin(d * 40) * 4 * Math.exp(-d * 6)}deg)`; document.getElementById('flash').style.opacity = 0.35 * Math.exp(-d * 10); }
+  else if (d >= 0.6) { logo.style.transform = ''; document.getElementById('flash').style.opacity = 0; }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script></body></html>

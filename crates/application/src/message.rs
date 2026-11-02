@@ -1,13 +1,33 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use thiserror::Error;
 
 /// A key of the translated texts. The frontend owns the translations, so TypeScript refuses
 /// a variant that is missing from them.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Type)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum TextKey {
+    AiCalibrationSaved,
+    AiCalibrationTooShort,
+    AiDownloadFailed,
+    AiInstalled,
+    AiLoadFailed,
+    AiNotCalibrated,
+    AiNotInstalled,
+    AiTooSlow,
     AudioDeviceNotResponding,
     CatalogNoConnection,
+    CloneDeleted,
+    CloneMissingName,
+    CloneNotTheSameSpeaker,
+    CloneSaved,
+    CloneTermsBiometric,
+    CloneTermsNoMisuse,
+    CloneTermsOwner,
+    CloneTermsPresent,
+    CloneTermsRefused,
+    CloneTermsRevoke,
+    CloneVoice,
+    CloneWrongPhrase,
     DevelopmentVersion,
     DeviceUnavailable,
     Downloading,
@@ -25,7 +45,11 @@ pub enum TextKey {
     DriverVerifying,
     EffectCycle,
     EffectDeep,
+    EffectFeminine,
+    EffectFeminineAi,
+    EffectGhost,
     EffectNatural,
+    EffectOgre,
     EffectThin,
     EmptyPad,
     FailedSound,
@@ -36,17 +60,25 @@ pub enum TextKey {
     InterfaceFullHint,
     Listening,
     MicStopped,
+    MicrophoneBusy,
     Missing,
     NoDriverHint,
     Ok,
     OutputStopped,
     PadSelected,
+    ParamEcho,
     ParamFormant,
+    ParamGrowl,
     ParamHigh,
     ParamIntensity,
     ParamLow,
+    ParamPitch,
     ParamTime,
+    ParamWhisper,
+    PhraseTooLong,
     RoutingStatus,
+    SampleTooLong,
+    SampleTooShort,
     SaveFailed,
     Saved,
     SentTo,
@@ -85,6 +117,11 @@ impl Message {
 
     pub fn plain(text: impl Into<String>) -> Self {
         Self::Plain { text: text.into() }
+    }
+
+    /// A limit the user went past, with the number of seconds it allows.
+    pub(crate) fn limit(key: TextKey, seconds: u32) -> Self {
+        Self::with(key, [Self::plain(seconds.to_string())])
     }
 }
 

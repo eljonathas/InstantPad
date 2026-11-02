@@ -2,7 +2,7 @@ use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
 use instantpad_test_support::contract;
 use instantpad_test_support::fakes::{
     FakeCable, FakeFileStore, FakeHotkeyHost, FakePlayer, InMemoryBoard, InMemoryFavorites,
-    InMemorySettings, device,
+    InMemorySettings, InMemoryVoiceLibrary, device,
 };
 
 #[tokio::test]
@@ -21,6 +21,7 @@ fn the_in_memory_repositories() {
     contract::board_repository(&InMemoryBoard::default());
     contract::favorites_repository(&InMemoryFavorites::default());
     contract::settings_repository(&InMemorySettings::default());
+    contract::voice_library_repository(&InMemoryVoiceLibrary::default());
 }
 
 #[test]

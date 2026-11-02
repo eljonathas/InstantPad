@@ -111,6 +111,12 @@ pub enum VoiceIcon {
     Feather,
     Mountain,
     Wave,
+    Flower,
+    Ghost,
+    Horns,
+    Sparkles,
+    Person,
+    Blend,
 }
 
 /// A knob of an effect. The interface draws whatever an effect lists here.
@@ -131,18 +137,112 @@ pub struct ParamView {
 #[serde(rename_all = "camelCase")]
 pub struct EffectView {
     pub effect: VoiceEffect,
-    pub name: TextKey,
+    /// Tells the cloned voices apart, which all share [`VoiceEffect::Cloned`].
+    pub clone_id: Option<String>,
+    /// A cloned voice has the name the user gave it.
+    pub name: Message,
     pub icon: VoiceIcon,
     pub color: String,
+    pub needs_ai: bool,
     pub params: Vec<ParamView>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AiStatus {
+    Missing,
+    Downloading { percent: u8 },
+    Ready,
+}
+
+/// Learning the user's own voice, which the AI must remove before adding another.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Calibration {
+    Idle,
+    Recording,
+    Analyzing,
+}
+
+/// What the AI voices need before they can speak.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AiView {
+    pub status: AiStatus,
+    pub download_megabytes: u32,
+    pub calibration: Calibration,
+    pub min_calibration_seconds: u32,
+    /// What the user asked for that waits for the AI to be set up. A voice then comes on by
+    /// itself; cloning is opened again by the user.
+    pub waiting: Option<Message>,
+}
+
+/// A cloned voice, which a designed voice can start from or mix in.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ClonedVoiceView {
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceView {
     pub active: VoiceEffect,
+    /// The cloned voice in use, when `active` is [`VoiceEffect::Cloned`].
+    pub active_clone_id: Option<String>,
     pub effects: Vec<EffectView>,
     pub is_hearing: bool,
+    pub ai: AiView,
+    pub cloned_voices: Vec<ClonedVoiceView>,
+    /// `None` while the voice designer is closed.
+    pub designer: Option<DesignerView>,
+}
+
+/// The voice designer, which the backend keeps open so a failed save loses nothing.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DesignerView {
+    /// The user hears the voice being designed, instead of the effect in use.
+    pub is_previewing: bool,
+    /// Where the timbre and blend knobs start, and where a double click puts them.
+    #[specta(type = u32)]
+    pub default_timbre: f64,
+    #[specta(type = u32)]
+    pub default_blend: f64,
+}
+
+/// Where the user is in cloning a voice. Each step only opens once the one before is done.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(
+    tag = "step",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum CloneStep {
+    Closed,
+    /// The owner of the voice reads and accepts each clause.
+    Terms {
+        clauses: Vec<TextKey>,
+    },
+    /// The owner records a long sample, or picks a file of their voice.
+    Sample {
+        is_recording: bool,
+        min_seconds: u32,
+        max_seconds: u32,
+        problem: Option<Message>,
+    },
+    /// The owner reads the digits aloud, which proves they are at the microphone.
+    Phrase {
+        digits: String,
+        is_recording: bool,
+        max_seconds: u32,
+        problem: Option<Message>,
+    },
+    /// The AI is listening to a recording.
+    Analyzing,
+    /// The voice passed every check and only needs a name.
+    Name,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
@@ -184,6 +284,7 @@ pub enum AppEvent {
     DriverStatus(Message),
     Update(UpdateView),
     Voice(VoiceView),
+    Cloning(CloneStep),
     Display(DisplayEvent),
 }
 

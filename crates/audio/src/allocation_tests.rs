@@ -9,9 +9,12 @@ use std::cell::Cell;
 use std::sync::Arc;
 
 use instantpad_application::ports::PlaybackTag;
-use instantpad_domain::voice::{PitchShape, VoiceShift};
-use rtrb::RingBuffer;
+use instantpad_domain::voice::{PitchShape, VoiceChain, VoiceColor};
+use instantpad_test_support::fakes::{FakeConverter, RecordingEvents};
+use rtrb::{Consumer, RingBuffer};
 
+use crate::ai::AiBridge;
+use crate::ai::tests::conversion;
 use crate::capture::CaptureProcessor;
 use crate::clip::SoundClip;
 use crate::controls::{AtomicF32, Controls};
@@ -19,6 +22,7 @@ use crate::format::{CHANNELS, SAMPLE_RATE, samples_for};
 use crate::mic;
 use crate::mixer::{self, Mixer, MixerHandle};
 use crate::playback::{Conversion, Playback};
+use crate::recording::Recorder;
 use crate::voice::VoiceControls;
 
 thread_local! {
@@ -181,11 +185,36 @@ fn stopping_everything_and_starting_more_than_fit_allocates_and_frees_nothing() 
     assert_eq!(requests, 0);
 }
 
-fn capture(channels: usize, rate: u32, voice: Arc<VoiceControls>) -> CaptureProcessor {
-    let (ring, _) = RingBuffer::new(SAMPLE_RATE as usize * CHANNELS);
+fn bridge() -> AiBridge {
+    AiBridge::new(
+        Arc::new(FakeConverter::default()),
+        Arc::new(RecordingEvents::default()),
+    )
+}
+
+/// A capture callback with the rings it fills, a recorder to start and an AI bridge to route.
+fn wired(
+    channels: usize,
+    rate: u32,
+    voice: Arc<VoiceControls>,
+) -> (CaptureProcessor, Consumer<f32>, Recorder, AiBridge) {
+    let (ring, game) = RingBuffer::new(SAMPLE_RATE as usize * CHANNELS);
     let (headphones, _) = RingBuffer::new(SAMPLE_RATE as usize * CHANNELS);
     let level = Arc::new(AtomicF32::new(0.0));
-    CaptureProcessor::new(channels, rate, [ring, headphones], level, voice).unwrap()
+    let recorder = Recorder::new();
+    let (tap, recording) = recorder.tap();
+    recorder.attach(Some(recording));
+    let bridge = bridge();
+    let (stage, converting) = bridge.rings();
+    bridge.attach(Some(converting));
+    let processor =
+        CaptureProcessor::new(channels, rate, [ring, headphones], level, voice, tap, stage)
+            .unwrap();
+    (processor, game, recorder, bridge)
+}
+
+fn capture(channels: usize, rate: u32, voice: Arc<VoiceControls>) -> CaptureProcessor {
+    wired(channels, rate, voice).0
 }
 
 #[cfg(target_os = "macos")]
@@ -207,13 +236,14 @@ fn changing_the_voice_allocates_and_frees_nothing() {
     let callback: Vec<f32> = (0..441 * 2)
         .map(|index| (index as f32 * 0.03).sin() * 0.3)
         .collect();
-    let cycle = VoiceShift {
+    let cycle = VoiceChain {
         pitch: PitchShape::Cycle {
             low: -12.0,
             high: 12.0,
             seconds: 0.2,
         },
         formant: 3.0,
+        color: VoiceColor::default(),
     };
 
     let requests = requests_during(|| {
@@ -224,6 +254,84 @@ fn changing_the_voice_allocates_and_frees_nothing() {
         }
     });
 
+    assert_eq!(requests, 0);
+}
+
+#[test]
+fn coloring_the_voice_allocates_and_frees_nothing() {
+    let voice = Arc::new(VoiceControls::new());
+    let mut processor = capture(2, 44_100, voice.clone());
+    let callback: Vec<f32> = (0..441 * 2)
+        .map(|index| (index as f32 * 0.03).sin() * 0.3)
+        .collect();
+    let chain = |amount: f32| VoiceChain {
+        pitch: PitchShape::Fixed { semitones: 3.0 },
+        formant: 0.0,
+        color: VoiceColor {
+            whisper: amount,
+            echo: amount,
+            tremolo: amount,
+            growl: amount,
+            brightness: amount,
+        },
+    };
+
+    let requests = requests_during(|| {
+        for round in 0..200 {
+            // The amounts move all the time, which also makes the shelf work out its filter
+            // again, and they drop to zero now and then, which puts the colors to sleep.
+            let amount = if round % 40 < 5 {
+                0.0
+            } else {
+                (round % 10) as f32 / 10.0 + 0.1
+            };
+            voice.set(Some(chain(amount)));
+            processor.push(&callback);
+        }
+    });
+
+    assert_eq!(requests, 0);
+}
+
+#[test]
+fn recording_the_microphone_allocates_and_frees_nothing() {
+    let (mut processor, _, recorder, _) = wired(2, 44_100, Arc::new(VoiceControls::new()));
+    let callback = vec![0.2_f32; 441 * 2];
+    recorder.start();
+
+    let requests = requests_during(|| {
+        for _ in 0..50 {
+            processor.push(&callback);
+        }
+    });
+
+    assert_eq!(requests, 0);
+}
+
+#[test]
+fn sending_the_voice_through_the_ai_allocates_and_frees_nothing() {
+    let (mut processor, mut game, _, bridge) = wired(2, 44_100, Arc::new(VoiceControls::new()));
+    bridge.route(Some(&conversion()));
+    let callback: Vec<f32> = (0..441 * 2)
+        .map(|index| (index as f32 * 0.03).sin() * 0.3 + 0.4)
+        .collect();
+    let mut heard = vec![0.0; SAMPLE_RATE as usize * CHANNELS];
+
+    // The converter runs on a thread of its own, so the callback goes on until the converted
+    // voice plays, which takes it through priming, playing and, if the thread lags, running dry.
+    let mut requests = 0;
+    let mut played = 0;
+    for round in 0..5000 {
+        requests += requests_during(|| processor.push(&callback));
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        let (popped, _) = game.pop_partial_slice(&mut heard);
+        played += popped.iter().filter(|&&sample| sample != 0.0).count();
+        if played > 20_000 && round > 100 {
+            break;
+        }
+    }
+
+    assert!(played > 20_000, "the voice was never converted");
     assert_eq!(requests, 0);
 }
 

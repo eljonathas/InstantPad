@@ -3,10 +3,13 @@
 use instantpad_application::hotkeys::HotkeyCommand;
 use instantpad_application::ports::{
     AudioDevice, BoardRepository, FavoritesRepository, HotkeyHost, PlaybackTag, SettingsRepository,
-    SoundFileStore, SoundPlayer, VirtualCable,
+    SoundFileStore, SoundPlayer, VirtualCable, VoiceLibraryRepository,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
+use instantpad_domain::cloning::{
+    ClonedVoice, Consent, DesignedVoice, TERMS_VERSION, VoiceLibrary, VoiceRecipe, Voiceprint,
+};
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
 use instantpad_domain::sounds::SoundSource;
 
@@ -81,6 +84,38 @@ pub fn settings_repository(repository: &dyn SettingsRepository) {
     repository.save(&settings).expect("save the settings");
 
     assert_eq!(repository.load(), settings);
+}
+
+pub fn voice_library_repository(repository: &dyn VoiceLibraryRepository) {
+    let library = VoiceLibrary {
+        own: Some(Voiceprint::new(vec![0.5, -0.25])),
+        clones: vec![ClonedVoice {
+            id: "a".to_owned(),
+            name: "Ana".to_owned(),
+            voiceprint: Voiceprint::new(vec![0.25, 0.75]),
+            consent: Consent {
+                owner_name: "Ana Souza".to_owned(),
+                terms_version: TERMS_VERSION,
+                accepted_at: 1_700_000_000,
+                similarity: 0.875,
+                sample_sha256: "abc123".to_owned(),
+            },
+        }],
+        designs: vec![DesignedVoice {
+            id: "d".to_owned(),
+            name: "Mix".to_owned(),
+            recipe: VoiceRecipe {
+                base_id: "a".to_owned(),
+                timbre: 0.25,
+                blend_id: Some("b".to_owned()),
+                blend: 0.25,
+            },
+        }],
+    };
+
+    repository.save(&library).expect("save the voices");
+
+    assert_eq!(repository.load(), library);
 }
 
 /// `render` and `capture` are the two sides of a cable, `real` is a physical device.

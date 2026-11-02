@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { CloneDialog } from "../features/voice/CloneDialog";
+import { DesignDialog } from "../features/voice/DesignDialog";
 import { useBackend } from "../shared/store/backend";
 import { useText } from "../shared/store/text";
 import { OverlayProvider } from "../shared/ui/overlay";
@@ -32,6 +34,8 @@ export function App() {
   return (
     <OverlayProvider>
       <Device />
+      <CloneDialog />
+      <DesignDialog />
     </OverlayProvider>
   );
 }

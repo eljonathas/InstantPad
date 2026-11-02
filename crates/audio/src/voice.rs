@@ -4,11 +4,12 @@ use std::f32::consts::TAU;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use instantpad_domain::voice::{PitchShape, VoiceShift};
+use instantpad_domain::voice::{PitchShape, VoiceChain};
 use signalsmith_stretch::Stretch;
 
+use crate::color::{Color, ColorControls};
 use crate::controls::AtomicF32;
-use crate::format::{CHANNELS, SAMPLE_RATE};
+use crate::format::{CHANNELS, SAMPLE_RATE, downmix};
 
 /// The delay the effect adds. A shorter window hurts low voices.
 const WINDOW_MS: usize = 40;
@@ -24,6 +25,7 @@ pub(crate) struct VoiceControls {
     high: AtomicF32,
     seconds: AtomicF32,
     formant: AtomicF32,
+    color: ColorControls,
 }
 
 impl VoiceControls {
@@ -34,11 +36,17 @@ impl VoiceControls {
             high: AtomicF32::new(0.0),
             seconds: AtomicF32::new(1.0),
             formant: AtomicF32::new(0.0),
+            color: ColorControls::new(),
         }
     }
 
-    pub(crate) fn set(&self, shift: Option<VoiceShift>) {
-        let Some(VoiceShift { pitch, formant }) = shift else {
+    pub(crate) fn set(&self, chain: Option<VoiceChain>) {
+        let Some(VoiceChain {
+            pitch,
+            formant,
+            color,
+        }) = chain
+        else {
             self.is_on.store(false, Ordering::Relaxed);
             return;
         };
@@ -52,6 +60,7 @@ impl VoiceControls {
         self.high.store(high);
         self.seconds.store(seconds);
         self.formant.store(formant);
+        self.color.set(color);
         self.is_on.store(true, Ordering::Relaxed);
     }
 }
@@ -59,6 +68,7 @@ impl VoiceControls {
 pub(crate) struct VoiceProcessor {
     controls: Arc<VoiceControls>,
     stretch: Stretch,
+    color: Color,
     was_on: bool,
     /// Position inside the pitch cycle, from 0 to 1.
     phase: f32,
@@ -72,6 +82,7 @@ impl VoiceProcessor {
     pub(crate) fn new(controls: Arc<VoiceControls>) -> Self {
         let frames_per_ms = SAMPLE_RATE as usize / 1000;
         Self {
+            color: Color::new(),
             controls,
             stretch: Stretch::new(1, WINDOW_MS * frames_per_ms, INTERVAL_MS * frames_per_ms),
             was_on: false,
@@ -94,12 +105,13 @@ impl VoiceProcessor {
         if !self.was_on {
             self.was_on = true;
             self.stretch.reset();
+            self.color.reset();
             self.filled = 0;
             self.phase = 0.0;
         }
 
-        for [left, right] in stereo.as_chunks::<CHANNELS>().0 {
-            self.mono[self.filled] = (left + right) / 2.0;
+        for sample in downmix(stereo) {
+            self.mono[self.filled] = sample;
             self.filled += 1;
             if self.filled == BLOCK_FRAMES {
                 self.filled = 0;
@@ -119,6 +131,8 @@ impl VoiceProcessor {
         self.stretch
             .set_formant_factor_semitones(self.controls.formant.load(), true);
         self.stretch.process(self.mono, &mut self.changed);
+        self.color
+            .process(&mut self.changed, self.controls.color.load());
 
         for (frame, sample) in self
             .stereo
@@ -134,6 +148,8 @@ impl VoiceProcessor {
 
 #[cfg(test)]
 mod tests {
+    use instantpad_domain::voice::VoiceColor;
+
     use super::*;
 
     fn tone(frequency: f32, frames: usize) -> Vec<f32> {
@@ -146,9 +162,9 @@ mod tests {
             .collect()
     }
 
-    fn run(shift: Option<VoiceShift>, input: &[f32]) -> Vec<f32> {
+    fn run(chain: Option<VoiceChain>, input: &[f32]) -> Vec<f32> {
         let controls = Arc::new(VoiceControls::new());
-        controls.set(shift);
+        controls.set(chain);
         let mut voice = VoiceProcessor::new(controls);
         let mut output = Vec::new();
         for block in input.chunks(BLOCK_FRAMES) {
@@ -173,10 +189,11 @@ mod tests {
         rises as f32 / (settled.len() as f32 / SAMPLE_RATE as f32)
     }
 
-    fn fixed(semitones: f32) -> Option<VoiceShift> {
-        Some(VoiceShift {
+    fn fixed(semitones: f32) -> Option<VoiceChain> {
+        Some(VoiceChain {
             pitch: PitchShape::Fixed { semitones },
             formant: 0.0,
+            color: VoiceColor::default(),
         })
     }
 
@@ -213,16 +230,17 @@ mod tests {
     #[test]
     fn a_pitch_cycle_goes_both_above_and_below_the_voice() {
         let frames = SAMPLE_RATE as usize * 2;
-        let shift = Some(VoiceShift {
+        let chain = Some(VoiceChain {
             pitch: PitchShape::Cycle {
                 low: -7.0,
                 high: 7.0,
                 seconds: 2.0,
             },
             formant: 0.0,
+            color: VoiceColor::default(),
         });
 
-        let output = run(shift, &tone(330.0, frames));
+        let output = run(chain, &tone(330.0, frames));
 
         let quarter = frames / 4 * CHANNELS;
         let rising = frequency_of(&output[quarter / 2..quarter * 3 / 2]);
@@ -244,5 +262,60 @@ mod tests {
         let mut output = Vec::new();
         voice.process(&input, |samples| output.extend_from_slice(samples));
         assert_eq!(output, input);
+    }
+
+    fn colored(color: VoiceColor) -> Option<VoiceChain> {
+        Some(VoiceChain {
+            pitch: PitchShape::Fixed { semitones: 3.0 },
+            formant: 0.0,
+            color,
+        })
+    }
+
+    #[test]
+    fn color_changes_the_voice_after_the_pitch() {
+        let input = tone(220.0, SAMPLE_RATE as usize / 2);
+        let plain = run(colored(VoiceColor::default()), &input);
+
+        let growled = run(
+            colored(VoiceColor {
+                growl: 1.0,
+                ..VoiceColor::default()
+            }),
+            &input,
+        );
+
+        assert_eq!(growled.len(), plain.len());
+        assert_ne!(growled, plain);
+    }
+
+    #[test]
+    fn taking_the_color_away_returns_to_the_pitch_alone_at_once() {
+        let input = tone(220.0, BLOCK_FRAMES * 40);
+        let controls = Arc::new(VoiceControls::new());
+        controls.set(colored(VoiceColor::default()));
+        let mut plain = VoiceProcessor::new(controls);
+        let controls = Arc::new(VoiceControls::new());
+        controls.set(colored(VoiceColor {
+            whisper: 1.0,
+            echo: 1.0,
+            tremolo: 1.0,
+            growl: 1.0,
+            brightness: 1.0,
+        }));
+        let mut colored_voice = VoiceProcessor::new(controls.clone());
+        let (mut expected, mut heard) = (Vec::new(), Vec::new());
+
+        for (index, block) in input.chunks(BLOCK_FRAMES * CHANNELS).enumerate() {
+            if index == 20 {
+                controls.set(colored(VoiceColor::default()));
+            }
+            plain.process(block, |samples| expected.extend_from_slice(samples));
+            colored_voice.process(block, |samples| heard.extend_from_slice(samples));
+        }
+
+        let from = 20 * BLOCK_FRAMES * CHANNELS;
+        assert_ne!(heard[..from], expected[..from]);
+        assert_eq!(heard[from..], expected[from..]);
     }
 }

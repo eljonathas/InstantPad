@@ -2,9 +2,10 @@
 
 use async_trait::async_trait;
 use instantpad_domain::board::PadBoard;
+use instantpad_domain::cloning::{VoiceLibrary, Voiceprint};
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
-use instantpad_domain::voice::VoiceShift;
+use instantpad_domain::voice::{Conversion, VoiceChain, VoicePreset};
 use serde::Serialize;
 use specta::Type;
 
@@ -105,11 +106,64 @@ pub trait AudioMix: Send + Sync {
 
 /// Changes the voice on its way to the game.
 pub trait VoiceChanger: Send + Sync {
-    /// `None` is the natural voice, which gets through with no added delay.
-    fn set_voice(&self, shift: Option<VoiceShift>);
+    /// `None` and `None` is the natural voice, which gets through with no added delay. A
+    /// `conversion` hands the voice to the AI after the chain.
+    fn set_voice(&self, chain: Option<VoiceChain>, conversion: Option<Conversion>);
 
     /// Sends the voice to the headphones too, so the user can hear what the effect does.
     fn set_hearing_voice(&self, enabled: bool);
+}
+
+/// Keeps what the microphone hears, before any effect, for the AI to learn a voice from.
+#[async_trait]
+pub trait VoiceRecorder: Send + Sync {
+    /// Starts over, dropping anything recorded before.
+    fn start_recording(&self);
+
+    /// Mono at 48 kHz. Empty when no microphone was open.
+    fn stop_recording(&self) -> Vec<f32>;
+
+    /// Reads an audio file the user chose, as mono at 48 kHz.
+    async fn decode_file(&self, path: &str) -> Result<Vec<f32>, Failure>;
+}
+
+/// The AI voice models. They are far bigger than the app, so they download on demand.
+#[async_trait]
+pub trait VoiceModels: Send + Sync {
+    fn is_installed(&self) -> bool;
+
+    /// What the user is about to download, rounded up.
+    fn download_megabytes(&self) -> u32;
+
+    /// Downloads and checks every file. Reports 0 to 100.
+    async fn install(&self, progress: &(dyn Fn(u8) + Send + Sync)) -> Result<(), Failure>;
+}
+
+/// Listens to speech with the AI models, which must be installed. Speech is mono at 48 kHz.
+#[async_trait]
+pub trait VoiceAnalyzer: Send + Sync {
+    async fn voiceprint(&self, speech: Vec<f32>) -> Result<Voiceprint, Failure>;
+
+    /// What was said, as text.
+    async fn transcribe(&self, speech: Vec<f32>) -> Result<String, Failure>;
+
+    /// The voiceprint of a voice that ships with the app.
+    fn preset(&self, preset: VoicePreset) -> Voiceprint;
+
+    /// SHA-256 of the speech, in hex, which records what was cloned without keeping it.
+    fn fingerprint(&self, speech: &[f32]) -> String;
+}
+
+/// Turns one voice into another, a stretch at a time. It is far slower than the audio
+/// callbacks, so the engine runs it on a thread of its own. Speech is mono at 48 kHz.
+pub trait SpeechConverter: Send + Sync {
+    /// Starts over with new speakers, dropping anything half converted. Cheap: the work, and
+    /// any failure, comes with the next `convert`.
+    fn start(&self, conversion: &Conversion);
+
+    /// Takes the next stretch of voice and returns the converted voice that is ready, which
+    /// comes out later and in larger pieces than it went in.
+    fn convert(&self, speech: &[f32]) -> Result<Vec<f32>, Failure>;
 }
 
 /// How the operating system itself has its audio configured.
@@ -165,6 +219,12 @@ pub trait SettingsRepository: Send + Sync {
     fn load(&self) -> AppSettings;
 
     fn save(&self, settings: &AppSettings) -> Result<(), Failure>;
+}
+
+pub trait VoiceLibraryRepository: Send + Sync {
+    fn load(&self) -> VoiceLibrary;
+
+    fn save(&self, library: &VoiceLibrary) -> Result<(), Failure>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

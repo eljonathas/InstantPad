@@ -1,0 +1,35 @@
+.design-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-7);
+  margin-bottom: var(--space-3);
+}
+
+.design-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.design-control select {
+  align-self: stretch;
+}
+
+.design-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-width: var(--design-ends-width);
+  color: var(--color-dialog-label);
+  font-size: var(--font-dialog-label);
+}
+
+.design-ends > :only-child {
+  margin-inline: auto;
+}
+
+.design-preview {
+  width: 100%;
+  height: var(--mic-toggle-height);
+  margin-bottom: var(--space-7);
+}

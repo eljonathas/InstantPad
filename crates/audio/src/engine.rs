@@ -11,16 +11,18 @@ use async_trait::async_trait;
 use instantpad_application::message::{Failure, TextKey};
 use instantpad_application::ports::{
     AudioDevice, AudioMix, AudioRouter, EventSink, NowPlaying, PlaybackTag, SoundPlayer,
-    VoiceChanger,
+    SpeechConverter, VoiceChanger, VoiceRecorder,
 };
-use instantpad_domain::voice::VoiceShift;
+use instantpad_domain::voice::{Conversion, VoiceChain};
 use tokio::sync::OnceCell;
 
-use crate::clip::SoundClip;
+use crate::ai::AiBridge;
+use crate::clip::{self, SoundClip};
 use crate::controls::{AtomicF32, Controls};
 use crate::devices;
 use crate::mic::{self, MicSlot};
 use crate::mixer::{self, MixerHandle};
+use crate::recording::Recorder;
 use crate::role::Role;
 use crate::voice::VoiceControls;
 
@@ -102,6 +104,8 @@ struct Microphone {
 /// allocates or waits.
 pub struct AudioEngine {
     events: Arc<dyn EventSink>,
+    ai: AiBridge,
+    recorder: Recorder,
     clips: Mutex<Clips>,
     started: Mutex<Vec<Started>>,
     microphone: Microphone,
@@ -110,12 +114,14 @@ pub struct AudioEngine {
 }
 
 impl AudioEngine {
-    pub fn new(events: Arc<dyn EventSink>) -> Self {
+    pub fn new(events: Arc<dyn EventSink>, converter: Arc<dyn SpeechConverter>) -> Self {
         let reader = mic::empty_slot();
         let hearing = mic::empty_slot();
         let monitor = Output::new("monitor output", Some(hearing.clone()));
         monitor.controls.mic_enabled.store(false, Ordering::Relaxed);
         Self {
+            ai: AiBridge::new(converter, events.clone()),
+            recorder: Recorder::new(),
             events,
             clips: Mutex::default(),
             started: Mutex::default(),
@@ -241,6 +247,8 @@ impl AudioRouter for AudioEngine {
         let microphone = &self.microphone;
         *microphone.reader.lock().unwrap() = None;
         *microphone.hearing.lock().unwrap() = None;
+        self.recorder.attach(None);
+        self.ai.attach(None);
         microphone.level.store(0.0);
 
         let Some(id) = device_id.map(str::to_owned) else {
@@ -251,16 +259,22 @@ impl AudioRouter for AudioEngine {
         let (hearing_ring, hearing) = mic::ring();
         let level = microphone.level.clone();
         let voice = microphone.voice.clone();
+        let (tap, recording) = self.recorder.tap();
+        let (ai, converting) = self.ai.rings();
         let events = self.events.clone();
         microphone
             .role
             .run(move |stream| {
                 *stream = None;
                 let rings = [ring, hearing_ring];
-                *stream = Some(devices::open_capture(&id, rings, level, voice, events)?);
+                *stream = Some(devices::open_capture(
+                    &id, rings, level, voice, tap, ai, events,
+                )?);
                 Ok(())
             })
             .await?;
+        self.recorder.attach(Some(recording));
+        self.ai.attach(Some(converting));
 
         *microphone.reader.lock().unwrap() = Some(reader);
         *microphone.hearing.lock().unwrap() = Some(hearing);
@@ -277,8 +291,9 @@ impl AudioRouter for AudioEngine {
 }
 
 impl VoiceChanger for AudioEngine {
-    fn set_voice(&self, shift: Option<VoiceShift>) {
-        self.microphone.voice.set(shift);
+    fn set_voice(&self, chain: Option<VoiceChain>, conversion: Option<Conversion>) {
+        self.microphone.voice.set(chain);
+        self.ai.route(conversion.as_ref());
     }
 
     fn set_hearing_voice(&self, enabled: bool) {
@@ -286,6 +301,24 @@ impl VoiceChanger for AudioEngine {
             .controls
             .mic_enabled
             .store(enabled, Ordering::Relaxed);
+    }
+}
+
+#[async_trait]
+impl VoiceRecorder for AudioEngine {
+    fn start_recording(&self) {
+        self.recorder.start();
+    }
+
+    fn stop_recording(&self) -> Vec<f32> {
+        self.recorder.stop()
+    }
+
+    async fn decode_file(&self, path: &str) -> Result<Vec<f32>, Failure> {
+        let path = path.to_owned();
+        tokio::task::spawn_blocking(move || clip::load_speech(&path))
+            .await
+            .map_err(|error| Failure::because(TextKey::SoundOpenFailed, error))?
     }
 }
 
@@ -321,10 +354,12 @@ impl AudioMix for AudioEngine {
 
 #[cfg(test)]
 mod tests {
+    use instantpad_application::message::Message;
     use instantpad_test_support::contract;
-    use instantpad_test_support::fakes::RecordingEvents;
+    use instantpad_test_support::fakes::{FakeConverter, RecordingEvents};
 
     use super::*;
+    use crate::ai::tests::conversion;
     use crate::clip::tests::wav;
     use crate::mixer::Mixer;
 
@@ -341,7 +376,10 @@ mod tests {
     }
 
     fn engine() -> AudioEngine {
-        AudioEngine::new(Arc::new(RecordingEvents::default()))
+        AudioEngine::new(
+            Arc::new(RecordingEvents::default()),
+            Arc::new(FakeConverter::default()),
+        )
     }
 
     fn heard(mixer: &mut Mixer) -> f32 {
@@ -563,5 +601,56 @@ mod tests {
 
         assert_eq!(engine.mic_level(), 0.0);
         assert_eq!(engine.game_output_level(), 0.0);
+    }
+
+    #[test]
+    fn a_conversion_starts_the_converter_with_its_speakers() {
+        let converter = Arc::new(FakeConverter::default());
+        let engine = AudioEngine::new(Arc::new(RecordingEvents::default()), converter.clone());
+
+        engine.set_voice(None, Some(conversion()));
+
+        assert_eq!(*converter.started.lock().unwrap(), [conversion()]);
+    }
+
+    #[test]
+    fn the_natural_voice_does_not_start_the_converter() {
+        let converter = Arc::new(FakeConverter::default());
+        let engine = AudioEngine::new(Arc::new(RecordingEvents::default()), converter.clone());
+
+        engine.set_voice(None, None);
+
+        assert!(converter.started.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn recording_with_no_microphone_open_gives_nothing() {
+        let engine = engine();
+
+        engine.start_recording();
+
+        assert!(engine.stop_recording().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_file_is_decoded_to_mono_at_the_engine_rate() {
+        let file = wav(24_000, &[8192, 0], 12_000);
+
+        let speech = engine().decode_file(file.path()).await.unwrap();
+
+        assert!(speech.len().abs_diff(24_000) <= 1024, "{}", speech.len());
+    }
+
+    #[tokio::test]
+    async fn a_file_that_cannot_be_decoded_is_refused() {
+        let failure = engine().decode_file("/no/such/voice.wav").await;
+
+        assert!(matches!(
+            failure.unwrap_err().0,
+            Message::Text {
+                key: TextKey::SoundOpenFailed,
+                ..
+            }
+        ));
     }
 }

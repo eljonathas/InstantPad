@@ -1,9 +1,12 @@
 use std::path::PathBuf;
 
 use instantpad_application::message::Failure;
-use instantpad_application::ports::{BoardRepository, FavoritesRepository, SettingsRepository};
+use instantpad_application::ports::{
+    BoardRepository, FavoritesRepository, SettingsRepository, VoiceLibraryRepository,
+};
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
+use instantpad_domain::cloning::VoiceLibrary;
 use instantpad_domain::sounds::SoundSource;
 
 use crate::data_folder::AppDataFolder;
@@ -60,5 +63,25 @@ impl SettingsRepository for JsonSettingsRepository {
 
     fn save(&self, settings: &AppSettings) -> Result<(), Failure> {
         json_file::save(&self.0, settings)
+    }
+}
+
+/// The user's voiceprint and the cloned voices with their consent records. No recording is
+/// ever kept here.
+pub struct JsonVoiceLibraryRepository(PathBuf);
+
+impl JsonVoiceLibraryRepository {
+    pub fn new(folder: &AppDataFolder) -> Self {
+        Self(folder.file("voices.json"))
+    }
+}
+
+impl VoiceLibraryRepository for JsonVoiceLibraryRepository {
+    fn load(&self) -> VoiceLibrary {
+        json_file::load(&self.0)
+    }
+
+    fn save(&self, library: &VoiceLibrary) -> Result<(), Failure> {
+        json_file::save(&self.0, library)
     }
 }

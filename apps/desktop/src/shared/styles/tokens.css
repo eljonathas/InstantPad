@@ -148,6 +148,16 @@
   --effect-size: 78px;
   --effect-well-gap: 8px;
   --effect-icon-size: 30px;
+  --effect-badge-offset: -2px;
+  --effect-badge-padding: 1px 4px;
+  --radius-badge: 3px;
+  --effect-badge-line-height: 1.2;
+  --ai-progress-height: 8px;
+  --record-gap: 12px;
+  --list-indent: 18px;
+  --design-ends-width: 160px;
+  --clone-digits-size: 40px;
+  --clone-digits-spacing: 0.3em;
   --effect-gap: 16px 6px;
   --cap-travel-effect: 3px;
   --gradient-skeleton: linear-gradient(90deg, var(--gray-3) 30%, var(--gray-1) 50%, var(--gray-3) 70%);
@@ -292,6 +302,7 @@
 
   /* Dialogs */
   --dialog-width: 380px;
+  --dialog-width-wide: 520px;
   --dialog-padding: 16px;
   --dialog-button-width: 96px;
   --dialog-button-height: 32px;

@@ -13,11 +13,13 @@ use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{AudioDevice, EventSink};
 use rtrb::Producer;
 
+use crate::ai::AiStage;
 use crate::capture::CaptureProcessor;
 use crate::controls::AtomicF32;
 use crate::format::{CHANNELS, SAMPLE_RATE};
 use crate::mixer::Mixer;
 use crate::playback::{Conversion, Playback};
+use crate::recording::RecordTap;
 use crate::voice::VoiceControls;
 
 const OUTPUT_BUFFER_MS: u32 = 30;
@@ -27,7 +29,8 @@ pub(crate) fn microphones() -> Vec<AudioDevice> {
     describe(cpal::default_host().input_devices())
 }
 
-pub(crate) fn outputs() -> Vec<AudioDevice> {
+/// The output devices, also for the installer, which only needs to know whether the cable is one.
+pub fn outputs() -> Vec<AudioDevice> {
     describe(cpal::default_host().output_devices())
 }
 
@@ -125,6 +128,8 @@ pub(crate) fn open_capture(
     rings: [Producer<f32>; 2],
     level: Arc<AtomicF32>,
     voice: Arc<VoiceControls>,
+    tap: RecordTap,
+    ai: AiStage,
     events: Arc<dyn EventSink>,
 ) -> Result<Stream, Failure> {
     let device = find(id)?;
@@ -145,6 +150,8 @@ pub(crate) fn open_capture(
         rings,
         level,
         voice,
+        tap,
+        ai,
     )
     .map_err(unavailable)?;
     let on_error = report(events, TextKey::MicStopped);

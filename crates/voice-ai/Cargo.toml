@@ -1,0 +1,27 @@
+[package]
+name = "instantpad-voice-ai"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait.workspace = true
+instantpad-application.workspace = true
+instantpad-domain.workspace = true
+# The runtime is a library the pack downloads, so the build needs none of it.
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["load-dynamic"] }
+realfft = "3.5"
+reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
+rubato = "5.0"
+serde_json.workspace = true
+sha2 = "0.10"
+tokio = { workspace = true, features = ["fs", "io-util", "rt"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

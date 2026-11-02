@@ -2,13 +2,13 @@
 
 use std::path::Path;
 
-use instantpad_application::message::{Failure, TextKey};
+use instantpad_application::message::Failure;
 use ort::session::Session;
 use ort::value::{Tensor, TensorRef};
 use serde_json::Value;
 
 use crate::pack::{TOKENIZER, WHISPER_DECODER, WHISPER_ENCODER};
-use crate::runtime::session;
+use crate::runtime::{load_failed, session};
 use crate::stft::Stft;
 
 /// The rate the model works at.
@@ -32,8 +32,6 @@ const ENGLISH: i64 = 50259;
 const TRANSCRIBE: i64 = 50359;
 const NO_TIMESTAMPS: i64 = 50363;
 const PORTUGUESE: i64 = 50267;
-/// What the decoder is told before the first word: start, language, task and no timestamps.
-const PROMPT: usize = 4;
 
 pub(crate) struct Whisper {
     encoder: Session,
@@ -44,12 +42,17 @@ pub(crate) struct Whisper {
 
 impl Whisper {
     pub(crate) fn load(folder: &Path) -> Result<Self, Failure> {
-        let tokenizer = std::fs::read(folder.join(TOKENIZER))
-            .map_err(|error| Failure::because(TextKey::AiLoadFailed, error))?;
+        let file = folder.join(TOKENIZER);
+        let tokenizer = std::fs::read(&file).map_err(load_failed)?;
+        // A tokenizer that cannot be read is not there as far as the app knows, so the
+        // interface offers the download again.
+        let tokens = Tokens::parse(&tokenizer).inspect_err(|_| {
+            let _ = std::fs::remove_file(&file);
+        })?;
         Ok(Self {
             encoder: session(folder, WHISPER_ENCODER)?,
             decoder: session(folder, WHISPER_DECODER)?,
-            tokens: Tokens::parse(&tokenizer)?,
+            tokens,
             mel: LogMel::new(),
         })
     }
@@ -73,6 +76,7 @@ impl Whisper {
         };
 
         let mut ids = vec![START, language, TRANSCRIBE, NO_TIMESTAMPS];
+        let prompt = ids.len();
         for _ in 0..MAX_TOKENS {
             let logits = self.logits(&ids, &hidden)?;
             // Only words and the end are allowed: the ids past them are languages and times.
@@ -82,7 +86,7 @@ impl Whisper {
             }
             ids.push(next);
         }
-        Ok(self.tokens.text(&ids[PROMPT..]))
+        Ok(self.tokens.text(&ids[prompt..]))
     }
 
     /// What the decoder expects after `ids`, which it reads whole every time.
@@ -221,17 +225,15 @@ struct Tokens(Vec<String>);
 
 impl Tokens {
     fn parse(tokenizer: &[u8]) -> Result<Self, Failure> {
-        let invalid = |detail: &str| Failure::because(TextKey::AiLoadFailed, detail);
-        let tokenizer: Value =
-            serde_json::from_slice(tokenizer).map_err(|error| invalid(&error.to_string()))?;
+        let tokenizer: Value = serde_json::from_slice(tokenizer).map_err(load_failed)?;
         let vocabulary = tokenizer["model"]["vocab"]
             .as_object()
-            .ok_or_else(|| invalid("the tokenizer has no vocabulary"))?;
+            .ok_or_else(|| load_failed("the tokenizer has no vocabulary"))?;
 
         let mut tokens = vec![String::new(); vocabulary.len()];
         for (token, id) in vocabulary {
             let slot = id.as_u64().and_then(|id| tokens.get_mut(id as usize));
-            *slot.ok_or_else(|| invalid("the tokenizer has a gap in its vocabulary"))? =
+            *slot.ok_or_else(|| load_failed("the tokenizer has a gap in its vocabulary"))? =
                 token.clone();
         }
         Ok(Self(tokens))
@@ -391,10 +393,7 @@ mod tests {
     fn a_tokenizer_without_a_vocabulary_is_refused() {
         let failure = Tokens::parse(b"{}").err().unwrap();
 
-        assert_eq!(
-            failure,
-            Failure::because(TextKey::AiLoadFailed, "the tokenizer has no vocabulary")
-        );
+        assert_eq!(failure, load_failed("the tokenizer has no vocabulary"));
     }
 
     #[test]

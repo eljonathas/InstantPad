@@ -7,6 +7,7 @@ use std::thread;
 
 use instantpad_application::message::{Failure, TextKey};
 use ort::environment::Environment;
+use ort::error::ErrorCode;
 use ort::session::Session;
 
 use crate::pack;
@@ -14,43 +15,56 @@ use crate::pack;
 /// The runtime lives once per process, and it cannot be started again after it was stopped.
 static ENVIRONMENT: Mutex<Option<Environment>> = Mutex::new(None);
 
-/// Something loaded from the model folder when it is first needed, and kept.
-pub(crate) struct Lazy<T> {
-    folder: PathBuf,
-    load: fn(&Path) -> Result<T, Failure>,
-    loaded: Mutex<Option<T>>,
+pub(crate) fn load_failed(detail: impl ToString) -> Failure {
+    Failure::because(TextKey::AiLoadFailed, detail)
 }
 
-impl<T> Lazy<T> {
-    pub(crate) fn new(folder: &Path, load: fn(&Path) -> Result<T, Failure>) -> Self {
+/// A model that stays loaded after its first use, for what runs all the time.
+pub(crate) struct Cached {
+    folder: PathBuf,
+    model: &'static str,
+    session: Mutex<Option<Session>>,
+}
+
+impl Cached {
+    pub(crate) fn new(folder: &Path, model: &'static str) -> Self {
         Self {
             folder: folder.to_owned(),
-            load,
-            loaded: Mutex::new(None),
+            model,
+            session: Mutex::new(None),
         }
     }
 
-    /// Runs `work` with exclusive use of the value, which a first call loads.
+    /// Runs `work` with exclusive use of the model, which a first call loads.
     pub(crate) fn with<R>(
         &self,
-        work: impl FnOnce(&mut T) -> ort::Result<R>,
+        work: impl FnOnce(&mut Session) -> ort::Result<R>,
     ) -> Result<R, Failure> {
-        let mut loaded = self.loaded.lock().unwrap();
-        if loaded.is_none() {
-            *loaded = Some((self.load)(&self.folder)?);
-        }
-        let value = loaded.as_mut().expect("the value was just loaded");
-        work(value).map_err(|error| Failure::because(TextKey::AiLoadFailed, error))
+        let mut loaded = self.session.lock().unwrap();
+        let session = match loaded.take() {
+            Some(session) => session,
+            None => session(&self.folder, self.model)?,
+        };
+        work(loaded.insert(session)).map_err(load_failed)
     }
 }
 
 /// A model of the pack, ready to run.
 pub(crate) fn session(folder: &Path, model: &str) -> Result<Session, Failure> {
-    let failed =
-        |detail: &dyn ToString| Failure::because(TextKey::AiLoadFailed, detail.to_string());
-    let library = pack::library(folder).ok_or_else(|| failed(&pack::unsupported()))?;
+    let library = pack::library(folder).map_err(load_failed)?;
     let environment = environment(&library)?;
-    open(&environment, &folder.join(model)).map_err(|error| failed(&error))
+    let file = folder.join(model);
+    open(&environment, &file).map_err(|error| {
+        // A model that cannot be read is not there as far as the app knows, so the interface
+        // offers the download again.
+        if matches!(
+            error.code(),
+            ErrorCode::InvalidProtobuf | ErrorCode::InvalidGraph | ErrorCode::NoModel
+        ) {
+            let _ = std::fs::remove_file(&file);
+        }
+        load_failed(error)
+    })
 }
 
 fn open(environment: &Environment, model: &Path) -> ort::Result<Session> {
@@ -60,18 +74,16 @@ fn open(environment: &Environment, model: &Path) -> ort::Result<Session> {
 }
 
 fn environment(library: &Path) -> Result<Environment, Failure> {
-    let failed =
-        |detail: &dyn ToString| Failure::because(TextKey::AiLoadFailed, detail.to_string());
     let mut started = ENVIRONMENT.lock().unwrap();
     if let Some(environment) = started.as_ref() {
         return Ok(environment.clone());
     }
     let environment = ort::init_from(library)
-        .map_err(|error| failed(&error))?
+        .map_err(load_failed)?
         .with_name("instantpad")
         .with_telemetry(false)
         .build()
-        .map_err(|error| failed(&error))?;
+        .map_err(load_failed)?;
     *started = Some(environment.clone());
     Ok(environment)
 }

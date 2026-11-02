@@ -12,8 +12,8 @@ pub(crate) const HOP: usize = 256;
 const FRAME: usize = 1024;
 const PAD: usize = 384;
 const BINS: usize = FRAME / 2 + 1;
-/// How much of the original voice survives the conversion.
-const TAU: f32 = 0.3;
+/// How much the model varies what it makes: the lower, the steadier the voice.
+const NOISE_SCALE: f32 = 0.3;
 
 /// What the model reads: the linear magnitude of the speech.
 pub(crate) struct Spectrogram {
@@ -67,7 +67,7 @@ pub(crate) fn convert(
         "audio_length" => Tensor::from_array(([1], vec![count as i64]))?,
         "src_tone" => TensorRef::from_array_view(([1, source.len(), 1], source))?,
         "dest_tone" => TensorRef::from_array_view(([1, target.len(), 1], target))?,
-        "tau" => Tensor::from_array(([1], vec![TAU]))?,
+        "tau" => Tensor::from_array(([1], vec![NOISE_SCALE]))?,
     ])?;
     let (_, converted) = outputs["converted_audio"].try_extract_tensor::<f32>()?;
     Ok(converted.to_vec())

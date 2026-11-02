@@ -1,9 +1,9 @@
 //! The AI voices: downloads the models on demand and runs them with ONNX Runtime.
 
-mod feminine;
 mod fingerprint;
 mod openvoice;
 mod pack;
+mod presets;
 mod resample;
 mod runtime;
 mod stft;
@@ -11,52 +11,59 @@ mod stream;
 mod whisper;
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use async_trait::async_trait;
-use instantpad_application::message::{Failure, TextKey};
+use instantpad_application::message::Failure;
 use instantpad_application::ports::{SpeechConverter, VoiceAnalyzer, VoiceModels};
 use instantpad_domain::cloning::Voiceprint;
 use instantpad_domain::voice::{Conversion, VoicePreset};
-use ort::session::Session;
 
 use crate::openvoice::Spectrogram;
 use crate::resample::{SPEECH_RATE, StreamResampler, resample};
-use crate::runtime::Lazy;
+use crate::runtime::{Cached, load_failed, session};
 use crate::stream::Stream;
 use crate::whisper::Whisper;
 
-/// The smallest blocks of speech that 48 kHz and 22.05 kHz divide into, one way and the other.
+// The smallest blocks of speech that 48 kHz and 22.05 kHz divide into, one way and the other.
 const DOWN_BLOCK: usize = 320;
 const UP_BLOCK: usize = 147;
 
 pub struct OnnxVoices {
     folder: PathBuf,
-    models: Arc<Models>,
-    /// The conversion in progress, which `start` begins.
+    /// The only model that stays loaded, because the conversion runs all the time. The others
+    /// serve a calibration or a clone now and then, and are loaded for each.
+    tone_color: Cached,
+    requested: Mutex<Requested>,
+    /// The conversion in progress, which only the thread that converts uses.
     conversion: Mutex<Option<Running>>,
 }
 
-/// The models, each loaded when it is first needed.
-struct Models {
-    tone_extract: Lazy<Session>,
-    tone_color: Lazy<Session>,
-    whisper: Lazy<Whisper>,
+/// The speakers `start` asked for, which the next `convert` picks up.
+#[derive(Default)]
+struct Requested {
+    speakers: Option<Conversion>,
+    unseen: bool,
 }
 
 impl OnnxVoices {
     pub fn new(folder: &Path) -> Self {
         Self {
             folder: folder.to_owned(),
-            models: Arc::new(Models {
-                tone_extract: Lazy::new(folder, |folder| {
-                    runtime::session(folder, pack::TONE_EXTRACT)
-                }),
-                tone_color: Lazy::new(folder, |folder| runtime::session(folder, pack::TONE_COLOR)),
-                whisper: Lazy::new(folder, Whisper::load),
-            }),
+            tone_color: Cached::new(folder, pack::TONE_COLOR),
+            requested: Mutex::new(Requested::default()),
             conversion: Mutex::new(None),
         }
+    }
+
+    /// The speakers asked for since the last time, if any.
+    fn take_request(&self) -> Option<Conversion> {
+        let mut requested = self.requested.lock().unwrap();
+        if !requested.unseen {
+            return None;
+        }
+        requested.unseen = false;
+        requested.speakers.clone()
     }
 }
 
@@ -66,7 +73,7 @@ async fn blocking<T: Send + 'static>(
 ) -> Result<T, Failure> {
     tokio::task::spawn_blocking(work)
         .await
-        .map_err(|error| Failure::because(TextKey::AiLoadFailed, error))?
+        .map_err(load_failed)?
 }
 
 #[async_trait]
@@ -76,7 +83,7 @@ impl VoiceModels for OnnxVoices {
     }
 
     fn download_megabytes(&self) -> u32 {
-        pack::download_megabytes()
+        pack::download_megabytes(&self.folder)
     }
 
     async fn install(&self, progress: &(dyn Fn(u8) + Send + Sync)) -> Result<(), Failure> {
@@ -87,30 +94,33 @@ impl VoiceModels for OnnxVoices {
 #[async_trait]
 impl VoiceAnalyzer for OnnxVoices {
     async fn voiceprint(&self, speech: Vec<f32>) -> Result<Voiceprint, Failure> {
-        let models = self.models.clone();
+        let folder = self.folder.clone();
         blocking(move || {
             let speech = resample(&speech, SPEECH_RATE, openvoice::RATE);
-            let tone = models
-                .tone_extract
-                .with(|session| openvoice::voiceprint(session, &speech))?;
+            let mut model = session(&folder, pack::TONE_EXTRACT)?;
+            let tone = openvoice::voiceprint(&mut model, &speech).map_err(load_failed)?;
             Ok(Voiceprint::new(tone))
         })
         .await
     }
 
     async fn transcribe(&self, speech: Vec<f32>) -> Result<String, Failure> {
-        let models = self.models.clone();
+        let folder = self.folder.clone();
         blocking(move || {
             let speech = resample(&speech, SPEECH_RATE, whisper::RATE);
-            models.whisper.with(|whisper| whisper.transcribe(&speech))
+            Whisper::load(&folder)?
+                .transcribe(&speech)
+                .map_err(load_failed)
         })
         .await
     }
 
     fn preset(&self, preset: VoicePreset) -> Voiceprint {
-        match preset {
-            VoicePreset::Feminine => Voiceprint::new(feminine::VOICEPRINT.to_vec()),
-        }
+        let values = match preset {
+            VoicePreset::Feminine => presets::FEMININE,
+            VoicePreset::Masculine => presets::MASCULINE,
+        };
+        Voiceprint::new(values.to_vec())
     }
 
     fn fingerprint(&self, speech: &[f32]) -> String {
@@ -126,15 +136,13 @@ struct Running {
     stream: Stream,
     up: StreamResampler,
     spectrogram: Spectrogram,
-    /// Speech at the rate of the model, waiting to be converted.
+    /// The speech at the rate of the model, which every call empties and fills again.
     heard: Vec<f32>,
 }
 
-impl SpeechConverter for OnnxVoices {
-    fn start(&self, conversion: &Conversion) -> Result<(), Failure> {
-        // Loading takes a while, which is better spent here than in the middle of the speech.
-        self.models.tone_color.with(|_| Ok(()))?;
-        *self.conversion.lock().unwrap() = Some(Running {
+impl Running {
+    fn new(conversion: &Conversion) -> Self {
+        Self {
             source: conversion.source.values().to_vec(),
             target: conversion.target.values().to_vec(),
             down: StreamResampler::new(SPEECH_RATE, openvoice::RATE, DOWN_BLOCK),
@@ -142,12 +150,28 @@ impl SpeechConverter for OnnxVoices {
             up: StreamResampler::new(openvoice::RATE, SPEECH_RATE, UP_BLOCK),
             spectrogram: Spectrogram::new(),
             heard: Vec::new(),
-        });
+        }
+    }
+}
+
+impl SpeechConverter for OnnxVoices {
+    /// Only notes the speakers, because the interface thread calls it and the conversion may be
+    /// in the middle of a stretch. The thread that converts starts over at its next call, and
+    /// that is where the model loads.
+    fn start(&self, conversion: &Conversion) -> Result<(), Failure> {
+        let mut requested = self.requested.lock().unwrap();
+        if requested.speakers.as_ref() != Some(conversion) {
+            requested.speakers = Some(conversion.clone());
+            requested.unseen = true;
+        }
         Ok(())
     }
 
     fn convert(&self, speech: &[f32]) -> Result<Vec<f32>, Failure> {
         let mut conversion = self.conversion.lock().unwrap();
+        if let Some(speakers) = self.take_request() {
+            *conversion = Some(Running::new(&speakers));
+        }
         // With nobody to turn the voice into yet, nothing comes out.
         let Some(running) = conversion.as_mut() else {
             return Ok(Vec::new());
@@ -156,7 +180,7 @@ impl SpeechConverter for OnnxVoices {
         running.heard.clear();
         running.down.push(speech, &mut running.heard);
         let converted = running.stream.convert(&running.heard, &mut |window| {
-            self.models.tone_color.with(|session| {
+            self.tone_color.with(|session| {
                 openvoice::convert(
                     session,
                     &mut running.spectrogram,
@@ -175,7 +199,7 @@ impl SpeechConverter for OnnxVoices {
 
 #[cfg(test)]
 mod tests {
-    use instantpad_application::message::Message;
+    use instantpad_application::message::{Message, TextKey};
 
     use super::*;
 
@@ -183,12 +207,26 @@ mod tests {
         OnnxVoices::new(&std::env::temp_dir().join("instantpad-voice-never-installed"))
     }
 
-    #[test]
-    fn the_feminine_preset_is_a_voiceprint_of_the_size_the_models_use() {
-        let preset = empty_folder().preset(VoicePreset::Feminine);
+    fn conversion(source: VoicePreset, target: VoicePreset) -> Conversion {
+        let voices = empty_folder();
+        Conversion {
+            source: voices.preset(source),
+            target: voices.preset(target),
+        }
+    }
 
-        assert_eq!(preset.values().len(), 256);
-        assert!((preset.similarity(&preset) - 1.0).abs() < 1e-6);
+    #[test]
+    fn the_presets_are_different_voiceprints_of_the_size_the_models_use() {
+        let voices = empty_folder();
+
+        let feminine = voices.preset(VoicePreset::Feminine);
+        let masculine = voices.preset(VoicePreset::Masculine);
+
+        for preset in [&feminine, &masculine] {
+            assert_eq!(preset.values().len(), 256);
+            assert!((preset.similarity(preset) - 1.0).abs() < 1e-6);
+        }
+        assert!(!feminine.is_same_speaker(&masculine));
     }
 
     #[test]
@@ -200,35 +238,55 @@ mod tests {
     }
 
     #[test]
-    fn models_that_were_not_downloaded_are_not_installed_and_do_not_load() {
+    fn analyzing_speech_with_models_that_were_not_downloaded_fails_to_load() {
         let voices = empty_folder();
-
         assert!(!voices.is_installed());
-        let Failure(Message::Text { key, .. }) = voices
-            .start(&Conversion {
-                source: voices.preset(VoicePreset::Feminine),
-                target: voices.preset(VoicePreset::Feminine),
-            })
-            .unwrap_err()
-        else {
-            panic!("expected a translated message");
-        };
-        assert_eq!(key, TextKey::AiLoadFailed);
-    }
 
-    #[tokio::test]
-    async fn analyzing_speech_with_models_that_were_not_downloaded_fails_to_load() {
-        let voices = empty_folder();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let voiceprint = runtime.block_on(voices.voiceprint(vec![0.0; 48_000]));
+        let transcript = runtime.block_on(voices.transcribe(vec![0.0; 48_000]));
 
-        let voiceprint = voices.voiceprint(vec![0.0; 48_000]).await.unwrap_err();
-        let transcript = voices.transcribe(vec![0.0; 48_000]).await.unwrap_err();
-
-        for failure in [voiceprint, transcript] {
+        for failure in [voiceprint.unwrap_err(), transcript.unwrap_err()] {
             let Failure(Message::Text { key, .. }) = failure else {
                 panic!("expected a translated message");
             };
             assert_eq!(key, TextKey::AiLoadFailed);
         }
+    }
+
+    #[test]
+    fn starting_only_notes_the_speakers_and_loading_fails_in_the_conversion() {
+        let voices = empty_folder();
+        let speakers = conversion(VoicePreset::Masculine, VoicePreset::Feminine);
+
+        voices.start(&speakers).unwrap();
+        // Enough speech for one window of the model.
+        let failure = voices.convert(&vec![0.0; 24_000]).unwrap_err();
+
+        let Failure(Message::Text { key, .. }) = failure else {
+            panic!("expected a translated message");
+        };
+        assert_eq!(key, TextKey::AiLoadFailed);
+    }
+
+    #[test]
+    fn the_conversion_starts_over_only_for_new_speakers() {
+        let voices = empty_folder();
+        let first = conversion(VoicePreset::Masculine, VoicePreset::Feminine);
+        let swapped = conversion(VoicePreset::Feminine, VoicePreset::Masculine);
+        assert_eq!(voices.take_request(), None);
+
+        voices.start(&first).unwrap();
+        assert_eq!(voices.take_request(), Some(first.clone()));
+        assert_eq!(voices.take_request(), None);
+
+        voices.start(&first).unwrap();
+        assert_eq!(voices.take_request(), None);
+
+        voices.start(&swapped).unwrap();
+        assert_eq!(voices.take_request(), Some(swapped));
     }
 
     #[test]

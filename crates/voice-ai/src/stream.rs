@@ -1,9 +1,10 @@
 //! Converts speech that never ends in overlapping stretches, so each sounds like it was
 //! heard whole.
 
-use instantpad_application::message::{Failure, TextKey};
+use instantpad_application::message::Failure;
 
 use crate::openvoice::HOP;
+use crate::runtime::load_failed;
 
 /// The stretch that is converted and handed back at a time.
 const CHUNK: usize = 3072;
@@ -47,12 +48,7 @@ impl Stream {
             let converted = convert(window)?;
             let stretch = converted
                 .get(self.context..self.context + CHUNK + CROSSFADE)
-                .ok_or_else(|| {
-                    Failure::because(
-                        TextKey::AiLoadFailed,
-                        "the model returned too little speech",
-                    )
-                })?;
+                .ok_or_else(|| load_failed("the model returned too little speech"))?;
 
             let (chunk, tail) = stretch.split_at(CHUNK);
             match self.tail.replace(tail.to_vec()) {
@@ -77,6 +73,8 @@ impl Stream {
 
 #[cfg(test)]
 mod tests {
+    use instantpad_application::message::TextKey;
+
     use super::*;
 
     fn ramp(length: usize) -> Vec<f32> {
@@ -187,13 +185,7 @@ mod tests {
             .convert(&ramp(2 * CHUNK), &mut |_| Ok(vec![0.0; 10]))
             .unwrap_err();
 
-        assert_eq!(
-            failure,
-            Failure::because(
-                TextKey::AiLoadFailed,
-                "the model returned too little speech"
-            )
-        );
+        assert_eq!(failure, load_failed("the model returned too little speech"));
     }
 
     #[test]

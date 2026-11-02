@@ -89,6 +89,8 @@ impl CloningSession {
             self.voice.wait_for_cloning();
             return;
         }
+        // The AI stops listening to the user for the dialog, which needs the microphone.
+        self.voice.hold_microphone(true);
         let mut state = self.state();
         state.generation += 1;
         state.draft = Draft::default();
@@ -244,6 +246,7 @@ impl CloningSession {
     /// Closes the dialog, and drops whatever the AI is still listening to for it.
     fn end(&self, state: &mut MutexGuard<'_, State>) {
         self.recorder.stop(Recording::Cloning);
+        self.voice.hold_microphone(false);
         state.generation += 1;
         state.draft = Draft::default();
         self.show(state, CloneStep::Closed);

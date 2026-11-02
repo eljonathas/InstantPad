@@ -117,6 +117,13 @@ impl Recorder {
             .wake("voice recording", move || drain(kept, is_recording));
     }
 
+    /// What has been recorded so far, while the recording goes on.
+    pub(crate) fn peek(&self) -> Vec<f32> {
+        let mut kept = self.kept.lock().unwrap();
+        kept.collect();
+        kept.speech.clone()
+    }
+
     pub(crate) fn stop(&self) -> Vec<f32> {
         self.is_recording.store(false, Ordering::Relaxed);
         let mut kept = self.kept.lock().unwrap();
@@ -154,6 +161,22 @@ mod tests {
         let (tap, ring) = recorder.tap();
         recorder.attach(Some(ring));
         (recorder, tap)
+    }
+
+    #[test]
+    fn what_is_recorded_so_far_can_be_read_while_the_recording_goes_on() {
+        let (recorder, mut tap) = recorder();
+        recorder.start();
+
+        tap.push(&[0.5, 0.5, 0.25, 0.25]);
+        let first = recorder.peek();
+        tap.push(&[1.0, 1.0]);
+        let second = recorder.peek();
+
+        assert_eq!(first, [0.5, 0.25]);
+        assert_eq!(second, [0.5, 0.25, 1.0]);
+        // Reading takes nothing away.
+        assert_eq!(recorder.stop(), [0.5, 0.25, 1.0]);
     }
 
     #[test]

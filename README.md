@@ -120,7 +120,7 @@ An effect delays your voice by about 40 ms. **Natural** adds no delay.
 
 ### AI voices
 
-**Feminine AI** and cloned voices run an AI model on your own computer. Nothing you say leaves it. The first time, the app downloads the models, about 180 MB, and asks you to read for a few seconds so the AI learns your own voice. An AI voice delays your voice by about a third of a second, and it needs a recent processor. If your computer cannot keep up, the app warns you and keeps only the pitch part of the effect.
+**Feminine AI** and cloned voices run an AI model on your own computer. Nothing you say leaves it. The first time, the app downloads the models, about 180 MB, and the AI learns your own voice by itself: the first time you pick an AI voice, it listens while you talk for a few seconds, with nothing to record, and the voice comes on when it is done. If the first time was in a noisy room or on another microphone, **Learn my voice again** does it again. An AI voice delays your voice by about a third of a second, and it needs a recent processor. If your computer cannot keep up, the app warns you and keeps only the pitch part of the effect.
 
 ### Cloning a voice
 
@@ -135,7 +135,7 @@ The app does not check who a voice belongs to, so clone only your own voice or o
 
 #### Tips for a good clone
 
-How good the clone sounds depends almost entirely on the sample. Record in a quiet room with no echo, with the microphone you call with a hand's width from your mouth. Speak naturally and let your tone move, as you would in a conversation. One to three minutes of speech is ideal, and under 30 seconds leaves the voice thin. If you use a file, pick one without background music or heavy compression, because voice messages from chat apps lose detail. When you use the voice, calibrate your own voice on the same microphone and turn the **Pitch** until it is close to the cloned voice. The AI copies the timbre, but the pace and the way of speaking are still yours.
+How good the clone sounds depends almost entirely on the sample. Record in a quiet room with no echo, with the microphone you call with a hand's width from your mouth. Speak naturally and let your tone move, as you would in a conversation. One to three minutes of speech is ideal, and under 30 seconds leaves the voice thin. If you use a file, pick one without background music or heavy compression, because voice messages from chat apps lose detail. When you use the voice, let the AI learn your own voice on the same microphone and turn the **Pitch** until it is close to the cloned voice. The AI copies the timbre, but the pace and the way of speaking are still yours.
 
 ### Designing a voice
 

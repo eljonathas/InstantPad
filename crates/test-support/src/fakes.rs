@@ -431,6 +431,8 @@ impl EventSink for RecordingEvents {
 #[derive(Default)]
 pub struct FakeRecorder {
     pub is_recording: Mutex<bool>,
+    /// How many times a recording started, which also counts starting over.
+    pub starts: Mutex<u32>,
     pub next: Mutex<Vec<f32>>,
     /// What a file decodes to, or `None` for a file that cannot be read.
     pub file: Mutex<Option<Vec<f32>>>,
@@ -441,12 +443,17 @@ pub struct FakeRecorder {
 #[async_trait]
 impl VoiceRecorder for FakeRecorder {
     fn start_recording(&self) {
+        *self.starts.lock().unwrap() += 1;
         *self.is_recording.lock().unwrap() = true;
     }
 
     fn stop_recording(&self) -> Vec<f32> {
         *self.is_recording.lock().unwrap() = false;
         std::mem::take(&mut *self.next.lock().unwrap())
+    }
+
+    fn recorded(&self) -> Vec<f32> {
+        self.next.lock().unwrap().clone()
     }
 
     async fn decode_file(&self, _path: &str) -> Result<Vec<f32>, Failure> {

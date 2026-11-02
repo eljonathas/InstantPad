@@ -60,8 +60,7 @@ export const commands = {
 	setVoiceParam: (param: VoiceParam, value: number | null) => __TAURI_INVOKE<void>("set_voice_param", { param, value }),
 	setHearingVoice: (enabled: boolean) => __TAURI_INVOKE<void>("set_hearing_voice", { enabled }),
 	installVoiceAi: () => typedError<null, null>(__TAURI_INVOKE("install_voice_ai")),
-	startCalibration: () => __TAURI_INVOKE<void>("start_calibration"),
-	finishCalibration: () => typedError<null, null>(__TAURI_INVOKE("finish_calibration")),
+	relearnVoice: () => __TAURI_INVOKE<void>("relearn_voice"),
 	deleteClonedVoice: (id: string) => __TAURI_INVOKE<void>("delete_cloned_voice", { id }),
 	openDesigner: () => __TAURI_INVOKE<void>("open_designer"),
 	closeDesigner: () => __TAURI_INVOKE<void>("close_designer"),
@@ -91,6 +90,8 @@ export type AiView = {
 	downloadMegabytes: number,
 	calibration: Calibration,
 	minCalibrationSeconds: number,
+	/**  How much of the talk the AI needs it has heard, from 0 to 100. */
+	heardPercent: number,
 	/**
 	 *  What the user asked for that waits for the AI to be set up. A voice then comes on by
 	 *  itself; cloning is opened again by the user.
@@ -120,7 +121,9 @@ export type BoardView = {
 };
 
 /**  Learning the user's own voice, which the AI must remove before adding another. */
-export type Calibration = "idle" | "recording" | "analyzing";
+export type Calibration = "idle" | 
+/**  The AI listens to the user talk, which is all it takes to learn their voice. */
+"listening" | "analyzing";
 
 /**  Where the user is in cloning a voice. Each step only opens once the one before is done. */
 export type CloneStep = { step: "closed" } | 
@@ -331,7 +334,7 @@ export type StartView = {
  *  A key of the translated texts. The frontend owns the translations, so TypeScript refuses
  *  a variant that is missing from them.
  */
-export type TextKey = "AiCalibrationSaved" | "AiCalibrationTooShort" | "AiDownloadFailed" | "AiInstalled" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneSaved" | "CloneVoice" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "MicrophoneBusy" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
+export type TextKey = "AiCalibrationSaved" | "AiDownloadFailed" | "AiInstalled" | "AiListening" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneSaved" | "CloneVoice" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "MicrophoneBusy" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
 
 export type UpdateView = {
 	status: Message,

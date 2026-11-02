@@ -12,7 +12,7 @@ use instantpad_domain::voice::{
     PitchShape, VoiceEffect, VoiceParam, VoicePreset, VoiceSettings, VoiceTarget,
 };
 use instantpad_test_support::fakes::FakeAnalyzer;
-use support::{VoiceWorld, cloned_voice, own_voice, poll_once, speech};
+use support::{VoiceWorld, cloned_voice, own_voice, poll_once, speech, talking};
 
 fn error(key: TextKey) -> AppEvent {
     AppEvent::error(Message::text(key))
@@ -60,18 +60,6 @@ fn an_ai_effect_without_the_models_is_refused_and_nothing_changes() {
     assert_eq!(world.voice.view().active, VoiceEffect::Natural);
     assert_eq!(world.settings.lock().voice, VoiceSettings::default());
     assert_eq!(*world.changer.chain.lock().unwrap(), None);
-    assert_eq!(*world.changer.conversion.lock().unwrap(), None);
-}
-
-#[test]
-fn an_ai_effect_without_the_own_voice_known_asks_for_the_calibration() {
-    let world = VoiceWorld::new();
-    *world.models.is_installed.lock().unwrap() = true;
-
-    world.voice.select(VoiceEffect::FeminineAi);
-
-    assert!(world.saw(&error(TextKey::AiNotCalibrated)));
-    assert_eq!(world.voice.view().active, VoiceEffect::Natural);
     assert_eq!(*world.changer.conversion.lock().unwrap(), None);
 }
 
@@ -183,86 +171,6 @@ fn the_screen_is_told_the_size_of_the_download() {
     let world = VoiceWorld::new();
 
     assert_eq!(world.voice.view().ai.download_megabytes, 260);
-}
-
-#[test]
-fn calibration_listens_to_the_microphone_until_it_is_finished() {
-    let world = VoiceWorld::installed();
-
-    world.voice.start_calibration();
-
-    assert!(*world.recorder.is_recording.lock().unwrap());
-    assert_eq!(world.voice.view().ai.calibration, Calibration::Recording);
-}
-
-#[tokio::test]
-async fn a_calibration_that_is_too_short_is_refused() {
-    let world = VoiceWorld::installed();
-    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
-    world.voice.start_calibration();
-    *world.recorder.next.lock().unwrap() = speech(MIN_CALIBRATION_SECONDS - 1);
-
-    world.voice.finish_calibration().await;
-
-    let seconds = Message::plain(MIN_CALIBRATION_SECONDS.to_string());
-    let reason = Message::with(TextKey::AiCalibrationTooShort, [seconds]);
-    assert!(world.saw(&AppEvent::error(reason)));
-    assert_eq!(world.library.lock().own, None);
-    assert_eq!(world.repository.library.lock().unwrap().own, None);
-    assert_eq!(world.analyzer.voiceprints.lock().unwrap().len(), 1);
-    let view = world.voice.view();
-    assert_eq!(view.ai.calibration, Calibration::Idle);
-    assert_eq!(world.library.lock().own, None);
-}
-
-#[tokio::test]
-async fn a_long_enough_calibration_saves_the_own_voice() {
-    let world = VoiceWorld::installed();
-    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
-    world.voice.start_calibration();
-    *world.recorder.next.lock().unwrap() = speech(MIN_CALIBRATION_SECONDS);
-
-    world.voice.finish_calibration().await;
-
-    assert_eq!(
-        world.repository.library.lock().unwrap().own,
-        Some(own_voice())
-    );
-    assert!(world.saw(&shown(TextKey::AiCalibrationSaved)));
-    assert!(!*world.recorder.is_recording.lock().unwrap());
-    let view = world.voice.view();
-    assert!(world.library.lock().own.is_some());
-    assert_eq!(view.ai.calibration, Calibration::Idle);
-}
-
-#[tokio::test]
-async fn a_calibration_the_ai_cannot_hear_shows_why() {
-    let world = VoiceWorld::installed();
-    world.voice.start_calibration();
-    *world.recorder.next.lock().unwrap() = speech(10);
-
-    world.voice.finish_calibration().await;
-
-    assert!(world.saw(&failed(TextKey::AiLoadFailed, "no voiceprint prepared")));
-    assert_eq!(world.library.lock().own, None);
-}
-
-#[tokio::test]
-async fn calibrating_again_replaces_the_own_voice() {
-    let world = VoiceWorld::resuming(VoiceSettings::default(), calibrated(), true);
-    let newer = FakeAnalyzer::voice([0.0, 2.0]);
-    world
-        .analyzer
-        .voiceprints
-        .lock()
-        .unwrap()
-        .push(newer.clone());
-    world.voice.start_calibration();
-    *world.recorder.next.lock().unwrap() = speech(9);
-
-    world.voice.finish_calibration().await;
-
-    assert_eq!(world.repository.library.lock().unwrap().own, Some(newer));
 }
 
 #[test]
@@ -510,80 +418,6 @@ fn the_knob_of_a_clone_changes_its_pitch() {
 }
 
 #[test]
-fn calibration_needs_the_models() {
-    let world = VoiceWorld::new();
-
-    world.voice.start_calibration();
-
-    assert!(world.saw(&error(TextKey::AiNotInstalled)));
-    assert_eq!(world.voice.view().ai.calibration, Calibration::Idle);
-    assert!(!*world.recorder.is_recording.lock().unwrap());
-}
-
-#[tokio::test]
-async fn finishing_a_calibration_that_never_started_does_nothing() {
-    let world = VoiceWorld::installed();
-    *world.recorder.next.lock().unwrap() = speech(MIN_CALIBRATION_SECONDS);
-
-    world.voice.finish_calibration().await;
-
-    assert!(world.events.0.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn a_second_stop_during_the_analysis_does_nothing() {
-    let world = VoiceWorld::installed();
-    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
-    let voice = world.voice.clone();
-    let recorder = world.recorder.clone();
-    *world.analyzer.meanwhile.lock().unwrap() = Some(Box::new(move || {
-        assert_eq!(voice.view().ai.calibration, Calibration::Analyzing);
-        assert!(poll_once(voice.finish_calibration()).is_some());
-        voice.start_calibration();
-        assert!(!*recorder.is_recording.lock().unwrap());
-        assert_eq!(voice.view().ai.calibration, Calibration::Analyzing);
-    }));
-    world.voice.start_calibration();
-    *world.recorder.next.lock().unwrap() = speech(MIN_CALIBRATION_SECONDS);
-
-    world.voice.finish_calibration().await;
-
-    let saved = shown(TextKey::AiCalibrationSaved);
-    let count = |event: &AppEvent| {
-        world
-            .events
-            .0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|e| *e == event)
-            .count()
-    };
-    assert_eq!(count(&saved), 1);
-    assert_eq!(
-        world.repository.library.lock().unwrap().own,
-        Some(own_voice())
-    );
-    assert_eq!(world.voice.view().ai.calibration, Calibration::Idle);
-}
-
-#[tokio::test]
-async fn a_calibration_that_cannot_be_saved_is_not_used() {
-    let world = VoiceWorld::installed();
-    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
-    *world.repository.fails.lock().unwrap() = true;
-    world.voice.start_calibration();
-    *world.recorder.next.lock().unwrap() = speech(MIN_CALIBRATION_SECONDS);
-
-    world.voice.finish_calibration().await;
-
-    assert!(world.saw(&error(TextKey::SaveFailed)));
-    assert!(!world.saw(&shown(TextKey::AiCalibrationSaved)));
-    assert_eq!(world.library.lock().own, None);
-    assert_eq!(world.library.lock().own, None);
-}
-
-#[test]
 fn a_clone_that_could_not_be_deleted_stays_in_the_app() {
     let world = VoiceWorld::ready();
     world.keep_clone("a", "Ana");
@@ -627,7 +461,7 @@ fn a_clone_that_cannot_run_yet_waits_under_its_name() {
 }
 
 #[tokio::test]
-async fn a_waiting_effect_comes_on_by_itself_after_the_install_and_the_calibration() {
+async fn a_waiting_effect_comes_on_by_itself_after_the_install_and_the_learning() {
     let world = VoiceWorld::new();
     world.voice.select(VoiceEffect::FeminineAi);
 
@@ -641,9 +475,7 @@ async fn a_waiting_effect_comes_on_by_itself_after_the_install_and_the_calibrati
     );
 
     world.analyzer.voiceprints.lock().unwrap().push(own_voice());
-    world.voice.start_calibration();
-    *world.recorder.next.lock().unwrap() = speech(MIN_CALIBRATION_SECONDS);
-    world.voice.finish_calibration().await;
+    world.hears_the_user_talk().await;
 
     let view = world.voice.view();
     assert_eq!(view.active, VoiceEffect::FeminineAi);
@@ -947,9 +779,7 @@ async fn a_design_saved_before_the_own_voice_is_known_waits_to_come_on() {
     assert_eq!(view.ai.waiting, Some(Message::plain("Mix")));
 
     world.analyzer.voiceprints.lock().unwrap().push(own_voice());
-    world.voice.start_calibration();
-    *world.recorder.next.lock().unwrap() = speech(MIN_CALIBRATION_SECONDS);
-    world.voice.finish_calibration().await;
+    world.hears_the_user_talk().await;
 
     let view = world.voice.view();
     assert_eq!(view.active, VoiceEffect::Cloned);
@@ -1342,4 +1172,284 @@ async fn a_waiting_effect_keeps_the_knobs_turned_while_it_waited() {
 
     assert_eq!(world.voice.view().active, VoiceEffect::FeminineAi);
     assert_eq!(pitch_of(&world), 8.0);
+}
+
+#[test]
+fn an_ai_effect_without_the_own_voice_known_starts_listening_instead_of_failing() {
+    let world = VoiceWorld::installed();
+
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    assert!(world.saw(&shown(TextKey::AiListening)));
+    assert!(!world.saw(&error(TextKey::AiNotCalibrated)));
+    assert!(world.is_listening());
+    let view = world.voice.view();
+    assert_eq!(view.ai.calibration, Calibration::Listening);
+    assert_eq!(view.active, VoiceEffect::Natural);
+    assert_eq!(
+        view.ai.waiting,
+        Some(Message::text(TextKey::EffectFeminineAi))
+    );
+    assert_eq!(*world.changer.conversion.lock().unwrap(), None);
+}
+
+#[tokio::test]
+async fn nothing_is_listened_to_when_nothing_waits_for_the_own_voice() {
+    let world = VoiceWorld::installed();
+
+    world.voice.learn().await;
+
+    assert!(!world.is_listening());
+    assert_eq!(world.voice.view().ai.calibration, Calibration::Idle);
+}
+
+#[tokio::test]
+async fn nothing_is_listened_to_without_the_models() {
+    let world = VoiceWorld::new();
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    world.voice.learn().await;
+
+    assert!(!world.is_listening());
+}
+
+#[tokio::test]
+async fn the_ai_does_not_listen_again_once_it_knows_the_voice() {
+    let world = VoiceWorld::resuming(VoiceSettings::default(), calibrated(), true);
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    world.voice.learn().await;
+
+    assert!(!world.is_listening());
+    assert_eq!(world.voice.view().active, VoiceEffect::FeminineAi);
+}
+
+#[tokio::test]
+async fn silence_is_not_talk_and_the_ai_goes_on_listening() {
+    let world = VoiceWorld::installed();
+    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
+    world.voice.select(VoiceEffect::FeminineAi);
+    *world.recorder.next.lock().unwrap() = speech(30);
+
+    world.voice.learn().await;
+
+    let view = world.voice.view();
+    assert_eq!(view.ai.calibration, Calibration::Listening);
+    assert_eq!(view.ai.heard_percent, 0);
+    assert!(world.is_listening());
+    assert_eq!(world.analyzer.voiceprints.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn the_progress_follows_how_much_talk_was_heard() {
+    let world = VoiceWorld::installed();
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    *world.recorder.next.lock().unwrap() = talking(MIN_CALIBRATION_SECONDS / 2);
+    world.voice.learn().await;
+
+    let view = world.voice.view();
+    assert_eq!(view.ai.calibration, Calibration::Listening);
+    assert_eq!(view.ai.heard_percent, 50);
+    assert_eq!(world.library.lock().own, None);
+}
+
+#[tokio::test]
+async fn enough_talk_teaches_the_voice_and_the_waiting_effect_comes_on() {
+    let world = VoiceWorld::installed();
+    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    world.hears_the_user_talk().await;
+
+    assert_eq!(
+        world.repository.library.lock().unwrap().own,
+        Some(own_voice())
+    );
+    assert!(world.saw(&shown(TextKey::AiCalibrationSaved)));
+    assert!(!world.is_listening());
+    let view = world.voice.view();
+    assert_eq!(view.ai.calibration, Calibration::Idle);
+    assert_eq!(view.ai.heard_percent, 0);
+    assert_eq!(view.active, VoiceEffect::FeminineAi);
+    assert_eq!(view.ai.waiting, None);
+    assert!(world.changer.conversion.lock().unwrap().is_some());
+}
+
+#[tokio::test]
+async fn talk_in_pieces_with_silences_between_adds_up() {
+    let world = VoiceWorld::installed();
+    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    *world.recorder.next.lock().unwrap() = [talking(5), speech(10), talking(4)].concat();
+    world.voice.learn().await;
+
+    assert_eq!(world.voice.view().ai.calibration, Calibration::Idle);
+    assert!(world.library.lock().own.is_some());
+}
+
+#[tokio::test]
+async fn listening_that_hears_too_little_talk_for_too_long_starts_over() {
+    let world = VoiceWorld::installed();
+    world.voice.select(VoiceEffect::FeminineAi);
+    assert_eq!(*world.recorder.starts.lock().unwrap(), 1);
+
+    *world.recorder.next.lock().unwrap() = speech(41);
+    world.voice.learn().await;
+
+    assert_eq!(*world.recorder.starts.lock().unwrap(), 2);
+    assert_eq!(world.voice.view().ai.calibration, Calibration::Listening);
+}
+
+#[tokio::test]
+async fn a_voice_the_ai_cannot_hear_shows_why_and_stops_waiting() {
+    let world = VoiceWorld::installed();
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    world.hears_the_user_talk().await;
+
+    assert!(world.saw(&failed(TextKey::AiLoadFailed, "no voiceprint prepared")));
+    assert_eq!(world.library.lock().own, None);
+    assert_eq!(world.voice.view().ai.waiting, None);
+    assert_eq!(world.voice.view().ai.calibration, Calibration::Idle);
+    // Not listening again and failing the same way over and over.
+    world.voice.learn().await;
+    assert!(!world.is_listening());
+}
+
+#[tokio::test]
+async fn a_voice_that_cannot_be_saved_is_not_used() {
+    let world = VoiceWorld::installed();
+    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
+    *world.repository.fails.lock().unwrap() = true;
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    world.hears_the_user_talk().await;
+
+    assert!(world.saw(&error(TextKey::SaveFailed)));
+    assert!(!world.saw(&shown(TextKey::AiCalibrationSaved)));
+    assert_eq!(world.library.lock().own, None);
+    assert_eq!(world.voice.view().active, VoiceEffect::Natural);
+}
+
+#[tokio::test]
+async fn picking_another_effect_stops_the_listening() {
+    let world = VoiceWorld::installed();
+    world.voice.select(VoiceEffect::FeminineAi);
+    assert!(world.is_listening());
+
+    world.voice.select(VoiceEffect::Thin);
+
+    assert!(!world.is_listening());
+    let view = world.voice.view();
+    assert_eq!(view.ai.calibration, Calibration::Idle);
+    assert_eq!(view.ai.waiting, None);
+    assert_eq!(view.active, VoiceEffect::Thin);
+}
+
+#[tokio::test]
+async fn deleting_the_voice_that_waits_stops_the_listening_on_the_next_call() {
+    let world = VoiceWorld::installed();
+    world.keep_clone("a", "Ana");
+    world.voice.select_clone("a");
+    assert!(world.is_listening());
+
+    world.voice.delete_clone("a");
+    world.voice.learn().await;
+
+    assert!(!world.is_listening());
+    assert_eq!(world.voice.view().ai.calibration, Calibration::Idle);
+}
+
+#[tokio::test]
+async fn a_second_call_while_the_ai_analyzes_does_nothing() {
+    let world = VoiceWorld::installed();
+    world.analyzer.voiceprints.lock().unwrap().push(own_voice());
+    world.voice.select(VoiceEffect::FeminineAi);
+    let voice = world.voice.clone();
+    *world.analyzer.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        assert_eq!(voice.view().ai.calibration, Calibration::Analyzing);
+        assert!(poll_once(voice.learn()).is_some());
+        assert_eq!(voice.view().ai.calibration, Calibration::Analyzing);
+    }));
+
+    world.hears_the_user_talk().await;
+
+    let saved = shown(TextKey::AiCalibrationSaved);
+    let count = world
+        .events
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|event| **event == saved)
+        .count();
+    assert_eq!(count, 1);
+    assert_eq!(world.voice.view().ai.calibration, Calibration::Idle);
+}
+
+#[tokio::test]
+async fn an_effect_waiting_for_the_install_starts_listening_once_the_ai_is_there() {
+    let world = VoiceWorld::new();
+    world.voice.select(VoiceEffect::FeminineAi);
+    assert!(!world.is_listening());
+
+    world.voice.install_ai().await;
+
+    assert!(world.is_listening());
+    assert_eq!(world.voice.view().ai.calibration, Calibration::Listening);
+}
+
+#[tokio::test]
+async fn relearning_forgets_the_voice_and_the_effect_comes_back_when_it_is_learned_again() {
+    let world = VoiceWorld::resuming(saved_with(VoiceEffect::FeminineAi), calibrated(), true);
+    let newer = FakeAnalyzer::voice([0.0, 2.0]);
+    world
+        .analyzer
+        .voiceprints
+        .lock()
+        .unwrap()
+        .push(newer.clone());
+
+    world.voice.relearn();
+
+    assert_eq!(world.library.lock().own, None);
+    assert_eq!(world.repository.library.lock().unwrap().own, None);
+    assert!(world.is_listening());
+    let view = world.voice.view();
+    assert_eq!(view.active, VoiceEffect::Natural);
+    assert_eq!(
+        view.ai.waiting,
+        Some(Message::text(TextKey::EffectFeminineAi))
+    );
+    assert_eq!(*world.changer.conversion.lock().unwrap(), None);
+
+    world.hears_the_user_talk().await;
+
+    assert_eq!(world.repository.library.lock().unwrap().own, Some(newer));
+    assert_eq!(world.voice.view().active, VoiceEffect::FeminineAi);
+}
+
+#[test]
+fn relearning_with_an_effect_that_needs_no_ai_does_nothing() {
+    let world = VoiceWorld::resuming(saved_with(VoiceEffect::Thin), calibrated(), true);
+
+    world.voice.relearn();
+
+    assert!(world.library.lock().own.is_some());
+    assert!(!world.is_listening());
+}
+
+#[test]
+fn relearning_that_cannot_be_saved_keeps_the_voice_and_the_effect() {
+    let world = VoiceWorld::resuming(saved_with(VoiceEffect::FeminineAi), calibrated(), true);
+    *world.repository.fails.lock().unwrap() = true;
+
+    world.voice.relearn();
+
+    assert!(world.saw(&error(TextKey::SaveFailed)));
+    assert!(world.library.lock().own.is_some());
+    assert_eq!(world.voice.view().active, VoiceEffect::FeminineAi);
+    assert!(!world.is_listening());
 }

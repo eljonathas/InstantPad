@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { installTheAi, lcd, openApp, readyTheAi, recordCommands, recordFor } from "./support";
+import { installTheAi, lcd, letTheAiListen, openApp, readyTheAi, recordCommands, recordFor } from "./support";
 
 test.beforeEach(async ({ page }) => {
   await page.clock.install();
@@ -22,7 +22,7 @@ async function cloneVoice(page: Page, name: string) {
   await wizard(page).getByRole("button", { name: "Save" }).click();
 }
 
-test("cloning without the AI asks for the download, and then needs no calibration", async ({ page }) => {
+test("cloning without the AI asks for the download, and then needs nothing else", async ({ page }) => {
   await page.getByRole("button", { name: "Clone a voice" }).click();
 
   await expect(wizard(page)).toHaveCount(0);
@@ -117,9 +117,9 @@ test("a cloned voice picked before the AI knows the user waits, then comes on by
 
   await page.getByRole("button", { name: "Ana", exact: true }).dispatchEvent("pointerdown");
   await expect(page.locator(".voice-title")).toHaveText("Ana");
-  await expect(page.getByText("read any text aloud", { exact: false })).toBeVisible();
+  await expect(page.getByText("The AI is learning your voice", { exact: false })).toBeVisible();
 
-  await recordFor(page, 8);
+  await letTheAiListen(page);
 
   await expect(page.getByRole("button", { name: "Ana", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Delete voice" })).toBeVisible();
@@ -239,7 +239,7 @@ test("a preview the backend refuses stays off", async ({ page }) => {
   await designer(page).getByRole("button", { name: "Hear preview" }).click();
 
   await expect(lcd(page)).toHaveText("Error");
-  await expect(page.getByText("must learn your own voice first", { exact: false })).toBeVisible();
+  await expect(page.getByText("The AI is still learning your voice", { exact: false })).toBeVisible();
   await expect(designer(page).getByRole("button", { name: "Hear preview" })).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByRole("button", { name: "Hear my voice" })).toHaveAttribute("aria-pressed", "false");
 });
@@ -308,7 +308,7 @@ test("deleting a voice that is waiting for the AI leaves nothing waiting", async
   await cloneVoice(page, "Ana");
   await page.getByRole("button", { name: "Ana", exact: true }).dispatchEvent("pointerdown");
   await expect(page.locator(".voice-title")).toHaveText("Ana");
-  await expect(page.getByText("read any text aloud", { exact: false })).toBeVisible();
+  await expect(page.getByText("The AI is learning your voice", { exact: false })).toBeVisible();
 
   // Its key is out of reach while the AI is being set up, so the command goes straight to the backend.
   await page.evaluate(() =>
@@ -318,18 +318,33 @@ test("deleting a voice that is waiting for the AI leaves nothing waiting", async
   );
 
   await expect(page.getByRole("button", { name: "Ana", exact: true })).toHaveCount(0);
-  await expect(page.getByText("read any text aloud", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("The AI is learning your voice", { exact: false })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Natural" })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("the microphone is not shared between a calibration and the cloning dialog", async ({ page }) => {
+test("the AI stops listening while the cloning dialog is open, and goes back to it when it closes", async ({
+  page,
+}) => {
   await installTheAi(page);
   await page.getByRole("button", { name: "Feminine AI", exact: true }).dispatchEvent("pointerdown");
-  await page.getByRole("button", { name: "Record" }).click();
-  await page.getByRole("button", { name: "Clone a voice" }).click();
+  await expect(page.getByText("The AI is learning your voice", { exact: false })).toBeVisible();
 
+  await page.getByRole("button", { name: "Clone a voice" }).click();
   await wizard(page).getByRole("button", { name: "Record" }).click();
 
-  await expect(page.getByText("The microphone is already recording.", { exact: false })).toBeVisible();
-  await expect(wizard(page).getByRole("button", { name: "Record" })).toBeVisible();
+  await expect(wizard(page).getByRole("button", { name: "Stop" })).toBeVisible();
+  await expect(page.getByText("The microphone is already recording.", { exact: false })).toHaveCount(0);
+  await letTheAiListen(page);
+  await expect(page.getByRole("button", { name: "Feminine AI", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+
+  await wizard(page).getByRole("button", { name: "Cancel" }).click();
+  await letTheAiListen(page);
+
+  await expect(page.getByRole("button", { name: "Feminine AI", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });

@@ -1,0 +1,64 @@
+//! Telling the parts of a recording where someone talks from the rest of it.
+
+/// The pieces the recording is cut into, which are short enough to follow the words.
+const FRAME_MILLISECONDS: usize = 20;
+/// A talker is louder than the room by at least this many times.
+const LOUDER_THAN_THE_ROOM: f32 = 3.0;
+/// Below this the microphone hears nothing, whatever the room.
+const SILENCE: f32 = 0.004;
+/// A click or a cough is shorter than a word, so a stretch has to last this many frames.
+const MIN_FRAMES: usize = 5;
+/// A quiet moment this short is the breath between two syllables, not the end of the talk.
+const BRIDGED_FRAMES: usize = 8;
+
+/// The parts of `speech` where someone talks, one after the other. `rate` is the samples in a
+/// second. The room is what the quietest tenth of the recording sounds like, so a fan or a
+/// steady hum is not taken for a voice, and neither are pauses or a click of the keyboard.
+pub fn voiced(speech: &[f32], rate: usize) -> Vec<f32> {
+    let frame = rate * FRAME_MILLISECONDS / 1000;
+    let frames: Vec<&[f32]> = speech.chunks_exact(frame).collect();
+    if frames.is_empty() {
+        return Vec::new();
+    }
+    let levels: Vec<f32> = frames.iter().map(|frame| level(frame)).collect();
+
+    let mut sorted = levels.clone();
+    sorted.sort_by(f32::total_cmp);
+    let room = sorted[sorted.len() / 10];
+    let threshold = (room * LOUDER_THAN_THE_ROOM).max(SILENCE);
+
+    let mut talking = Vec::new();
+    let mut stretch = 0..0;
+    let mut quiet = 0;
+    for (index, &level) in levels.iter().enumerate() {
+        if level >= threshold {
+            if stretch.is_empty() {
+                stretch.start = index;
+            }
+            stretch.end = index + 1;
+            quiet = 0;
+        } else if !stretch.is_empty() {
+            quiet += 1;
+            if quiet > BRIDGED_FRAMES {
+                keep(&frames, &mut stretch, &mut talking);
+            }
+        }
+    }
+    keep(&frames, &mut stretch, &mut talking);
+    talking
+}
+
+/// How loud a frame is: the root of the mean of its squares.
+fn level(frame: &[f32]) -> f32 {
+    (frame.iter().map(|sample| sample * sample).sum::<f32>() / frame.len() as f32).sqrt()
+}
+
+/// Adds the stretch to `talking` when it lasted long enough, and starts the next one.
+fn keep(frames: &[&[f32]], stretch: &mut std::ops::Range<usize>, talking: &mut Vec<f32>) {
+    if stretch.len() >= MIN_FRAMES {
+        for frame in &frames[stretch.clone()] {
+            talking.extend_from_slice(frame);
+        }
+    }
+    *stretch = 0..0;
+}

@@ -7,9 +7,9 @@ use thiserror::Error;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub enum TextKey {
     AiCalibrationSaved,
-    AiCalibrationTooShort,
     AiDownloadFailed,
     AiInstalled,
+    AiListening,
     AiLoadFailed,
     AiNotCalibrated,
     AiNotInstalled,

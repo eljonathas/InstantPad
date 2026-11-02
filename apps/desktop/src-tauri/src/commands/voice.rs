@@ -37,15 +37,8 @@ pub async fn install_voice_ai(core: State<'_, Core>) -> Result<(), ()> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn start_calibration(core: State<'_, Core>) {
-    core.voice.start_calibration();
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn finish_calibration(core: State<'_, Core>) -> Result<(), ()> {
-    core.voice.finish_calibration().await;
-    Ok(())
+pub fn relearn_voice(core: State<'_, Core>) {
+    core.voice.relearn();
 }
 
 #[tauri::command]

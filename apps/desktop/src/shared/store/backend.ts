@@ -93,6 +93,7 @@ let state: BackendState = {
       calibration: "idle",
       waiting: null,
       minCalibrationSeconds: 0,
+      heardPercent: 0,
     },
   },
   cloning: { step: "closed" },

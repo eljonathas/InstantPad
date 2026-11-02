@@ -120,7 +120,7 @@ Um efeito atrasa sua voz em cerca de 40 ms. **Natural** não acrescenta atraso.
 
 ### Vozes com IA
 
-**Feminina IA** e as vozes clonadas rodam um modelo de IA no seu próprio computador. Nada do que você fala sai dele. Na primeira vez, o app baixa os modelos, cerca de 180 MB, e pede que você leia por alguns segundos para a IA aprender a sua própria voz. Uma voz com IA atrasa sua voz em cerca de um terço de segundo e precisa de um processador recente. Se o computador não acompanhar, o app avisa e mantém só a parte de tom do efeito.
+**Feminina IA** e as vozes clonadas rodam um modelo de IA no seu próprio computador. Nada do que você fala sai dele. Na primeira vez, o app baixa os modelos, cerca de 180 MB, e a IA aprende a sua própria voz sozinha: na primeira vez que você escolhe uma voz de IA, ela escuta você falar por alguns segundos, sem gravar nada, e a voz liga quando termina. Se a primeira vez foi num lugar barulhento ou em outro microfone, **Aprender minha voz de novo** refaz isso. Uma voz com IA atrasa sua voz em cerca de um terço de segundo e precisa de um processador recente. Se o computador não acompanhar, o app avisa e mantém só a parte de tom do efeito.
 
 ### Clonar uma voz
 
@@ -135,7 +135,7 @@ O app não confere de quem é a voz, então clone só a sua própria voz ou a de
 
 #### Dicas para um bom clone
 
-A qualidade do clone depende quase toda da amostra. Grave num lugar silencioso e sem eco, com o microfone das chamadas a um palmo da boca. Fale com naturalidade e varie a entonação, como numa conversa. De 1 a 3 minutos de fala é o ideal, e menos de 30 segundos deixa a voz pobre. Se usar um arquivo, escolha um sem música de fundo e sem compressão forte, porque áudios de aplicativos de mensagem perdem detalhes. Na hora de usar, calibre a sua própria voz no mesmo microfone e ajuste o **Tom** até ficar perto da voz clonada. A IA copia o timbre, mas o ritmo e o jeito de falar continuam sendo seus.
+A qualidade do clone depende quase toda da amostra. Grave num lugar silencioso e sem eco, com o microfone das chamadas a um palmo da boca. Fale com naturalidade e varie a entonação, como numa conversa. De 1 a 3 minutos de fala é o ideal, e menos de 30 segundos deixa a voz pobre. Se usar um arquivo, escolha um sem música de fundo e sem compressão forte, porque áudios de aplicativos de mensagem perdem detalhes. Na hora de usar, deixe a IA aprender a sua própria voz no mesmo microfone e ajuste o **Tom** até ficar perto da voz clonada. A IA copia o timbre, mas o ritmo e o jeito de falar continuam sendo seus.
 
 ### Criar uma voz personalizada
 

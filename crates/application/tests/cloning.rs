@@ -5,10 +5,10 @@ use std::sync::Arc;
 use instantpad_application::cloning::CloningSession;
 use instantpad_application::events::{AppEvent, Calibration, CloneStep};
 use instantpad_application::message::{Message, TextKey};
-use instantpad_domain::cloning::{MAX_SAMPLE_SECONDS, MIN_CALIBRATION_SECONDS, MIN_SAMPLE_SECONDS};
+use instantpad_domain::cloning::{MAX_SAMPLE_SECONDS, MIN_SAMPLE_SECONDS};
 use instantpad_domain::voice::VoiceEffect;
 use instantpad_test_support::fakes::FakeAnalyzer;
-use support::{VoiceWorld, own_voice, poll_once, speech};
+use support::{VoiceWorld, poll_once, speech};
 
 struct Cloning {
     world: VoiceWorld,
@@ -18,7 +18,15 @@ struct Cloning {
 impl Cloning {
     /// Models installed, the way cloning needs them.
     fn new() -> Self {
-        let world = VoiceWorld::ready();
+        Self::in_world(VoiceWorld::ready())
+    }
+
+    /// Models installed, but the AI does not know the voice of the user yet.
+    fn learning() -> Self {
+        Self::in_world(VoiceWorld::installed())
+    }
+
+    fn in_world(world: VoiceWorld) -> Self {
         let session = Arc::new(CloningSession::new(
             world.microphone.clone(),
             world.analyzer.clone(),
@@ -473,72 +481,6 @@ async fn closing_while_a_file_is_read_analyzes_nothing() {
     assert_eq!(cloning.unused_voiceprints(), 1);
 }
 
-#[test]
-fn calibration_and_cloning_cannot_record_at_once() {
-    let cloning = Cloning::new();
-    cloning.world.voice.start_calibration();
-    cloning.session.open();
-
-    cloning.session.start_sample();
-
-    assert!(matches!(
-        cloning.step(),
-        CloneStep::Sample {
-            is_recording: false,
-            ..
-        }
-    ));
-    assert!(cloning.world.saw(&error(TextKey::MicrophoneBusy)));
-    assert_eq!(
-        cloning.world.voice.view().ai.calibration,
-        Calibration::Recording
-    );
-}
-
-#[test]
-fn cloning_that_records_keeps_the_calibration_from_starting() {
-    let cloning = Cloning::new();
-    cloning.session.open();
-    cloning.session.start_sample();
-
-    cloning.world.voice.start_calibration();
-
-    assert!(cloning.world.saw(&error(TextKey::MicrophoneBusy)));
-    assert_eq!(cloning.world.voice.view().ai.calibration, Calibration::Idle);
-    assert!(matches!(
-        cloning.step(),
-        CloneStep::Sample {
-            is_recording: true,
-            ..
-        }
-    ));
-}
-
-#[tokio::test]
-async fn closing_the_dialog_does_not_stop_a_calibration_recording() {
-    let cloning = Cloning::new();
-    cloning.world.voice.start_calibration();
-    cloning.session.open();
-
-    cloning.session.close();
-
-    assert!(cloning.is_recording());
-    assert_eq!(
-        cloning.world.voice.view().ai.calibration,
-        Calibration::Recording
-    );
-    cloning
-        .world
-        .analyzer
-        .voiceprints
-        .lock()
-        .unwrap()
-        .push(own_voice());
-    cloning.records(MIN_CALIBRATION_SECONDS);
-    cloning.world.voice.finish_calibration().await;
-    assert!(cloning.world.library.lock().own.is_some());
-}
-
 #[tokio::test]
 async fn a_second_stop_of_the_sample_does_nothing() {
     let cloning = Cloning::new();
@@ -650,4 +592,94 @@ async fn a_voice_that_could_not_be_saved_leaves_the_other_voices_alone() {
     cloning.session.save("My voice");
 
     assert_eq!(cloning.world.library.lock().ids(), ["earlier"]);
+}
+
+#[test]
+fn the_ai_stops_listening_to_the_user_while_the_dialog_is_open() {
+    let cloning = Cloning::learning();
+    cloning.world.voice.select(VoiceEffect::FeminineAi);
+    assert_eq!(
+        cloning.world.voice.view().ai.calibration,
+        Calibration::Listening
+    );
+
+    cloning.session.open();
+
+    assert!(!cloning.is_recording());
+    assert_eq!(cloning.world.voice.view().ai.calibration, Calibration::Idle);
+    // The dialog can record at once, because the microphone is free.
+    cloning.session.start_sample();
+    assert!(cloning.is_recording());
+    assert!(matches!(
+        cloning.step(),
+        CloneStep::Sample {
+            is_recording: true,
+            ..
+        }
+    ));
+    assert!(!cloning.world.saw(&error(TextKey::MicrophoneBusy)));
+}
+
+#[tokio::test]
+async fn the_ai_does_not_start_listening_again_while_the_dialog_is_open() {
+    let cloning = Cloning::learning();
+    cloning.world.voice.select(VoiceEffect::FeminineAi);
+    cloning.session.open();
+
+    cloning.world.voice.learn().await;
+
+    assert!(!cloning.is_recording());
+    assert_eq!(cloning.world.voice.view().ai.calibration, Calibration::Idle);
+}
+
+#[tokio::test]
+async fn the_ai_goes_back_to_listening_when_the_dialog_closes() {
+    let cloning = Cloning::learning();
+    cloning.world.voice.select(VoiceEffect::FeminineAi);
+    cloning.session.open();
+    cloning.session.close();
+
+    cloning.world.voice.learn().await;
+
+    assert!(cloning.is_recording());
+    assert_eq!(
+        cloning.world.voice.view().ai.calibration,
+        Calibration::Listening
+    );
+}
+
+#[tokio::test]
+async fn saving_a_voice_gives_the_microphone_back_to_the_ai() {
+    let cloning = Cloning::learning();
+    cloning.world.voice.select(VoiceEffect::FeminineAi);
+    cloning.arrives_at_the_name().await;
+
+    cloning.session.save("My voice");
+    cloning.world.voice.learn().await;
+
+    assert_eq!(cloning.step(), CloneStep::Closed);
+    assert_eq!(
+        cloning.world.voice.view().ai.calibration,
+        Calibration::Listening
+    );
+}
+
+#[tokio::test]
+async fn the_ai_waits_for_a_recording_of_the_dialog_that_is_still_going_on() {
+    let cloning = Cloning::learning();
+    cloning.session.open();
+    cloning.session.start_sample();
+    cloning.world.voice.select(VoiceEffect::FeminineAi);
+
+    cloning.world.voice.learn().await;
+
+    // The sample is still being recorded, and nothing of it is lost to the AI.
+    assert!(matches!(
+        cloning.step(),
+        CloneStep::Sample {
+            is_recording: true,
+            ..
+        }
+    ));
+    assert_eq!(cloning.world.voice.view().ai.calibration, Calibration::Idle);
 }

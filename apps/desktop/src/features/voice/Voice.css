@@ -227,6 +227,7 @@
   color: var(--color-white);
 }
 
+.voice-relearn,
 .voice-delete {
   flex: none;
   height: var(--mic-toggle-height);

@@ -1,8 +1,7 @@
 import { commands, type AiView } from "../../shared/ipc";
 import { useText } from "../../shared/store/text";
-import { RecordKey } from "./RecordKey";
 
-/** What an AI voice still needs: the models, then the user's own voice. */
+/** What an AI voice still needs: the models, then to hear the user talk, which needs nothing from them. */
 export function AiSetup({ ai }: { ai: AiView }) {
   const { t } = useText();
   const { status } = ai;
@@ -31,12 +30,8 @@ export function AiSetup({ ai }: { ai: AiView }) {
 
   return (
     <>
-      <p className="screen-text ai-text">{t("AiCalibratePrompt", [String(ai.minCalibrationSeconds)])}</p>
-      <RecordKey
-        isRecording={ai.calibration === "recording"}
-        onStart={() => void commands.startCalibration()}
-        onStop={() => void commands.finishCalibration()}
-      />
+      <p className="screen-text ai-text">{t("AiListenPrompt")}</p>
+      <progress className="ai-progress" max={100} value={ai.heardPercent} />
     </>
   );
 }

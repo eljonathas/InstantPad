@@ -123,6 +123,9 @@ pub trait VoiceRecorder: Send + Sync {
     /// Mono at 48 kHz. Empty when no microphone was open.
     fn stop_recording(&self) -> Vec<f32>;
 
+    /// What has been recorded so far, mono at 48 kHz, while the recording goes on.
+    fn recorded(&self) -> Vec<f32>;
+
     /// Reads an audio file the user chose, as mono at 48 kHz.
     async fn decode_file(&self, path: &str) -> Result<Vec<f32>, Failure>;
 }

@@ -10,7 +10,7 @@ pub(crate) enum Recording {
     Cloning,
 }
 
-/// The one recorder, shared by calibration and cloning. Only one of them records at a time, and
+/// The one recorder, shared by the learning of the user's voice and cloning. Only one of them records at a time, and
 /// only the one that started a recording can stop it.
 pub struct SharedRecorder {
     recorder: Arc<dyn VoiceRecorder>,
@@ -44,6 +44,15 @@ impl SharedRecorder {
         }
         *current = None;
         self.recorder.stop_recording()
+    }
+
+    /// What `owner` has recorded so far. Empty when it was not recording.
+    pub(crate) fn peek(&self, owner: Recording) -> Vec<f32> {
+        let current = self.owner.lock().expect("recorder lock poisoned");
+        if *current != Some(owner) {
+            return Vec::new();
+        }
+        self.recorder.recorded()
     }
 
     pub(crate) async fn decode_file(&self, path: &str) -> Result<Vec<f32>, Failure> {

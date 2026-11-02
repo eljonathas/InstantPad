@@ -19,6 +19,8 @@ use crate::events::{BackendEvent, MeterEvent};
 use crate::hotkeys::GlobalHotkeys;
 
 const METER_INTERVAL: Duration = Duration::from_millis(33);
+/// How often the AI checks whether it has heard enough of the user to learn their voice.
+const LEARN_INTERVAL: Duration = Duration::from_millis(500);
 
 fn specta_builder() -> Builder<Wry> {
     Builder::<Wry>::new()
@@ -73,8 +75,7 @@ fn specta_builder() -> Builder<Wry> {
             commands::voice::set_voice_param,
             commands::voice::set_hearing_voice,
             commands::voice::install_voice_ai,
-            commands::voice::start_calibration,
-            commands::voice::finish_calibration,
+            commands::voice::relearn_voice,
             commands::voice::delete_cloned_voice,
             commands::voice::open_designer,
             commands::voice::close_designer,
@@ -100,6 +101,18 @@ fn start_meters(app: AppHandle) {
             // Only fails while the window is closing, when nobody is listening.
             let _ = MeterEvent(frame).emit(&app);
             thread::sleep(METER_INTERVAL);
+        }
+    });
+}
+
+/// The AI learns the voice of the user while they talk, so something has to ask it from time to
+/// time whether it heard enough.
+fn start_learning(app: AppHandle) {
+    thread::spawn(move || {
+        loop {
+            let core = app.state::<Core>();
+            tauri::async_runtime::block_on(core.voice.learn());
+            thread::sleep(LEARN_INTERVAL);
         }
     });
 }
@@ -137,6 +150,7 @@ pub fn run() {
             app.manage(hotkeys.clone());
             app.manage(composition::build(app.handle(), hotkeys)?);
             start_meters(app.handle().clone());
+            start_learning(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())

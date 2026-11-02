@@ -160,7 +160,8 @@ pub enum AiStatus {
 #[serde(rename_all = "camelCase")]
 pub enum Calibration {
     Idle,
-    Recording,
+    /// The AI listens to the user talk, which is all it takes to learn their voice.
+    Listening,
     Analyzing,
 }
 
@@ -172,6 +173,8 @@ pub struct AiView {
     pub download_megabytes: u32,
     pub calibration: Calibration,
     pub min_calibration_seconds: u32,
+    /// How much of the talk the AI needs it has heard, from 0 to 100.
+    pub heard_percent: u8,
     /// What the user asked for that waits for the AI to be set up. A voice then comes on by
     /// itself; cloning is opened again by the user.
     pub waiting: Option<Message>,

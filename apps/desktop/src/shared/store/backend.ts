@@ -3,6 +3,7 @@ import type { TextId } from "../i18n";
 import type {
   AppEvent,
   BoardView,
+  CloneStep,
   Limits,
   Message,
   MixerView,
@@ -34,6 +35,8 @@ export interface BackendState {
   update: UpdateView | null;
   limits: Limits;
   voice: VoiceView;
+  /** The step of the voice cloning dialog, which is closed unless the backend opens it. */
+  cloning: CloneStep;
   /** Counts the presses on empty pads, each of which brings the sound sources into view. */
   sourceRequests: number;
 }
@@ -74,7 +77,20 @@ let state: BackendState = {
     defaultColumns: 0,
     defaultMixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
   },
-  voice: { active: "natural", effects: [], isHearing: false },
+  voice: {
+    active: "natural",
+    activeCloneId: null,
+    effects: [],
+    isHearing: false,
+    ai: {
+      status: { kind: "missing" },
+      downloadMegabytes: 0,
+      isCalibrated: false,
+      isCalibrating: false,
+      minCalibrationSeconds: 0,
+    },
+  },
+  cloning: { step: "closed" },
   sourceRequests: 0,
 };
 
@@ -122,6 +138,8 @@ export function applyEvent(event: AppEvent) {
       return replace({ update: event.data });
     case "voice":
       return replace({ voice: event.data });
+    case "cloning":
+      return replace({ cloning: event.data });
     case "display": {
       const shown = event.data;
       if (shown.kind === "show") {

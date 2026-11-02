@@ -5,6 +5,8 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type {
   AppEvent,
   BoardView,
+  CloneStep,
+  EffectView,
   Hotkey,
   InterfaceLayout,
   Message,
@@ -14,7 +16,9 @@ import type {
   SoundPage,
   SoundSource,
   StartView,
+  TextKey,
   VoiceEffect,
+  VoiceIcon,
   VoiceParam,
   VoiceView,
 } from "./bindings";
@@ -43,41 +47,120 @@ const VOICE_KEYS: Record<NumericScheme, string[]> = {
 
 const MOCK_PEAKS = Array.from({ length: 44 }, (_, index) => 0.25 + 0.75 * Math.abs(Math.sin(index * 0.7)));
 
-function seedVoice(): VoiceView {
-  const param = (param: VoiceParam, label: "ParamIntensity" | "ParamFormant" | "ParamTime" | "ParamHigh" | "ParamLow") => ({
-    param,
-    label,
-    value: 0.5,
-    defaultValue: 0.5,
-    text: "50%",
-  });
-  return {
-    active: "natural",
-    isHearing: false,
-    effects: [
-      { effect: "natural", name: "EffectNatural", icon: "mic", color: "#1fd6ff", params: [] },
-      {
-        effect: "thin",
-        name: "EffectThin",
-        icon: "feather",
-        color: "#1fd6ff",
-        params: [param("thinIntensity", "ParamIntensity"), param("thinFormant", "ParamFormant")],
-      },
-      {
-        effect: "deep",
-        name: "EffectDeep",
-        icon: "mountain",
-        color: "#b45cff",
-        params: [param("deepIntensity", "ParamIntensity"), param("deepFormant", "ParamFormant")],
-      },
-      {
-        effect: "pitchCycle",
-        name: "EffectCycle",
-        icon: "wave",
-        color: "#35f27a",
-        params: [param("cycleTime", "ParamTime"), param("cycleHigh", "ParamHigh"), param("cycleLow", "ParamLow")],
-      },
+const text = (key: TextKey, args: Message[] = []): Message => ({ kind: "text", key, args });
+
+interface BuiltIn {
+  effect: VoiceEffect;
+  name: TextKey;
+  icon: VoiceIcon;
+  color: string;
+  needsAi?: boolean;
+  params: [VoiceParam, TextKey][];
+}
+
+const BUILT_IN: BuiltIn[] = [
+  { effect: "natural", name: "EffectNatural", icon: "mic", color: PAD_COLORS[4], params: [] },
+  {
+    effect: "thin",
+    name: "EffectThin",
+    icon: "feather",
+    color: PAD_COLORS[4],
+    params: [
+      ["thinIntensity", "ParamIntensity"],
+      ["thinFormant", "ParamFormant"],
     ],
+  },
+  {
+    effect: "deep",
+    name: "EffectDeep",
+    icon: "mountain",
+    color: PAD_COLORS[6],
+    params: [
+      ["deepIntensity", "ParamIntensity"],
+      ["deepFormant", "ParamFormant"],
+    ],
+  },
+  {
+    effect: "pitchCycle",
+    name: "EffectCycle",
+    icon: "wave",
+    color: PAD_COLORS[3],
+    params: [
+      ["cycleTime", "ParamTime"],
+      ["cycleHigh", "ParamHigh"],
+      ["cycleLow", "ParamLow"],
+    ],
+  },
+  {
+    effect: "feminine",
+    name: "EffectFeminine",
+    icon: "flower",
+    color: PAD_COLORS[7],
+    params: [
+      ["feminineIntensity", "ParamIntensity"],
+      ["feminineFormant", "ParamFormant"],
+    ],
+  },
+  {
+    effect: "ghost",
+    name: "EffectGhost",
+    icon: "ghost",
+    color: PAD_COLORS[5],
+    params: [
+      ["ghostWhisper", "ParamWhisper"],
+      ["ghostEcho", "ParamEcho"],
+      ["ghostPitch", "ParamPitch"],
+    ],
+  },
+  {
+    effect: "ogre",
+    name: "EffectOgre",
+    icon: "horns",
+    color: PAD_COLORS[1],
+    params: [
+      ["ogreDepth", "ParamIntensity"],
+      ["ogreGrowl", "ParamGrowl"],
+      ["ogreFormant", "ParamFormant"],
+    ],
+  },
+  {
+    effect: "feminineAi",
+    name: "EffectFeminineAi",
+    icon: "sparkles",
+    color: PAD_COLORS[7],
+    needsAi: true,
+    params: [["feminineAiPitch", "ParamPitch"]],
+  },
+];
+
+const CLONE_PITCH: [VoiceParam, TextKey][] = [["clonePitch", "ParamPitch"]];
+const AI_DOWNLOAD_MEGABYTES = 255;
+const AI_STEP_MS = 60;
+const AI_STEP_PERCENT = 20;
+const MIN_CALIBRATION_SECONDS = 8;
+const MIN_SAMPLE_SECONDS = 20;
+const MAX_SAMPLE_SECONDS = 300;
+const MAX_PHRASE_SECONDS = 20;
+const ANALYZE_MS = 400;
+const CLAUSES: TextKey[] = [
+  "CloneTermsOwner",
+  "CloneTermsPresent",
+  "CloneTermsNoMisuse",
+  "CloneTermsBiometric",
+  "CloneTermsRevoke",
+];
+const MOCK_DIGITS = "482915";
+
+function seedVoice() {
+  return {
+    active: "natural" as VoiceEffect,
+    activeCloneId: null as string | null,
+    isHearing: false,
+    /** Where each knob stands, by its param. A knob that was never turned is at its default. */
+    values: new Map<VoiceParam, number>(),
+    clones: [] as { id: string; name: string }[],
+    // The AI as the backend reports it: nothing downloaded, and it does not know the user yet.
+    ai: { isInstalled: false, percent: null as number | null, isCalibrated: false, isCalibrating: false },
   };
 }
 
@@ -325,6 +408,79 @@ export function installMock() {
     send({ kind: "setup", data: { ...setup } });
   }
 
+  function voiceView(): VoiceView {
+    const { values, clones, ai } = backend.voice;
+    const params = (list: [VoiceParam, TextKey][]) =>
+      list.map(([param, label]) => {
+        const value = values.get(param) ?? 0.5;
+        return { param, label, value, defaultValue: 0.5, text: `${Math.round(value * 100)}%` };
+      });
+    const built: EffectView[] = BUILT_IN.map((item) => ({
+      effect: item.effect,
+      cloneId: null,
+      name: text(item.name),
+      icon: item.icon,
+      color: item.color,
+      needsAi: !!item.needsAi,
+      params: params(item.params),
+    }));
+    const cloned: EffectView[] = clones.map((clone) => ({
+      effect: "cloned",
+      cloneId: clone.id,
+      name: plain(clone.name),
+      icon: "person",
+      color: PAD_COLORS[2],
+      needsAi: true,
+      params: params(CLONE_PITCH),
+    }));
+    return {
+      active: backend.voice.active,
+      activeCloneId: backend.voice.activeCloneId,
+      effects: [...built, ...cloned],
+      isHearing: backend.voice.isHearing,
+      ai: {
+        status: ai.isInstalled
+          ? { kind: "ready" }
+          : ai.percent === null
+            ? { kind: "missing" }
+            : { kind: "downloading", percent: ai.percent },
+        downloadMegabytes: AI_DOWNLOAD_MEGABYTES,
+        isCalibrated: ai.isCalibrated,
+        isCalibrating: ai.isCalibrating,
+        minCalibrationSeconds: MIN_CALIBRATION_SECONDS,
+      },
+    };
+  }
+
+  const publishVoice = () => send({ kind: "voice", data: voiceView() });
+
+  /** Like the backend, an AI voice stays off until the models and the user's own voice are there. */
+  function switchTo(effect: VoiceEffect, cloneId: string | null, needsAi: boolean) {
+    const { ai } = backend.voice;
+    if (needsAi && !ai.isInstalled) return fail(text("AiNotInstalled"));
+    if (needsAi && !ai.isCalibrated) return fail(text("AiNotCalibrated"));
+    backend.voice = { ...backend.voice, active: effect, activeCloneId: cloneId };
+    publishVoice();
+  }
+
+  const showCloning = (step: CloneStep) => send({ kind: "cloning", data: step });
+
+  const sampleStep = (isRecording: boolean, problem: Message | null = null): CloneStep => ({
+    step: "sample",
+    is_recording: isRecording,
+    min_seconds: MIN_SAMPLE_SECONDS,
+    max_seconds: MAX_SAMPLE_SECONDS,
+    problem,
+  });
+
+  const phraseStep = (isRecording: boolean): CloneStep => ({
+    step: "phrase",
+    digits: MOCK_DIGITS,
+    is_recording: isRecording,
+    max_seconds: MAX_PHRASE_SECONDS,
+    problem: null,
+  });
+
   function activate(id: string) {
     backend.activeId = id;
     backend.targetSlot = null;
@@ -397,7 +553,7 @@ export function installMock() {
         setup: backend.setup,
         favorites: backend.favorites,
         limits: LIMITS,
-        voice: backend.voice,
+        voice: voiceView(),
       } satisfies StartView;
     },
     press_pad: ({ slot }) => {
@@ -538,26 +694,75 @@ export function installMock() {
     choose_microphone: ({ id }) => ((backend.setup.microphoneId = id as string | null), publishSetup()),
     choose_game_output: ({ id }) => ((backend.setup.gameOutputId = id as string | null), publishSetup()),
     choose_monitor_output: ({ id }) => ((backend.setup.monitorOutputId = id as string | null), publishSetup()),
-    select_voice_effect: ({ effect }) => {
-      backend.voice = { ...backend.voice, active: effect as VoiceEffect };
-      send({ kind: "voice", data: backend.voice });
-    },
+    select_voice_effect: ({ effect }) =>
+      switchTo(effect as VoiceEffect, null, !!BUILT_IN.find((item) => item.effect === effect)?.needsAi),
+    select_cloned_voice: ({ id }) => switchTo("cloned", id as string, true),
     set_voice_param: ({ param, value }) => {
-      const effects = backend.voice.effects.map((item) => ({
-        ...item,
-        params: item.params.map((entry) =>
-          entry.param === param
-            ? { ...entry, value: value as number, text: `${Math.round((value as number) * 100)}%` }
-            : entry,
-        ),
-      }));
-      backend.voice = { ...backend.voice, effects };
-      send({ kind: "voice", data: backend.voice });
+      backend.voice.values.set(param as VoiceParam, value as number);
+      publishVoice();
     },
     set_hearing_voice: ({ enabled }) => {
-      backend.voice = { ...backend.voice, isHearing: enabled as boolean };
-      send({ kind: "voice", data: backend.voice });
+      backend.voice.isHearing = enabled as boolean;
+      publishVoice();
     },
+    install_voice_ai: () =>
+      new Promise((done) => {
+        const { ai } = backend.voice;
+        if (ai.isInstalled || ai.percent !== null) return done(null);
+        ai.percent = 0;
+        publishVoice();
+        const timer = setInterval(() => {
+          ai.percent = Math.min(100, (ai.percent ?? 0) + AI_STEP_PERCENT);
+          if (ai.percent === 100) {
+            clearInterval(timer);
+            ai.percent = null;
+            ai.isInstalled = true;
+            show(text("AiInstalled"));
+            done(null);
+          }
+          publishVoice();
+        }, AI_STEP_MS);
+      }),
+    start_calibration: () => {
+      backend.voice.ai.isCalibrating = true;
+      publishVoice();
+    },
+    finish_calibration: () => {
+      Object.assign(backend.voice.ai, { isCalibrating: false, isCalibrated: true });
+      show(text("AiCalibrationSaved"));
+      publishVoice();
+    },
+    delete_cloned_voice: ({ id }) => {
+      backend.voice.clones = backend.voice.clones.filter((clone) => clone.id !== id);
+      if (backend.voice.activeCloneId === id) {
+        backend.voice = { ...backend.voice, active: "natural", activeCloneId: null };
+      }
+      show(text("CloneDeleted"));
+      publishVoice();
+    },
+    open_cloning: () => {
+      if (!backend.voice.ai.isInstalled) return fail(text("AiNotInstalled"));
+      showCloning({ step: "terms", clauses: CLAUSES });
+    },
+    accept_clone_terms: ({ ownerName }) => {
+      if (!(ownerName as string).trim()) return fail(text("CloneMissingName"));
+      showCloning(sampleStep(false));
+    },
+    start_clone_sample: () => showCloning(sampleStep(true)),
+    finish_clone_sample: () => showCloning(phraseStep(false)),
+    import_clone_sample: () => showCloning(phraseStep(false)),
+    start_clone_phrase: () => showCloning(phraseStep(true)),
+    finish_clone_phrase: () => {
+      showCloning({ step: "analyzing" });
+      setTimeout(() => showCloning({ step: "name" }), ANALYZE_MS);
+    },
+    save_cloned_voice: ({ name }) => {
+      backend.voice.clones.push({ id: `clone-${++counter}`, name: name as string });
+      showCloning({ step: "closed" });
+      show(text("CloneSaved"));
+      publishVoice();
+    },
+    close_cloning: () => showCloning({ step: "closed" }),
     set_one_sound_at_a_time: ({ enabled }) => {
       backend.setup.oneSoundAtATime = enabled as boolean;
       publishSetup();

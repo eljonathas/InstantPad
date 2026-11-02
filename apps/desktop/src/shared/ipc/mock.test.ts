@@ -12,6 +12,14 @@ describe("the browser mock", () => {
     expect(view.board.pads[0].sound?.name).toBe("Vine boom");
   });
 
+  it("starts with the AI voices waiting for their download", async () => {
+    const { voice } = await commands.start("Main");
+
+    expect(voice.ai.status).toEqual({ kind: "missing" });
+    expect(voice.effects.find((effect) => effect.effect === "feminineAi")?.needsAi).toBe(true);
+    expect(voice.effects.filter((effect) => effect.needsAi)).toHaveLength(1);
+  });
+
   it("answers the catalog with sounds", async () => {
     const page = await commands.trending(1);
 

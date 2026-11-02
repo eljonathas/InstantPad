@@ -45,6 +45,7 @@
 
 /* The ring around the key, which lights while the effect is on */
 .effect-well {
+  position: relative;
   display: grid;
   place-items: center;
   width: var(--effect-size);
@@ -152,4 +153,82 @@
   margin: var(--space-4) 0 0;
   color: var(--color-lcd-dim);
   font-size: var(--font-status);
+}
+
+/* Marks the voices that need the AI, which is not what the knobs of the others do. */
+.effect-ai {
+  position: absolute;
+  top: var(--effect-badge-offset);
+  right: var(--effect-badge-offset);
+  padding: var(--effect-badge-padding);
+  border-radius: var(--radius-badge);
+  background: var(--color-accent);
+  color: var(--gray-4);
+  font-size: var(--font-pad-shortcut);
+  font-weight: var(--weight-bold);
+  line-height: 1.2;
+}
+
+.effect-plus {
+  width: var(--effect-icon-size);
+  height: var(--effect-icon-size);
+}
+
+.voice-setup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-5);
+}
+
+.ai-text {
+  margin: 0;
+}
+
+.ai-key {
+  height: var(--mic-toggle-height);
+}
+
+.ai-progress {
+  width: 100%;
+  height: var(--ai-progress-height);
+  appearance: none;
+  border: 0;
+  background: var(--color-field-back);
+  accent-color: var(--color-accent);
+}
+
+.ai-progress::-webkit-progress-bar {
+  background: var(--color-field-back);
+}
+
+.ai-progress::-webkit-progress-value {
+  background: var(--color-accent);
+}
+
+.record {
+  display: flex;
+  align-items: center;
+  gap: var(--record-gap);
+}
+
+.record-key {
+  min-width: var(--dialog-button-width);
+  height: var(--dialog-button-height);
+}
+
+.record-time {
+  color: var(--color-lcd);
+  font-variant-numeric: tabular-nums;
+}
+
+.dialog .record-time {
+  color: var(--color-white);
+}
+
+.voice-delete {
+  flex: none;
+  height: var(--mic-toggle-height);
+  margin-bottom: var(--space-4);
 }

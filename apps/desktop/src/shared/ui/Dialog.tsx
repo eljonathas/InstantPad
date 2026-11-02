@@ -5,11 +5,13 @@ import { holdHotkeys } from "./hotkeyPause";
 interface DialogProps {
   title: string;
   onCancel: () => void;
+  /** For text that needs more room than a form. */
+  isWide?: boolean;
   children: ReactNode;
 }
 
 /** The frame of every dialog. Esc cancels, and the global hotkeys stay off while it is open. */
-export function Dialog({ title, onCancel, children }: DialogProps) {
+export function Dialog({ title, onCancel, isWide, children }: DialogProps) {
   useEffect(() => holdHotkeys(), []);
 
   useEffect(() => {
@@ -20,7 +22,7 @@ export function Dialog({ title, onCancel, children }: DialogProps) {
 
   return (
     <div className="dialog-backdrop">
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="dialog" data-wide={isWide ? "" : undefined} role="dialog" aria-modal="true" aria-label={title}>
         <h2 className="dialog-title">{title}</h2>
         {children}
       </div>

@@ -19,6 +19,10 @@
   color: var(--color-white);
 }
 
+.dialog[data-wide] {
+  width: var(--dialog-width-wide);
+}
+
 .dialog-title {
   margin: 0 0 var(--dialog-padding);
   font-size: var(--font-key);

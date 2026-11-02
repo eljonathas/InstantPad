@@ -1,0 +1,50 @@
+.clone-text {
+  margin: 0 0 var(--space-7);
+}
+
+.clone-clauses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0 0 var(--space-7);
+  padding: 0;
+  list-style: none;
+}
+
+.clone-clause {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  cursor: pointer;
+}
+
+.clone-clause input {
+  flex: none;
+  margin-top: var(--space-1);
+  accent-color: var(--color-accent);
+}
+
+.clone-owner {
+  margin-bottom: var(--space-7);
+}
+
+.clone-problem {
+  margin: 0 0 var(--space-7);
+  color: var(--color-danger);
+}
+
+.clone-digits {
+  margin: 0 0 var(--space-7);
+  font-size: var(--clone-digits-size);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--clone-digits-spacing);
+  text-align: center;
+}
+
+.clone-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-7);
+}

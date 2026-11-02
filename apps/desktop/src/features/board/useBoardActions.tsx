@@ -1,6 +1,7 @@
 import { audioDir, join } from "@tauri-apps/api/path";
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import type { MouseEvent } from "react";
+import { AUDIO_EXTENSIONS } from "../../shared/audioExtensions";
 import { commands, type InterfaceLayout, type InterfaceTab, type PadView, type SoundSource } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
@@ -10,8 +11,6 @@ import { useOverlay } from "../../shared/ui/overlay";
 import { InterfaceDialog } from "./InterfaceDialog";
 import { interfaceMenu, padMenu } from "./menus";
 import { TextDialog } from "./TextDialog";
-
-const AUDIO_EXTENSIONS = ["mp3", "wav", "m4a", "aac", "flac"];
 
 /** What the menus and keys of the board do: ask the user what is needed, then call the backend. */
 export function useBoardActions() {

@@ -338,6 +338,16 @@ pub(crate) mod tests {
             output
         }
 
+        /// Hands over the first block whole. The thread forgets what came in while it warmed
+        /// up, which would be the rest of a block it caught halfway.
+        fn process_first(&mut self, stereo: &[f32]) -> Vec<f32> {
+            let _held = self.bridge.ends.lock().unwrap();
+            let mut output = Vec::new();
+            self.stage
+                .process(stereo, |voice| output.extend_from_slice(voice));
+            output
+        }
+
         /// Plays the part of the converter, which answers whenever it likes.
         fn feed(&self, converted: &[f32]) {
             let mut ends = self.bridge.ends.lock().unwrap();
@@ -427,7 +437,12 @@ pub(crate) mod tests {
 
         let mut heard = Vec::new();
         for block in 0..blocks {
-            heard.extend(rig.process(&ramp(block * PIECE, PIECE)));
+            let voice = ramp(block * PIECE, PIECE);
+            heard.extend(if block == 0 {
+                rig.process_first(&voice)
+            } else {
+                rig.process(&voice)
+            });
             // Nothing is played until the first block after priming.
             rig.settle(
                 (block + 1) * PIECE,
@@ -445,7 +460,7 @@ pub(crate) mod tests {
         let mut rig = Rig::new(Arc::new(FakeConverter::default()));
         rig.bridge.route(Some(&conversion()));
 
-        let first = rig.process(&ramp(0, PIECE));
+        let first = rig.process_first(&ramp(0, PIECE));
         rig.settle(PIECE, 0);
         let second = rig.process(&ramp(PIECE, PIECE));
 

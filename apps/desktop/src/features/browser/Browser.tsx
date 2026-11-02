@@ -106,19 +106,29 @@ export function Browser() {
             holding.current = null;
           }}
         />
-        <button className="key" onClick={search}>
-          {t("Search")}
+        <button className="key key-bare browser-key" title={t("Search")} aria-label={t("Search")} onClick={search}>
+          <i className="icon icon-search" />
+        </button>
+        <button
+          className="key key-bare browser-key"
+          title={t("FromComputerHint")}
+          aria-label={t("FromComputer")}
+          onClick={() => void addFromComputer()}
+        >
+          <i className="icon icon-folder" />
         </button>
       </div>
       <div className="browser-status">
         <span className="screen-text browser-line" role="status">
           {line}
         </span>
-        <button className="key" onClick={() => show(null, 1)}>
-          {t("Trending")}
-        </button>
-        <button className="key" title={t("FromComputerHint")} onClick={() => void addFromComputer()}>
-          {t("FromComputer")}
+        <button
+          className="key key-bare browser-key"
+          title={t("Trending")}
+          aria-label={t("Trending")}
+          onClick={() => show(null, 1)}
+        >
+          <i className="icon icon-trending" />
         </button>
       </div>
       <ul ref={list} className="sound-list" aria-busy={isLoading}>

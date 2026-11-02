@@ -132,6 +132,18 @@
   --icon: var(--icon-fullscreen);
 }
 
+.icon-search {
+  --icon: var(--icon-search);
+}
+
+.icon-folder {
+  --icon: var(--icon-folder);
+}
+
+.icon-trending {
+  --icon: var(--icon-trending);
+}
+
 /* Key with a LED strip (HwToggle): tabs, panel tabs and the mic switch */
 .toggle {
   display: grid;

@@ -58,7 +58,7 @@ Também dá para baixar o `.dmg` e arrastar o InstantPad para Aplicativos. Nesse
 
 ### Atualizações
 
-O InstantPad procura uma versão nova ao abrir e baixa em segundo plano, conferindo a assinatura. A versão nova é aplicada quando você fecha o app, ou na hora com **Reiniciar agora** em **Ajustes**. Ele nunca reinicia sozinho, então uma atualização não interrompe sua partida.
+O InstantPad procura uma versão nova ao abrir e baixa em segundo plano, conferindo a assinatura. Quando o download termina, uma janela avisa, uma vez por versão, com **Reiniciar agora** e **Depois**. Marque a caixa nela para a janela não aparecer mais: a versão nova fica esperando em **Ajustes**, em **Atualização**, onde o interruptor traz a janela de volta. De um jeito ou de outro, a versão nova é aplicada quando você fecha o app, ou na hora com **Reiniciar agora**. Ele nunca reinicia sozinho, então uma atualização não interrompe sua partida.
 
 ## Configure o jogo ou o Discord
 

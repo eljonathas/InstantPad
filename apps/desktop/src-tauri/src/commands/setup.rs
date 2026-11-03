@@ -57,6 +57,12 @@ pub fn set_press_again_to_stop(core: State<'_, Core>, enabled: bool) {
 
 #[tauri::command]
 #[specta::specta]
+pub fn set_quiet_updates(core: State<'_, Core>, enabled: bool) {
+    core.setup.set_quiet_updates(enabled);
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn set_language(core: State<'_, Core>, language: Option<String>) {
     core.setup.set_language(language);
 }

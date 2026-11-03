@@ -58,7 +58,7 @@ You can also download the `.dmg` and drag InstantPad to Applications. Then insta
 
 ### Updates
 
-InstantPad checks for a new version when it opens and downloads it in the background, verifying its signature. The new version is applied when you close the app, or right away with **Restart now** in **Settings**. It never restarts by itself, so an update cannot interrupt a match.
+InstantPad checks for a new version when it opens and downloads it in the background, verifying its signature. When the download is done, a window says so, once per version, with **Restart now** and **Later**. Tick the box in it to stop the window for good: the new version then waits in **Settings**, under **Update**, where the switch brings the window back. Either way the new version is applied when you close the app, or right away with **Restart now**. It never restarts by itself, so an update cannot interrupt a match.
 
 ## Set up your game or Discord
 

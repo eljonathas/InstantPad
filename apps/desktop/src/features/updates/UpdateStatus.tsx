@@ -1,11 +1,13 @@
 import { commands } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
+import { ToggleKey } from "../../shared/ui/ToggleKey";
 
 /** How the background update is going, and the key that restarts into it. */
 export function UpdateStatus() {
   const { t, render } = useText();
   const update = useBackend((state) => state.update);
+  const isQuiet = useBackend((state) => state.setup.quietUpdates);
 
   return (
     <section>
@@ -20,6 +22,14 @@ export function UpdateStatus() {
           {t("RestartNow")}
         </button>
       )}
+      <ToggleKey
+        kind="switch"
+        className="setting-spaced"
+        label={t("UpdateWindow")}
+        on={!isQuiet}
+        onClick={() => void commands.setQuietUpdates(!isQuiet)}
+      />
+      <p className="screen-text setting-note">{t("UpdateWindowHint")}</p>
     </section>
   );
 }

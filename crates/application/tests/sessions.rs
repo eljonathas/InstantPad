@@ -404,6 +404,17 @@ async fn press_again_to_stop_starts_off_and_is_remembered() {
 }
 
 #[tokio::test]
+async fn quiet_updates_start_off_and_are_remembered() {
+    let setup = setup();
+    assert!(!setup.session.view().quiet_updates);
+
+    setup.session.set_quiet_updates(true);
+
+    assert!(setup.session.view().quiet_updates);
+    assert!(setup.world.settings.lock().quiet_updates);
+}
+
+#[tokio::test]
 async fn changing_the_numeric_scheme_updates_keys_and_labels() {
     let setup = setup();
 

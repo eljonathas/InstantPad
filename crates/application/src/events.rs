@@ -90,6 +90,8 @@ pub struct SetupView {
     pub stop_hotkey: Option<Hotkey>,
     pub one_sound_at_a_time: bool,
     pub press_again_to_stop: bool,
+    /// A version that is ready to install is only shown here, not in a window.
+    pub quiet_updates: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]

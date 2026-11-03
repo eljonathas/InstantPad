@@ -105,6 +105,11 @@ test("an AI voice asks for the download, then learns the user's voice by itself,
   await expect(page.getByText("nothing to record", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Record" })).toHaveCount(0);
 
+  // The microphone level shows beside the progress, so the user sees they are being heard.
+  await expect(page.getByRole("meter", { name: "Microphone" })).toBeVisible();
+  await expect
+    .poll(() => page.getByRole("meter", { name: "Microphone" }).evaluate((bar) => (bar as HTMLMeterElement).value))
+    .toBeGreaterThan(0);
   const heard = () => page.locator(".ai-progress").evaluate((bar) => (bar as HTMLProgressElement).value);
   await page.clock.runFor(4000);
   await expect.poll(heard).toBeGreaterThanOrEqual(50);

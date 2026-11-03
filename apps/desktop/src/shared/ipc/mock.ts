@@ -326,6 +326,7 @@ function seed() {
       stopHotkey: null,
       oneSoundAtATime: true,
       pressAgainToStop: false,
+      quietUpdates: false,
     } as SetupView,
     mixer: { micVolume: 1, gameVolume: 0.8, monitorVolume: 0.6, micEnabled: true },
     voice: seedVoice(),
@@ -964,6 +965,20 @@ export function installMock() {
     set_one_sound_at_a_time: ({ enabled }) => {
       backend.setup.oneSoundAtATime = enabled as boolean;
       publishSetup();
+    },
+    set_quiet_updates: ({ enabled }) => {
+      backend.setup.quietUpdates = enabled as boolean;
+      publishSetup();
+    },
+    // Only in the browser: stands in for a version that finished downloading, for the tests.
+    mock_update_ready: ({ version }) => {
+      send({
+        kind: "update",
+        data: {
+          status: { kind: "text", key: "VersionInstalled", args: [plain(version as string)] },
+          isReadyToRestart: true,
+        },
+      });
     },
     set_press_again_to_stop: ({ enabled }) => {
       backend.setup.pressAgainToStop = enabled as boolean;

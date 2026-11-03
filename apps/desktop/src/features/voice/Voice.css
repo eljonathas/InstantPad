@@ -207,6 +207,41 @@
   background: var(--color-accent);
 }
 
+.ai-hearing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.ai-hearing-label {
+  flex: none;
+}
+
+.ai-level {
+  flex: 1;
+  height: var(--ai-progress-height);
+  appearance: none;
+  border: 0;
+  background: var(--color-field-back);
+}
+
+.ai-level::-webkit-meter-bar {
+  background: var(--color-field-back);
+  border: 0;
+  border-radius: 0;
+}
+
+.ai-level::-webkit-meter-optimum-value,
+.ai-level::-webkit-meter-suboptimum-value,
+.ai-level::-webkit-meter-even-less-good-value {
+  background: var(--color-accent);
+}
+
+.ai-hint {
+  margin: 0;
+  color: var(--color-danger);
+}
+
 .record {
   display: flex;
   align-items: center;

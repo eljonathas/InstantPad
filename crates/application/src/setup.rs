@@ -83,6 +83,7 @@ impl SetupSession {
             stop_hotkey: settings.stop_hotkey.clone(),
             one_sound_at_a_time: settings.one_sound_at_a_time,
             press_again_to_stop: settings.press_again_to_stop,
+            quiet_updates: settings.quiet_updates,
         }
     }
 
@@ -139,6 +140,12 @@ impl SetupSession {
 
     pub fn set_press_again_to_stop(&self, enabled: bool) {
         self.settings.lock().press_again_to_stop = enabled;
+        self.save();
+        self.publish();
+    }
+
+    pub fn set_quiet_updates(&self, enabled: bool) {
+        self.settings.lock().quiet_updates = enabled;
         self.save();
         self.publish();
     }

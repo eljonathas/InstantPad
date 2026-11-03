@@ -50,6 +50,7 @@ export const commands = {
 	setStopHotkey: (hotkey: Hotkey) => __TAURI_INVOKE<void>("set_stop_hotkey", { hotkey }),
 	setOneSoundAtATime: (enabled: boolean) => __TAURI_INVOKE<void>("set_one_sound_at_a_time", { enabled }),
 	setPressAgainToStop: (enabled: boolean) => __TAURI_INVOKE<void>("set_press_again_to_stop", { enabled }),
+	setQuietUpdates: (enabled: boolean) => __TAURI_INVOKE<void>("set_quiet_updates", { enabled }),
 	setLanguage: (language: string | null) => __TAURI_INVOKE<void>("set_language", { language }),
 	setTrendingRegion: (region: string | null) => __TAURI_INVOKE<void>("set_trending_region", { region }),
 	installDriver: () => typedError<null, null>(__TAURI_INVOKE("install_driver")),
@@ -291,6 +292,8 @@ export type SetupView = {
 	stopHotkey: Hotkey | null,
 	oneSoundAtATime: boolean,
 	pressAgainToStop: boolean,
+	/**  A version that is ready to install is only shown here, not in a window. */
+	quietUpdates: boolean,
 };
 
 export type SoundPage = {

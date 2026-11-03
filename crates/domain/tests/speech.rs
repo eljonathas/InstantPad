@@ -10,6 +10,17 @@ fn talk(frames: usize, loudness: f32) -> Vec<f32> {
         .collect()
 }
 
+/// Someone who talks without a single pause: the syllables swing between loud and quiet, as
+/// they do, but never fall silent.
+fn nonstop(frames: usize, loudness: f32) -> Vec<f32> {
+    (0..frames * FRAME)
+        .map(|n| {
+            let syllable = 0.15 + 0.85 * (0.5 + 0.5 * (n as f32 * 0.0025).sin());
+            loudness * (n as f32 * 0.07).sin() * syllable
+        })
+        .collect()
+}
+
 /// A steady hum, which never changes.
 fn hum(frames: usize, loudness: f32) -> Vec<f32> {
     (0..frames * FRAME)
@@ -109,4 +120,58 @@ fn a_rate_too_low_for_a_frame_does_not_panic() {
     for rate in [0, 1, 49] {
         let _ = voiced(&speech, rate);
     }
+}
+
+#[test]
+fn someone_who_talks_from_the_first_frame_with_no_pause_is_heard() {
+    let speech = nonstop(500, 0.1);
+
+    let heard = voiced(&speech, RATE).len();
+
+    assert!(heard >= 250 * FRAME, "{heard}");
+}
+
+#[test]
+fn a_short_silence_before_nonstop_talk_is_not_needed_to_hear_it() {
+    let speech = [quiet(50), nonstop(500, 0.1)].concat();
+
+    let heard = voiced(&speech, RATE).len();
+
+    assert!(heard >= 250 * FRAME, "{heard}");
+    assert!(heard <= 500 * FRAME, "{heard}");
+}
+
+#[test]
+fn a_quiet_talker_who_never_pauses_is_still_heard() {
+    let speech = nonstop(500, 0.012);
+
+    let heard = voiced(&speech, RATE).len();
+
+    assert!(heard >= 150 * FRAME, "{heard}");
+}
+
+#[test]
+fn a_loud_steady_hum_is_not_a_voice_either() {
+    assert!(voiced(&hum(300, 0.2), RATE).is_empty());
+}
+
+#[test]
+fn a_voice_over_a_loud_steady_noise_is_kept_and_the_noise_is_not() {
+    let noise = hum(50, 0.02);
+    let speech = [noise.clone(), nonstop(200, 0.15), noise].concat();
+
+    let heard = voiced(&speech, RATE).len();
+
+    assert!(heard >= 100 * FRAME, "{heard}");
+    assert!(heard <= 200 * FRAME, "{heard}");
+}
+
+#[test]
+fn a_few_words_in_a_long_silence_still_count() {
+    let speech = [talk(100, 0.2), quiet(1200)].concat();
+
+    let heard = voiced(&speech, RATE).len();
+
+    assert!(heard >= 90 * FRAME, "{heard}");
+    assert!(heard <= 100 * FRAME, "{heard}");
 }

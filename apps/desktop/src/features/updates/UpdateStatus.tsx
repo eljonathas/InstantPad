@@ -1,7 +1,7 @@
 import { commands } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
-import { ToggleKey } from "../../shared/ui/ToggleKey";
+import { Switch } from "../../shared/ui/Switch";
 
 /** How the background update is going, and the key that restarts into it. */
 export function UpdateStatus() {
@@ -22,14 +22,12 @@ export function UpdateStatus() {
           {t("RestartNow")}
         </button>
       )}
-      <ToggleKey
-        kind="switch"
-        className="setting-spaced"
+      <Switch
         label={t("UpdateWindow")}
+        hint={t("UpdateWindowHint")}
         on={!isQuiet}
-        onClick={() => void commands.setQuietUpdates(!isQuiet)}
+        onChange={(on) => void commands.setQuietUpdates(!on)}
       />
-      <p className="screen-text setting-note">{t("UpdateWindowHint")}</p>
     </section>
   );
 }

@@ -241,6 +241,9 @@ const catalog = [
   "Surprise",
 ].map(source);
 
+/** Far more trending sounds than the list shows at once, for the tests of its scrolling. */
+const LONG_CATALOG = Array.from({ length: 100 }, (_, index) => source(`Sound ${index + 1}`, index));
+
 const NO_HOTKEY = { ctrl: false, alt: false, shift: false, meta: false };
 
 function hotkeyLabel({ key, modifiers }: Hotkey) {
@@ -664,6 +667,9 @@ export function installMock() {
     return { sounds: list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), hasMore: list.length > page * PAGE_SIZE };
   }
 
+  let failNextPage = false;
+  let trendingCatalog = catalog;
+
   const handlers: Record<string, (args: Args) => unknown> = {
     start: ({ systemLocale }) => {
       backend = seed();
@@ -794,7 +800,21 @@ export function installMock() {
           done(pageOf(found, page as number));
         }, SEARCH_MS),
       ),
-    trending: ({ page }) => pageOf(catalog, page as number),
+    trending: ({ page }) => {
+      if (failNextPage && (page as number) > 1) {
+        failNextPage = false;
+        return Promise.reject(text("CatalogNoConnection"));
+      }
+      return pageOf(trendingCatalog, page as number);
+    },
+    // Only in the browser: the trending sounds become a list long enough to scroll.
+    mock_long_catalog: () => {
+      trendingCatalog = LONG_CATALOG;
+    },
+    // Only in the browser: the next page of trending sounds fails once, as with no connection.
+    mock_fail_next_page: () => {
+      failNextPage = true;
+    },
     preview_sound: ({ source }) =>
       show({ kind: "text", key: "Listening", args: [plain((source as SoundSource).name)] }),
     play_in_game: ({ source }) =>

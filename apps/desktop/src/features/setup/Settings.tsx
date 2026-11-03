@@ -4,7 +4,7 @@ import { commands, type AudioDevice, type NumericScheme } from "../../shared/ipc
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { useAskHotkey } from "../../shared/ui/HotkeyDialog";
-import { ToggleKey } from "../../shared/ui/ToggleKey";
+import { Switch } from "../../shared/ui/Switch";
 import { describeNumericKeys } from "./numericHint";
 import "./Settings.css";
 
@@ -166,22 +166,18 @@ export function Settings({ children }: { children: ReactNode }) {
       </p>
 
       <h3 className="setting-title screen-text">{t("Playback")}</h3>
-      <ToggleKey
-        kind="switch"
-        className="setting-toggle"
+      <Switch
         label={t("OneSoundAtATime")}
+        hint={t("OneSoundAtATimeHint")}
         on={setup.oneSoundAtATime}
-        onClick={() => commands.setOneSoundAtATime(!setup.oneSoundAtATime)}
+        onChange={(on) => void commands.setOneSoundAtATime(on)}
       />
-      <p className="screen-text setting-note">{t("OneSoundAtATimeHint")}</p>
-      <ToggleKey
-        kind="switch"
-        className="setting-toggle"
+      <Switch
         label={t("PressAgainToStop")}
+        hint={t("PressAgainToStopHint")}
         on={setup.pressAgainToStop}
-        onClick={() => commands.setPressAgainToStop(!setup.pressAgainToStop)}
+        onChange={(on) => void commands.setPressAgainToStop(on)}
       />
-      <p className="screen-text setting-note setting-spaced">{t("PressAgainToStopHint")}</p>
 
       <h3 className="setting-title screen-text">{t("StopShortcut")}</h3>
       <button className="key setting-key setting-spaced" onClick={() => void chooseStopHotkey()}>

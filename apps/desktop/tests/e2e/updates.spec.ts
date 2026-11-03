@@ -58,11 +58,11 @@ test("the checkbox silences the window, and the settings keep the restart and th
   await page.getByRole("tab", { name: "Settings" }).click();
   await expect(page.getByText("Version 9.9.10 is installed", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Restart now" })).toBeVisible();
-  const window = page.getByRole("button", { name: "Window when an update is ready" });
-  await expect(window).toHaveAttribute("aria-pressed", "false");
+  const window = page.getByRole("switch", { name: "Window when an update is ready" });
+  await expect(window).toHaveAttribute("aria-checked", "false");
 
   await window.click();
-  await expect(window).toHaveAttribute("aria-pressed", "true");
+  await expect(window).toHaveAttribute("aria-checked", "true");
   await updateArrives(page, "9.9.11");
   await expect(dialog(page)).toBeVisible();
 });

@@ -226,6 +226,11 @@
   --lcd-height: 92px;
   --tabs-row-height: 52px;
   --panel-tabs-height: 34px;
+  --switch-width: 36px;
+  --switch-height: 20px;
+  --switch-thumb: 16px;
+  --switch-gap: 2px;
+  --switch-time: 120ms;
   --panel-tabs-gap: 6px;
   --mic-toggle-height: 38px;
   --power-key-width: 30px;

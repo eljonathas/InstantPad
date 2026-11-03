@@ -11,8 +11,8 @@ use std::time::Instant;
 use async_trait::async_trait;
 use instantpad_application::message::{Failure, TextKey};
 use instantpad_application::ports::{
-    AudioDevice, AudioMix, AudioRouter, EventSink, NowPlaying, PlaybackTag, SoundPlayer,
-    SpeechConverter, VoiceChanger, VoiceRecorder, Waveform,
+    AudioDevice, AudioMix, AudioRouter, DeviceRole, EventSink, NowPlaying, PlaybackTag,
+    SoundPlayer, SpeechConverter, StreamStop, VoiceChanger, VoiceRecorder, Waveform,
 };
 use instantpad_domain::cuts::Cut;
 use instantpad_domain::voice::{Conversion, VoiceChain};
@@ -21,7 +21,7 @@ use tokio::sync::OnceCell;
 use crate::ai::AiBridge;
 use crate::clip::{self, SoundClip};
 use crate::controls::{AtomicF32, Controls};
-use crate::devices;
+use crate::devices::{self, StreamHealth};
 use crate::format::{CHANNELS, SAMPLE_RATE};
 use crate::mic::{self, MicSlot};
 use crate::mixer::{self, MixerHandle};
@@ -48,6 +48,7 @@ struct Output {
     mic: Option<MicSlot>,
     /// `None` while no device is open. A mixer nobody reads would never finish its voices.
     voices: Mutex<Option<MixerHandle>>,
+    health: HealthSlot,
 }
 
 impl Output {
@@ -57,6 +58,7 @@ impl Output {
             controls: Arc::new(Controls::new()),
             mic,
             voices: Mutex::new(None),
+            health: HealthSlot::default(),
         }
     }
 
@@ -64,24 +66,20 @@ impl Output {
         self.voices.lock().unwrap().as_mut().map(work)
     }
 
-    async fn open(
-        &self,
-        device_id: Option<&str>,
-        events: &Arc<dyn EventSink>,
-    ) -> Result<(), Failure> {
+    async fn open(&self, device_id: Option<&str>) -> Result<(), Failure> {
         // The old device is closed first, and its voices would never finish on the new one.
         *self.voices.lock().unwrap() = None;
+        let health = self.health.renew();
 
         let Some(id) = device_id.map(str::to_owned) else {
             return self.role.run(close).await;
         };
 
         let (mixer, handle) = mixer::pair(self.controls.clone(), self.mic.clone());
-        let events = events.clone();
         self.role
             .run(move |stream| {
                 *stream = None;
-                *stream = Some(devices::open_output(&id, mixer, events)?);
+                *stream = Some(devices::open_output(&id, mixer, health)?);
                 Ok(())
             })
             .await?;
@@ -96,6 +94,24 @@ fn close(stream: &mut Option<cpal::Stream>) -> Result<(), Failure> {
     Ok(())
 }
 
+/// The health of the stream a role has open now.
+#[derive(Default)]
+struct HealthSlot(Mutex<Arc<StreamHealth>>);
+
+impl HealthSlot {
+    /// Gives the stream about to open a health of its own, so the stream it replaces, which may
+    /// have stopped, no longer speaks for the role.
+    fn renew(&self) -> Arc<StreamHealth> {
+        let health = Arc::new(StreamHealth::default());
+        *self.0.lock().unwrap() = health.clone();
+        health
+    }
+
+    fn take_stop(&self) -> Option<StreamStop> {
+        self.0.lock().unwrap().take_stop()
+    }
+}
+
 struct Microphone {
     role: Role<cpal::Stream>,
     reader: MicSlot,
@@ -103,12 +119,12 @@ struct Microphone {
     hearing: MicSlot,
     level: Arc<AtomicF32>,
     voice: Arc<VoiceControls>,
+    health: HealthSlot,
 }
 
 /// Plays sounds and routes the microphone, with nothing in the audio callbacks that locks,
 /// allocates or waits.
 pub struct AudioEngine {
-    events: Arc<dyn EventSink>,
     ai: AiBridge,
     recorder: Recorder,
     clips: Mutex<Clips>,
@@ -125,9 +141,8 @@ impl AudioEngine {
         let monitor = Output::new("monitor output", Some(hearing.clone()));
         monitor.controls.mic_enabled.store(false, Ordering::Relaxed);
         Self {
-            ai: AiBridge::new(converter, events.clone()),
+            ai: AiBridge::new(converter, events),
             recorder: Recorder::new(),
-            events,
             clips: Mutex::default(),
             started: Mutex::default(),
             microphone: Microphone {
@@ -136,6 +151,7 @@ impl AudioEngine {
                 hearing,
                 level: Arc::new(AtomicF32::new(0.0)),
                 voice: Arc::new(VoiceControls::new()),
+                health: HealthSlot::default(),
             },
             game: Output::new("game output", Some(reader)),
             monitor,
@@ -300,6 +316,7 @@ impl AudioRouter for AudioEngine {
         self.recorder.attach(None);
         self.ai.attach(None);
         microphone.level.store(0.0);
+        let health = microphone.health.renew();
 
         let Some(id) = device_id.map(str::to_owned) else {
             return microphone.role.run(close).await;
@@ -311,14 +328,13 @@ impl AudioRouter for AudioEngine {
         let voice = microphone.voice.clone();
         let (tap, recording) = self.recorder.tap();
         let (ai, converting) = self.ai.rings();
-        let events = self.events.clone();
         microphone
             .role
             .run(move |stream| {
                 *stream = None;
                 let rings = [ring, hearing_ring];
                 *stream = Some(devices::open_capture(
-                    &id, rings, level, voice, tap, ai, events,
+                    &id, rings, level, voice, tap, ai, health,
                 )?);
                 Ok(())
             })
@@ -332,11 +348,22 @@ impl AudioRouter for AudioEngine {
     }
 
     async fn set_game_output(&self, device_id: Option<&str>) -> Result<(), Failure> {
-        self.game.open(device_id, &self.events).await
+        self.game.open(device_id).await
     }
 
     async fn set_monitor_output(&self, device_id: Option<&str>) -> Result<(), Failure> {
-        self.monitor.open(device_id, &self.events).await
+        self.monitor.open(device_id).await
+    }
+
+    fn take_stopped(&self) -> Vec<(DeviceRole, StreamStop)> {
+        [
+            (DeviceRole::Microphone, &self.microphone.health),
+            (DeviceRole::GameOutput, &self.game.health),
+            (DeviceRole::MonitorOutput, &self.monitor.health),
+        ]
+        .into_iter()
+        .filter_map(|(role, health)| Some((role, health.take_stop()?)))
+        .collect()
     }
 }
 
@@ -600,6 +627,45 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[tokio::test]
+    async fn the_engine_passes_the_audio_router_contract() {
+        contract::audio_router(&engine()).await;
+    }
+
+    /// What the error callback of the stream `slot` has open does when the device goes away.
+    fn unplug(slot: &HealthSlot) {
+        let health = slot.0.lock().unwrap().clone();
+        devices::watch(health)(cpal::Error::new(cpal::ErrorKind::DeviceNotAvailable));
+    }
+
+    #[test]
+    fn a_stream_that_stops_by_itself_is_told_once_with_its_role() {
+        let engine = engine();
+
+        unplug(&engine.microphone.health);
+        unplug(&engine.monitor.health);
+
+        assert_eq!(
+            engine.take_stopped(),
+            [
+                (DeviceRole::Microphone, StreamStop::Lost),
+                (DeviceRole::MonitorOutput, StreamStop::Lost)
+            ]
+        );
+        assert!(engine.take_stopped().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_stream_that_was_replaced_no_longer_speaks_for_its_role() {
+        let engine = engine();
+        let old = engine.game.health.0.lock().unwrap().clone();
+
+        engine.set_game_output(None).await.unwrap();
+        devices::watch(old)(cpal::Error::new(cpal::ErrorKind::DeviceNotAvailable));
+
+        assert!(engine.take_stopped().is_empty());
     }
 
     #[tokio::test]

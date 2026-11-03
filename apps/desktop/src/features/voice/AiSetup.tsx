@@ -78,5 +78,9 @@ export function AiSetup({ ai }: { ai: AiView }) {
 
   if (ai.calibration === "analyzing") return <p className="screen-text ai-text">{t("AiLearning")}</p>;
 
+  // The microphone level moves whether or not the AI records it, so the listening screen only
+  // shows while it does, or the user would talk to a bar that cannot fill.
+  if (ai.calibration === "idle") return <p className="screen-text ai-text">{t("AiWaitingForMicrophone")}</p>;
+
   return <Listening heardPercent={ai.heardPercent} />;
 }

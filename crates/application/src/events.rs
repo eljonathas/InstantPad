@@ -370,4 +370,6 @@ pub struct StartView {
     pub favorites: Vec<SoundSource>,
     pub limits: Limits,
     pub voice: VoiceView,
+    /// A reloaded interface shows the dialog again, which holds the microphone until it closes.
+    pub cloning: CloneStep,
 }

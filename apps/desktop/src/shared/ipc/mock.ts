@@ -775,6 +775,8 @@ export function installMock() {
   const handlers: Record<string, (args: Args) => unknown> = {
     start: ({ systemLocale }) => {
       backend = seed();
+      cloningGeneration++;
+      isCloningOpen = false;
       systemRegion = /[-_]([a-z]{2})(?:[-_.]|$)/i.exec(systemLocale as string)?.[1].toLowerCase() ?? "us";
       backend.setup.trendingRegion = systemRegion;
       playing = new Set();
@@ -794,6 +796,8 @@ export function installMock() {
         favorites: backend.favorites,
         limits: LIMITS,
         voice: voiceView(),
+        // The mock starts over with the interface, so no dialog is left open.
+        cloning: { step: "closed" },
       } satisfies StartView;
     },
     press_pad: ({ slot }) => {

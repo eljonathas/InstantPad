@@ -493,8 +493,9 @@ impl VoiceSession {
         self.settings.lock().voice.select(VoiceEffect::Natural);
         self.events
             .emit(AppEvent::show(Message::text(TextKey::AiListening)));
-        self.apply();
+        // Before the screen hears of the wait, as when a voice is picked.
         self.begin_listening();
+        self.apply();
     }
 
     /// The cloning dialog takes the microphone while it is open, and gives it back when it closes.
@@ -900,10 +901,12 @@ impl VoiceSession {
             } else {
                 AppEvent::error(unready.message())
             });
-            self.publish();
+            // Before the screen hears of the wait, which it only draws as listening when the
+            // microphone really is recording.
             if is_learning {
                 self.begin_listening();
             }
+            self.publish();
             return false;
         }
         *self.waiting() = None;

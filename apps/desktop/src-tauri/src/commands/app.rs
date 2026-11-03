@@ -33,5 +33,7 @@ pub fn start(
         favorites: core.favorites.list(),
         limits: Limits::current(),
         voice: core.voice.view(),
+        // The backend outlives a reload of the interface, and so does an open cloning dialog.
+        cloning: core.cloning.step(),
     }
 }

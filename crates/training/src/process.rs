@@ -20,9 +20,10 @@ impl Group {
         self.job.terminate();
         #[cfg(not(target_os = "windows"))]
         {
-            // The leader's id is the group's, and a minus sends to the whole group.
+            // The leader's id is the group's, and a minus sends to the whole group. Without the
+            // `--`, kill takes the minus for an option.
             let _ = Command::new("kill")
-                .args(["-KILL", &format!("-{}", self.leader)])
+                .args(["-s", "KILL", "--", &format!("-{}", self.leader)])
                 .status();
         }
     }

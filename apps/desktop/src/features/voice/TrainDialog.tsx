@@ -35,7 +35,7 @@ function Problem({ message }: { message: Message | null }) {
 function Buttons({ children }: { children?: ReactNode }) {
   const { t } = useText();
   return (
-    <div className="dialog-buttons">
+    <div className="dialog-buttons train-buttons">
       <button type="button" className="key" onClick={() => void commands.closeTraining()}>
         {t("Close")}
       </button>

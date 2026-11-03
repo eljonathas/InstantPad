@@ -5,6 +5,7 @@ describe("training time", () => {
   it("rounds a long stretch to hours and minutes", () => {
     expect(duration(30 * 3600 + 20 * 60 + 10)).toEqual(["DurationHours", ["30", "20"]]);
     expect(duration(45 * 60)).toEqual(["DurationMinutes", ["45"]]);
+    expect(duration(3600)).toEqual(["DurationWholeHours", ["1"]]);
   });
 
   it("never says zero minutes", () => {

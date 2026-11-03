@@ -46,6 +46,10 @@ const EXPERIMENTS: &str = "logs";
 const WEIGHTS: &str = "assets/weights";
 /// What a failure shows of the output of the kit, when it did not say what went wrong.
 const LAST_LINES: usize = 3;
+/// Windows loads no library from a path longer than 260 characters, and the deepest library of
+/// the tools is 120 characters into the folder.
+#[cfg(target_os = "windows")]
+const MAX_HOME_CHARACTERS: usize = 130;
 
 /// What is installed, kept in `tools.json`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -488,6 +492,16 @@ impl VoiceTrainer for KitTrainer {
         progress: &(dyn Fn(u8) + Send + Sync),
     ) -> Result<Outcome<()>, Failure> {
         self.stopping.store(false, Ordering::Relaxed);
+        #[cfg(target_os = "windows")]
+        {
+            let length = self.home.as_os_str().len();
+            if length > MAX_HOME_CHARACTERS {
+                return Err(failed(format!(
+                    "the folder {} is {length} characters long, and Windows needs it under                      {MAX_HOME_CHARACTERS}",
+                    self.home.display()
+                )));
+            }
+        }
         fs::create_dir_all(&self.home).map_err(failed)?;
         match self.install_tools(device.is_card(), progress).await {
             Ok(()) => Ok(Outcome::Done(())),

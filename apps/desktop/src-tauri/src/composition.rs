@@ -83,7 +83,8 @@ impl Core {
 pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result<Core> {
     let events: Arc<dyn EventSink> = Arc::new(TauriEvents(app.clone()));
 
-    let folder = AppDataFolder::resolve(app.path().app_data_dir()?)?;
+    let folder =
+        AppDataFolder::resolve(app.path().app_data_dir()?, app.path().app_local_data_dir()?)?;
     let files = Arc::new(FolderSoundStore::new(&folder));
     let ai = Arc::new(OnnxVoices::new(folder.voice_models()));
     let engine = Arc::new(AudioEngine::new(events.clone(), ai.clone()));

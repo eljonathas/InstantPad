@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Debug)]
 pub struct AppDataFolder {
     root: PathBuf,
+    /// For what is big and belongs to this computer, which a roaming profile must not copy.
+    local: PathBuf,
     sounds: PathBuf,
     previews: PathBuf,
     voice_models: PathBuf,
@@ -12,6 +14,10 @@ pub struct AppDataFolder {
 
 impl AppDataFolder {
     pub fn new(root: PathBuf) -> io::Result<Self> {
+        Self::with_local(root.clone(), root)
+    }
+
+    fn with_local(root: PathBuf, local: PathBuf) -> io::Result<Self> {
         let sounds = root.join("sounds");
         let previews = root.join("previews");
         let voice_models = root.join("voice-models");
@@ -20,6 +26,7 @@ impl AppDataFolder {
         std::fs::create_dir_all(&voice_models)?;
         Ok(Self {
             root,
+            local,
             sounds,
             previews,
             voice_models,
@@ -27,10 +34,10 @@ impl AppDataFolder {
     }
 
     /// `INSTANTPAD_DATA` keeps development runs away from the real data.
-    pub fn resolve(default_root: PathBuf) -> io::Result<Self> {
+    pub fn resolve(default_root: PathBuf, default_local: PathBuf) -> io::Result<Self> {
         match std::env::var_os("INSTANTPAD_DATA") {
             Some(root) if !root.is_empty() => Self::new(PathBuf::from(root)),
-            _ => Self::new(default_root),
+            _ => Self::with_local(default_root, default_local),
         }
     }
 
@@ -47,9 +54,10 @@ impl AppDataFolder {
     }
 
     /// Where the tools that train voices are installed, and the trainings work. Made only when
-    /// the user installs them.
+    /// the user installs them. The name is short because Windows loads no library from a path
+    /// longer than 260 characters, and PyTorch's go deep.
     pub fn voice_training(&self) -> PathBuf {
-        self.root.join("voice-training")
+        self.local.join("training")
     }
 
     /// Where the AI voice models are downloaded to.

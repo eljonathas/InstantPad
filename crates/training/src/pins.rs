@@ -60,8 +60,9 @@ mod system {
     pub(super) const UV_SHA256: &str =
         "a047d55651bc3e0ca24595b25ec4cfcb10f9dca9fb56514e661269b37d4fae68";
     pub(super) const UV_ENTRY: &str = "uv.exe";
-    /// What the tools take once installed, measured on a fresh install.
-    pub(super) const CARD_INSTALLED_MEGABYTES: u32 = 9_200;
+    /// What the tools take once installed. The card's was measured on a fresh install (7.6 GB);
+    /// the processor's is the card's less PyTorch's CUDA libraries, with room to spare.
+    pub(super) const CARD_INSTALLED_MEGABYTES: u32 = 7_800;
     pub(super) const PROCESSOR_INSTALLED_MEGABYTES: u32 = 2_700;
 }
 
@@ -76,7 +77,8 @@ mod system {
     pub(super) const UV_SHA256: &str =
         "04f8b82f5d47f0512dcd32c67a4a6f16a0ea27c81537c338fd0ad6b23cebe829";
     pub(super) const UV_ENTRY: &str = "uv-x86_64-unknown-linux-gnu/uv";
-    pub(super) const CARD_INSTALLED_MEGABYTES: u32 = 10_500;
+    /// Measured on the install `setup.sh` makes, which holds the same packages (8.7 GB).
+    pub(super) const CARD_INSTALLED_MEGABYTES: u32 = 8_900;
     pub(super) const PROCESSOR_INSTALLED_MEGABYTES: u32 = 2_700;
 }
 

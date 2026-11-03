@@ -111,6 +111,7 @@
   "DriverVerifying": "Conferindo a assinatura digital...",
   "DurationHours": "{0} h {1} min",
   "DurationMinutes": "{0} min",
+  "DurationWholeHours": "{0} h",
   "EffectCycle": "Variação de pitch",
   "EffectDeep": "Voz grossa",
   "EffectFeminine": "Feminina",

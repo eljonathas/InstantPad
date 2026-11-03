@@ -6,7 +6,8 @@ const MINUTE = 60;
 export function duration(seconds: number): [TextId, string[]] {
   const minutes = Math.max(1, Math.round(seconds / MINUTE));
   if (minutes < 60) return ["DurationMinutes", [String(minutes)]];
-  return ["DurationHours", [String(Math.floor(minutes / 60)), String(minutes % 60)]];
+  const hours = String(Math.floor(minutes / 60));
+  return minutes % 60 === 0 ? ["DurationWholeHours", [hours]] : ["DurationHours", [hours, String(minutes % 60)]];
 }
 
 /** Recorded speech as minutes and seconds, such as "12:05". */

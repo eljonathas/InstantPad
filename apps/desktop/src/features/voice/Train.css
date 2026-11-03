@@ -36,3 +36,10 @@
 .train-take-key {
   flex: none;
 }
+
+/* Its keys say more than the usual OK and Cancel. */
+.train-buttons .key {
+  width: auto;
+  min-width: var(--dialog-button-width);
+  padding-inline: var(--space-4);
+}

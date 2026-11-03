@@ -111,6 +111,7 @@
   "DriverVerifying": "Checking the digital signature...",
   "DurationHours": "{0} h {1} min",
   "DurationMinutes": "{0} min",
+  "DurationWholeHours": "{0} h",
   "EffectCycle": "Pitch cycle",
   "EffectDeep": "Deep voice",
   "EffectFeminine": "Feminine",

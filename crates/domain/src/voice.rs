@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::cloning::Voiceprint;
+use crate::cloning::{TrainedModel, Voiceprint};
 
 const THIN_SEMITONES: (f64, f64) = (2.0, 9.0);
 const DEEP_SEMITONES: (f64, f64) = (-2.0, -9.0);
@@ -22,6 +22,8 @@ const OGRE_FORMANT: (f64, f64) = (-2.0, -7.0);
 /// The AI keeps the melody of the voice, so a higher pitch first makes the result convincing.
 const AI_SEMITONES: (f64, f64) = (0.0, 8.0);
 const CLONE_SEMITONES: (f64, f64) = (-8.0, 8.0);
+/// A trained model already moves the voice to its own pitch, and this moves it further.
+const TRAINED_SEMITONES: (f64, f64) = (-12.0, 12.0);
 
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Type,
@@ -81,6 +83,8 @@ pub enum VoiceParam {
     OgreFormant,
     FeminineAiPitch,
     ClonePitch,
+    /// The pitch of a trained model, from its own.
+    TrainedPitch,
 }
 
 impl VoiceParam {
@@ -131,6 +135,17 @@ pub struct VoiceChain {
     pub color: VoiceColor,
 }
 
+impl VoiceChain {
+    /// The voice as it is, for a trained model, which sets the pitch itself.
+    pub fn untouched() -> Self {
+        Self {
+            pitch: PitchShape::Fixed { semitones: 0.0 },
+            formant: 0.0,
+            color: VoiceColor::default(),
+        }
+    }
+}
+
 /// A voice the app ships for the AI. The masculine one only moves the timbre of designed voices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VoicePreset {
@@ -146,13 +161,58 @@ pub enum VoiceTarget {
     Own(String),
 }
 
-/// The speakers the AI converts between.
+impl VoiceTarget {
+    /// What the settings and the library know the voice by.
+    pub fn key(&self) -> String {
+        match self {
+            Self::Preset(VoicePreset::Feminine) => "feminine".to_owned(),
+            Self::Preset(VoicePreset::Masculine) => "masculine".to_owned(),
+            Self::Own(id) => id.clone(),
+        }
+    }
+}
+
+/// How the AI speaks with a voice.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum VoiceEngine {
+    /// Takes the timbre of the voice from a few seconds of it and puts it on the user's, as the
+    /// voice is being spoken. Runs on any computer, sounds like the voice only roughly.
+    #[default]
+    Instant,
+    /// A model trained on the voice, which sounds far more like it and needs a faster processor.
+    Trained,
+}
+
+/// What the AI does to the voice.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Conversion {
-    /// The user, which the AI takes out of the voice.
-    pub source: Voiceprint,
-    /// Who the user should sound like.
-    pub target: Voiceprint,
+pub enum Conversion {
+    /// The timbre of `source`, the user, replaced with that of `target`.
+    Timbre {
+        source: Voiceprint,
+        target: Voiceprint,
+    },
+    /// The trained model speaks, at the pitch of its voice moved by `semitones`.
+    Trained { model: TrainedModel, semitones: f32 },
+}
+
+impl Conversion {
+    /// Whether the two speak with the same voice and differ at most in pitch, which a
+    /// conversion follows without starting over.
+    pub fn same_voice(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Trained { model, .. }, Self::Trained { model: other, .. }) => model == other,
+            _ => self == other,
+        }
+    }
+
+    /// How far a trained model moves the pitch, which stays out of the comparison above.
+    pub fn semitones(&self) -> Option<f32> {
+        match self {
+            Self::Trained { semitones, .. } => Some(*semitones),
+            Self::Timbre { .. } => None,
+        }
+    }
 }
 
 fn along((from, to): (f64, f64), position: f64) -> f64 {
@@ -168,6 +228,8 @@ pub struct VoiceSettings {
     /// The cloned voice that [`VoiceEffect::Cloned`] speaks with, kept while another effect is on.
     pub clone_id: Option<String>,
     values: BTreeMap<VoiceParam, f64>,
+    /// The engine picked for each voice that has a trained model, by [`VoiceTarget::key`].
+    engines: BTreeMap<String, VoiceEngine>,
 }
 
 impl Default for VoiceSettings {
@@ -177,6 +239,7 @@ impl Default for VoiceSettings {
             last_effect: VoiceEffect::Thin,
             clone_id: None,
             values: BTreeMap::new(),
+            engines: BTreeMap::new(),
         }
     }
 }
@@ -191,6 +254,22 @@ impl VoiceSettings {
 
     pub fn set(&mut self, param: VoiceParam, value: f64) {
         self.values.insert(param, value.clamp(0.0, 1.0));
+    }
+
+    /// The engine the AI speaks with `target` through. Only a voice with a trained model can
+    /// use it, and does unless the user picked the instant one: it is why the model was added.
+    pub fn engine(&self, target: &VoiceTarget, has_trained_model: bool) -> VoiceEngine {
+        if !has_trained_model {
+            return VoiceEngine::Instant;
+        }
+        self.engines
+            .get(&target.key())
+            .copied()
+            .unwrap_or(VoiceEngine::Trained)
+    }
+
+    pub fn set_engine(&mut self, target: &VoiceTarget, engine: VoiceEngine) {
+        self.engines.insert(target.key(), engine);
     }
 
     /// Picks a built-in effect. A cloned voice goes through [`Self::select_clone`].
@@ -211,6 +290,7 @@ impl VoiceSettings {
 
     /// Forgets a cloned voice that was deleted, so nothing points at it anymore.
     pub fn forget_clone(&mut self, id: &str) {
+        self.engines.remove(id);
         if self.clone_id.as_deref() != Some(id) {
             return;
         }
@@ -329,6 +409,11 @@ impl VoiceSettings {
         }
     }
 
+    /// How far a trained model moves the pitch from that of its voice.
+    pub fn trained_semitones(&self) -> f32 {
+        along(TRAINED_SEMITONES, self.get(VoiceParam::TrainedPitch)) as f32
+    }
+
     /// Whose voice the AI speaks with, or `None` when the effect needs no AI.
     pub fn target(&self) -> Option<VoiceTarget> {
         match self.effect {
@@ -358,6 +443,7 @@ impl VoiceSettings {
             VoiceParam::OgreFormant => semitones(along(OGRE_FORMANT, value)),
             VoiceParam::FeminineAiPitch => semitones(along(AI_SEMITONES, value)),
             VoiceParam::ClonePitch => semitones(along(CLONE_SEMITONES, value)),
+            VoiceParam::TrainedPitch => semitones(along(TRAINED_SEMITONES, value)),
             VoiceParam::GhostWhisper | VoiceParam::GhostEcho | VoiceParam::OgreGrowl => percent(),
         }
     }

@@ -1,8 +1,8 @@
 use instantpad_domain::cloning::{
-    CloneRefusal, ClonedVoice, DEFAULT_BLEND, DEFAULT_TIMBRE, DesignRefusal, VoiceLibrary,
-    VoiceRecipe, Voiceprint,
+    CloneRefusal, ClonedVoice, DEFAULT_BLEND, DEFAULT_TIMBRE, DesignRefusal, TrainedModel,
+    VoiceLibrary, VoiceRecipe, Voiceprint,
 };
-use instantpad_domain::voice::VoicePreset;
+use instantpad_domain::voice::{VoicePreset, VoiceTarget};
 
 fn voice(values: &[f32]) -> Voiceprint {
     Voiceprint::new(values.to_vec())
@@ -448,4 +448,57 @@ fn a_voice_saved_with_a_consent_record_by_an_earlier_version_still_loads() {
     assert_eq!(voice.id, "a");
     assert_eq!(voice.name, "Ana");
     assert_eq!(voice.voiceprint, Voiceprint::new(vec![0.25, 0.75]));
+}
+
+fn trained(id: &str) -> TrainedModel {
+    TrainedModel {
+        id: id.to_owned(),
+        name: "ana".to_owned(),
+        credit: String::new(),
+        pitch_hz: 200.0,
+    }
+}
+
+#[test]
+fn deleting_a_cloned_voice_takes_its_trained_model_and_those_of_its_designs() {
+    let mut library = VoiceLibrary::default();
+    library.clones.push(cloned("a"));
+    library.clones.push(cloned("b"));
+    library.trained.insert("a".to_owned(), trained("m1"));
+    library.trained.insert("b".to_owned(), trained("m2"));
+    library.trained.insert("feminine".to_owned(), trained("m3"));
+
+    library.remove("a");
+
+    assert_eq!(
+        library.trained.keys().collect::<Vec<_>>(),
+        ["b", "feminine"]
+    );
+}
+
+#[test]
+fn the_feminine_voice_and_the_cloned_ones_take_a_trained_model() {
+    let mut library = VoiceLibrary::default();
+    library.clones.push(cloned("a"));
+    library.trained.insert("a".to_owned(), trained("m1"));
+
+    let ana = VoiceTarget::Own("a".to_owned());
+    assert!(library.takes_trained_model(&VoiceTarget::Preset(VoicePreset::Feminine)));
+    assert!(library.takes_trained_model(&ana));
+    assert!(!library.takes_trained_model(&VoiceTarget::Own("gone".to_owned())));
+    assert!(!library.takes_trained_model(&VoiceTarget::Preset(VoicePreset::Masculine)));
+    assert_eq!(library.trained_model(&ana), Some(&trained("m1")));
+}
+
+#[test]
+fn every_new_trained_model_has_a_folder_of_its_own() {
+    assert_ne!(TrainedModel::new_id(), TrainedModel::new_id());
+}
+
+#[test]
+fn a_library_saved_before_trained_models_loads_without_any() {
+    let library: VoiceLibrary =
+        serde_json::from_str(r#"{"own": null, "clones": [], "designs": []}"#).unwrap();
+
+    assert!(library.trained.is_empty());
 }

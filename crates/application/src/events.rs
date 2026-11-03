@@ -1,7 +1,7 @@
 use instantpad_domain::hotkeys::{Hotkey, NumericScheme};
 use instantpad_domain::sounds::SoundSource;
 use instantpad_domain::trending::TRENDING_REGIONS;
-use instantpad_domain::voice::{VoiceEffect, VoiceParam};
+use instantpad_domain::voice::{VoiceEffect, VoiceEngine, VoiceParam};
 use instantpad_domain::{board, palette};
 use serde::Serialize;
 use specta::Type;
@@ -150,6 +150,19 @@ pub struct EffectView {
     pub color: String,
     pub needs_ai: bool,
     pub params: Vec<ParamView>,
+    /// Whether a trained model can be added to the voice.
+    pub takes_trained_model: bool,
+    /// The trained model of the voice, when it has one.
+    pub trained: Option<TrainedView>,
+}
+
+/// A trained model, with the engine the voice speaks through.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TrainedView {
+    pub name: String,
+    pub credit: String,
+    pub engine: VoiceEngine,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]

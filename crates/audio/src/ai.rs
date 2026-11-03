@@ -175,7 +175,17 @@ impl AiBridge {
             self.shared.is_routing.store(false, Ordering::Relaxed);
             return;
         };
-        if active.as_ref() == Some(conversion) && self.shared.is_routing.load(Ordering::Relaxed) {
+        let is_routing = self.shared.is_routing.load(Ordering::Relaxed);
+        if let Some(running) = active.as_ref().filter(|_| is_routing)
+            && running.same_voice(conversion)
+        {
+            // Only the pitch of a trained voice moved, which it follows as it speaks.
+            if let Some(semitones) = conversion.semitones()
+                && running.semitones() != Some(semitones)
+            {
+                self.converter.retune(semitones);
+                *active = Some(conversion.clone());
+            }
             return;
         }
 
@@ -186,6 +196,11 @@ impl AiBridge {
         *active = Some(conversion.clone());
         self.shared.is_routing.store(true, Ordering::Relaxed);
         let converter = Converting {
+            // A trained voice that cannot keep up has the instant engine to fall back on.
+            too_slow: match conversion {
+                Conversion::Trained { .. } => TextKey::AiTrainedTooSlow,
+                Conversion::Timbre { .. } => TextKey::AiTooSlow,
+            },
             ends: Arc::downgrade(&self.ends),
             shared: self.shared.clone(),
             converter: self.converter.clone(),
@@ -198,6 +213,8 @@ impl AiBridge {
 
 /// What the thread of the conversion works with.
 struct Converting {
+    /// What the user is told when the converter cannot keep up.
+    too_slow: TextKey,
     ends: Weak<Slot>,
     shared: Arc<AiShared>,
     converter: Arc<dyn SpeechConverter>,
@@ -236,7 +253,7 @@ impl Converting {
             } else {
                 match hear(&ends, is_warm, &mut speech) {
                     Heard::Nothing => {}
-                    Heard::TooMuch => self.give_up(generation, Message::text(TextKey::AiTooSlow)),
+                    Heard::TooMuch => self.give_up(generation, Message::text(self.too_slow)),
                     Heard::Speech(count) => match self.converter.convert(&speech[..count]) {
                         Ok(converted) => {
                             deliver(&ends, &self.shared, generation, &converted);
@@ -305,15 +322,27 @@ pub(crate) mod tests {
     use std::sync::mpsc;
     use std::time::Instant;
 
-    use instantpad_domain::cloning::Voiceprint;
+    use instantpad_domain::cloning::{TrainedModel, Voiceprint};
     use instantpad_test_support::fakes::{FakeConverter, RecordingEvents};
 
     use super::*;
 
     pub(crate) fn conversion() -> Conversion {
-        Conversion {
+        Conversion::Timbre {
             source: Voiceprint::new(vec![0.1]),
             target: Voiceprint::new(vec![0.2]),
+        }
+    }
+
+    pub(crate) fn trained(semitones: f32) -> Conversion {
+        Conversion::Trained {
+            model: TrainedModel {
+                id: "model".to_owned(),
+                name: "Ana".to_owned(),
+                credit: String::new(),
+                pitch_hz: 210.0,
+            },
+            semitones,
         }
     }
 
@@ -547,13 +576,17 @@ pub(crate) mod tests {
     /// A converter that stops on every piece until it is released, with a callback that has
     /// gone through the first piece, which is the one that may load a model.
     fn warmed_up_gate() -> (Rig, mpsc::Sender<()>) {
+        warmed_up_gate_for(&conversion())
+    }
+
+    fn warmed_up_gate_for(conversion: &Conversion) -> (Rig, mpsc::Sender<()>) {
         let (asked, was_asked) = mpsc::channel();
         let (release, open) = mpsc::channel();
         let mut rig = Rig::new(Arc::new(Gate {
             asked,
             open: Mutex::new(open),
         }));
-        rig.bridge.route(Some(&conversion()));
+        rig.bridge.route(Some(conversion));
         rig.process(&ramp(0, PIECE));
         was_asked.recv_timeout(Duration::from_secs(10)).unwrap();
 
@@ -695,8 +728,8 @@ pub(crate) mod tests {
         rig.bridge.route(Some(&conversion()));
         rig.process(&[]);
         rig.feed(&mono(0, PRIME));
-        let other = Conversion {
-            source: conversion().source,
+        let other = Conversion::Timbre {
+            source: Voiceprint::new(vec![0.1]),
             target: Voiceprint::new(vec![0.9]),
         };
 
@@ -704,5 +737,60 @@ pub(crate) mod tests {
 
         assert_eq!(converter.started.lock().unwrap().len(), 2);
         assert_eq!(rig.process(&ramp(0, PIECE)), vec![0.0; PIECE * CHANNELS]);
+    }
+
+    #[test]
+    fn moving_the_pitch_of_a_trained_voice_retunes_it_without_starting_over() {
+        let converter = Arc::new(FakeConverter::default());
+        let rig = Rig::new(converter.clone());
+        rig.bridge.route(Some(&trained(0.0)));
+        let generation = rig.bridge.shared.generation.load(Ordering::Relaxed);
+
+        rig.bridge.route(Some(&trained(3.0)));
+        rig.bridge.route(Some(&trained(3.0)));
+        rig.bridge.route(Some(&trained(-2.0)));
+
+        assert_eq!(converter.started.lock().unwrap().len(), 1);
+        assert_eq!(*converter.retuned.lock().unwrap(), [3.0, -2.0]);
+        assert_eq!(
+            rig.bridge.shared.generation.load(Ordering::Relaxed),
+            generation
+        );
+    }
+
+    #[test]
+    fn another_trained_voice_or_the_instant_engine_starts_over() {
+        let converter = Arc::new(FakeConverter::default());
+        let rig = Rig::new(converter.clone());
+        rig.bridge.route(Some(&trained(0.0)));
+        let Conversion::Trained { mut model, .. } = trained(0.0) else {
+            unreachable!()
+        };
+        model.id = "other".to_owned();
+
+        rig.bridge.route(Some(&Conversion::Trained {
+            model,
+            semitones: 0.0,
+        }));
+        rig.bridge.route(Some(&conversion()));
+
+        assert_eq!(converter.started.lock().unwrap().len(), 3);
+        assert!(converter.retuned.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_trained_voice_that_falls_behind_suggests_the_instant_engine() {
+        let (mut rig, release) = warmed_up_gate_for(&trained(0.0));
+
+        for block in 0..=MAX_BACKLOG / PIECE + 1 {
+            rig.process(&ramp(block * PIECE, PIECE));
+        }
+        release.send(()).unwrap();
+
+        eventually("the bypass did not happen", || !rig.errors().is_empty());
+        assert_eq!(
+            rig.errors(),
+            [AppEvent::error(Message::text(TextKey::AiTrainedTooSlow))]
+        );
     }
 }

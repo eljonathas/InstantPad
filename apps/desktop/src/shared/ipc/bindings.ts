@@ -68,6 +68,10 @@ export const commands = {
 	previewDesignedVoice: (recipe: VoiceRecipe) => __TAURI_INVOKE<void>("preview_designed_voice", { recipe }),
 	endVoicePreview: () => __TAURI_INVOKE<void>("end_voice_preview"),
 	saveDesignedVoice: (name: string, recipe: VoiceRecipe) => __TAURI_INVOKE<void>("save_designed_voice", { name, recipe }),
+	/**  Adds the voice the training kit exported to `folder` to an AI voice. */
+	addTrainedModel: (effect: VoiceEffect, cloneId: string | null, folder: string) => typedError<null, null>(__TAURI_INVOKE("add_trained_model", { effect, cloneId, folder })),
+	removeTrainedModel: (effect: VoiceEffect, cloneId: string | null) => __TAURI_INVOKE<void>("remove_trained_model", { effect, cloneId }),
+	setVoiceEngine: (effect: VoiceEffect, cloneId: string | null, engine: VoiceEngine) => __TAURI_INVOKE<void>("set_voice_engine", { effect, cloneId, engine }),
 	openCutEditor: (source: CutSource) => typedError<CutEditorView, Failure>(__TAURI_INVOKE("open_cut_editor", { source })),
 	cutWaveform: (startMs: number, endMs: number, bars: number) => typedError<Waveform, Failure>(__TAURI_INVOKE("cut_waveform", { startMs, endMs, bars })),
 	detectCues: () => typedError<number[], Failure>(__TAURI_INVOKE("detect_cues")),
@@ -201,6 +205,10 @@ export type EffectView = {
 	color: string,
 	needsAi: boolean,
 	params: ParamView[],
+	/**  Whether a trained model can be added to the voice. */
+	takesTrainedModel: boolean,
+	/**  The trained model of the voice, when it has one. */
+	trained: TrainedView | null,
 };
 
 /**  Something a port could not do, in words for the user. */
@@ -376,7 +384,14 @@ export type StartView = {
  *  A key of the translated texts. The frontend owns the translations, so TypeScript refuses
  *  a variant that is missing from them.
  */
-export type TextKey = "AiCalibrationSaved" | "AiDownloadFailed" | "AiInstalled" | "AiListening" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneSaved" | "CloneVoice" | "CutsPlaced" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "MicrophoneBusy" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
+export type TextKey = "AiCalibrationSaved" | "AiDownloadFailed" | "AiInstalled" | "AiListening" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AiTrainedTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneSaved" | "CloneVoice" | "CutsPlaced" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "MicrophoneBusy" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "TrainedModelAdded" | "TrainedModelInvalid" | "TrainedModelRemoved" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
+
+/**  A trained model, with the engine the voice speaks through. */
+export type TrainedView = {
+	name: string,
+	credit: string,
+	engine: VoiceEngine,
+};
 
 export type UpdateView = {
 	status: Message,
@@ -387,10 +402,22 @@ export type VoiceEffect = "natural" | "thin" | "deep" | "pitchCycle" | "feminine
 /**  One of the user's voices, cloned or designed, named by [`VoiceSettings::clone_id`]. */
 "cloned";
 
+/**  How the AI speaks with a voice. */
+export type VoiceEngine = 
+/**
+ *  Takes the timbre of the voice from a few seconds of it and puts it on the user's, as the
+ *  voice is being spoken. Runs on any computer, sounds like the voice only roughly.
+ */
+"instant" | 
+/**  A model trained on the voice, which sounds far more like it and needs a faster processor. */
+"trained";
+
 export type VoiceIcon = "mic" | "feather" | "mountain" | "wave" | "flower" | "ghost" | "horns" | "sparkles" | "person" | "blend";
 
 /**  A setting of an effect. Every value goes from 0 to 1, which is what a knob gives. */
-export type VoiceParam = "thinIntensity" | "thinFormant" | "deepIntensity" | "deepFormant" | "cycleTime" | "cycleHigh" | "cycleLow" | "feminineIntensity" | "feminineFormant" | "ghostWhisper" | "ghostEcho" | "ghostPitch" | "ogreDepth" | "ogreGrowl" | "ogreFormant" | "feminineAiPitch" | "clonePitch";
+export type VoiceParam = "thinIntensity" | "thinFormant" | "deepIntensity" | "deepFormant" | "cycleTime" | "cycleHigh" | "cycleLow" | "feminineIntensity" | "feminineFormant" | "ghostWhisper" | "ghostEcho" | "ghostPitch" | "ogreDepth" | "ogreGrowl" | "ogreFormant" | "feminineAiPitch" | "clonePitch" | 
+/**  The pitch of a trained model, from its own. */
+"trainedPitch";
 
 /**  How a voice is designed from the cloned ones. */
 export type VoiceRecipe = {

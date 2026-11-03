@@ -1,5 +1,7 @@
+use instantpad_domain::cloning::{TrainedModel, Voiceprint};
 use instantpad_domain::voice::{
-    PitchShape, VoiceChain, VoiceEffect, VoiceParam, VoicePreset, VoiceSettings, VoiceTarget,
+    Conversion, PitchShape, VoiceChain, VoiceColor, VoiceEffect, VoiceEngine, VoiceParam,
+    VoicePreset, VoiceSettings, VoiceTarget,
 };
 
 fn with(effect: VoiceEffect) -> VoiceSettings {
@@ -432,4 +434,102 @@ fn the_voice_of_the_user_goes_through_a_pitch_alone_whatever_the_effect() {
     assert_eq!(chain.color, Default::default());
     settings.select_clone("a");
     assert_eq!(settings.chain(), Some(chain));
+}
+
+fn model(id: &str) -> TrainedModel {
+    TrainedModel {
+        id: id.to_owned(),
+        name: "feminine".to_owned(),
+        credit: String::new(),
+        pitch_hz: 210.0,
+    }
+}
+
+#[test]
+fn a_voice_with_a_trained_model_speaks_through_it_until_the_user_picks_otherwise() {
+    let mut voice = VoiceSettings::default();
+    let feminine = VoiceTarget::Preset(VoicePreset::Feminine);
+
+    assert_eq!(voice.engine(&feminine, false), VoiceEngine::Instant);
+    assert_eq!(voice.engine(&feminine, true), VoiceEngine::Trained);
+
+    voice.set_engine(&feminine, VoiceEngine::Instant);
+
+    assert_eq!(voice.engine(&feminine, true), VoiceEngine::Instant);
+    let ana = VoiceTarget::Own("a".to_owned());
+    assert_eq!(voice.engine(&ana, true), VoiceEngine::Trained);
+}
+
+#[test]
+fn a_voice_without_a_model_always_uses_the_instant_engine() {
+    let mut voice = VoiceSettings::default();
+    let ana = VoiceTarget::Own("a".to_owned());
+    voice.set_engine(&ana, VoiceEngine::Trained);
+
+    assert_eq!(voice.engine(&ana, false), VoiceEngine::Instant);
+}
+
+#[test]
+fn forgetting_a_cloned_voice_forgets_its_engine() {
+    let mut voice = VoiceSettings::default();
+    let ana = VoiceTarget::Own("a".to_owned());
+    voice.set_engine(&ana, VoiceEngine::Instant);
+
+    voice.forget_clone("a");
+
+    assert_eq!(voice.engine(&ana, true), VoiceEngine::Trained);
+}
+
+#[test]
+fn the_pitch_of_a_trained_voice_goes_an_octave_either_way_from_its_own() {
+    let mut voice = VoiceSettings::default();
+    assert_eq!(voice.trained_semitones(), 0.0);
+    assert_eq!(voice.describe(VoiceParam::TrainedPitch), "+0.0 st");
+
+    voice.set(VoiceParam::TrainedPitch, 0.0);
+    assert_eq!(voice.trained_semitones(), -12.0);
+    voice.set(VoiceParam::TrainedPitch, 1.0);
+    assert_eq!(voice.trained_semitones(), 12.0);
+}
+
+#[test]
+fn a_trained_voice_differs_from_itself_only_in_pitch() {
+    let low = Conversion::Trained {
+        model: model("m"),
+        semitones: -2.0,
+    };
+    let high = Conversion::Trained {
+        model: model("m"),
+        semitones: 5.0,
+    };
+    let other = Conversion::Trained {
+        model: model("n"),
+        semitones: 5.0,
+    };
+
+    assert!(low.same_voice(&high));
+    assert!(!high.same_voice(&other));
+    assert_eq!(high.semitones(), Some(5.0));
+    let timbre = Conversion::Timbre {
+        source: Voiceprint::new(vec![1.0]),
+        target: Voiceprint::new(vec![0.5]),
+    };
+    assert!(timbre.same_voice(&timbre.clone()));
+    assert!(!timbre.same_voice(&low));
+    assert_eq!(timbre.semitones(), None);
+}
+
+#[test]
+fn the_keys_of_the_voices_tell_them_apart() {
+    assert_eq!(VoiceTarget::Preset(VoicePreset::Feminine).key(), "feminine");
+    assert_eq!(VoiceTarget::Own("abc".to_owned()).key(), "abc");
+}
+
+#[test]
+fn a_trained_model_leaves_the_voice_as_it_is_for_the_model_to_change() {
+    let chain = VoiceChain::untouched();
+
+    assert_eq!(chain.pitch, PitchShape::Fixed { semitones: 0.0 });
+    assert_eq!(chain.formant, 0.0);
+    assert_eq!(chain.color, VoiceColor::default());
 }

@@ -1,20 +1,24 @@
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use instantpad_domain::cloning::{
-    DEFAULT_BLEND, DEFAULT_TIMBRE, DesignRefusal, MIN_CALIBRATION_SECONDS, VoiceLibrary,
-    VoiceRecipe, Voiceprint,
+    DEFAULT_BLEND, DEFAULT_TIMBRE, DesignRefusal, MIN_CALIBRATION_SECONDS, TrainedModel,
+    VoiceLibrary, VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::palette;
 use instantpad_domain::speech::voiced;
-use instantpad_domain::voice::{Conversion, VoiceEffect, VoiceParam, VoiceSettings, VoiceTarget};
+use instantpad_domain::voice::{
+    Conversion, VoiceChain, VoiceEffect, VoiceEngine, VoiceParam, VoicePreset, VoiceSettings,
+    VoiceTarget,
+};
 
 use crate::events::{
     AiStatus, AiView, AppEvent, Calibration, ClonedVoiceView, DesignerView, EffectView, ParamView,
-    VoiceIcon, VoiceView,
+    TrainedView, VoiceIcon, VoiceView,
 };
 use crate::message::{Failure, Message, TextKey};
-use crate::ports::{EventSink, VoiceAnalyzer, VoiceChanger, VoiceModels};
+use crate::ports::{EventSink, TrainedVoiceModels, VoiceAnalyzer, VoiceChanger, VoiceModels};
 use crate::recorder::{Recording, SharedRecorder};
 use crate::settings::Settings;
 use crate::voice_library::VoiceLibraryStore;
@@ -114,6 +118,7 @@ const EFFECTS: [EffectInfo; 8] = [
 
 const CLONE_COLOR: &str = palette::PADS[2];
 const CLONE_PARAMS: &[(VoiceParam, TextKey)] = &[(VoiceParam::ClonePitch, TextKey::ParamPitch)];
+const TRAINED_PARAMS: &[(VoiceParam, TextKey)] = &[(VoiceParam::TrainedPitch, TextKey::ParamPitch)];
 
 fn param_views(params: &[(VoiceParam, TextKey)], voice: &VoiceSettings) -> Vec<ParamView> {
     params
@@ -128,7 +133,45 @@ fn param_views(params: &[(VoiceParam, TextKey)], voice: &VoiceSettings) -> Vec<P
         .collect()
 }
 
-fn effect_view(info: &EffectInfo, voice: &VoiceSettings) -> EffectView {
+/// The voice an effect speaks with, for one that can have a trained model.
+fn ai_voice(effect: VoiceEffect, clone_id: Option<&str>) -> Option<VoiceTarget> {
+    match (effect, clone_id) {
+        (VoiceEffect::FeminineAi, _) => Some(VoiceTarget::Preset(VoicePreset::Feminine)),
+        (VoiceEffect::Cloned, Some(id)) => Some(VoiceTarget::Own(id.to_owned())),
+        _ => None,
+    }
+}
+
+/// What the effect list says about the voice of `target` and its trained model, and the knobs
+/// it shows, which are those of a trained model when it speaks through one.
+fn voice_view(
+    target: Option<VoiceTarget>,
+    params: &'static [(VoiceParam, TextKey)],
+    voice: &VoiceSettings,
+    library: &VoiceLibrary,
+) -> (bool, Option<TrainedView>, Vec<ParamView>) {
+    let Some(target) = target else {
+        return (false, None, param_views(params, voice));
+    };
+    let trained = library.trained_model(&target).map(|model| TrainedView {
+        name: model.name.clone(),
+        credit: model.credit.clone(),
+        engine: voice.engine(&target, true),
+    });
+    let params = match &trained {
+        Some(view) if view.engine == VoiceEngine::Trained => TRAINED_PARAMS,
+        _ => params,
+    };
+    (
+        library.takes_trained_model(&target),
+        trained,
+        param_views(params, voice),
+    )
+}
+
+fn effect_view(info: &EffectInfo, voice: &VoiceSettings, library: &VoiceLibrary) -> EffectView {
+    let target = ai_voice(info.effect, None);
+    let (takes_trained_model, trained, params) = voice_view(target, info.params, voice, library);
     EffectView {
         effect: info.effect,
         clone_id: None,
@@ -136,7 +179,9 @@ fn effect_view(info: &EffectInfo, voice: &VoiceSettings) -> EffectView {
         icon: info.icon,
         color: info.color.to_owned(),
         needs_ai: info.effect.needs_ai(),
-        params: param_views(info.params, voice),
+        params,
+        takes_trained_model,
+        trained,
     }
 }
 
@@ -145,6 +190,7 @@ pub struct VoicePorts {
     pub changer: Arc<dyn VoiceChanger>,
     pub models: Arc<dyn VoiceModels>,
     pub analyzer: Arc<dyn VoiceAnalyzer>,
+    pub trained: Arc<dyn TrainedVoiceModels>,
 }
 
 /// Why the AI cannot speak with a voice yet.
@@ -202,6 +248,9 @@ pub struct VoiceSession {
     changer: Arc<dyn VoiceChanger>,
     models: Arc<dyn VoiceModels>,
     analyzer: Arc<dyn VoiceAnalyzer>,
+    trained: Arc<dyn TrainedVoiceModels>,
+    /// Set while a trained model is being added, which takes a while to check.
+    is_adding_model: AtomicBool,
     recorder: Arc<SharedRecorder>,
     library: Arc<VoiceLibraryStore>,
     settings: Arc<Settings>,
@@ -233,6 +282,8 @@ impl VoiceSession {
             changer: ports.changer,
             models: ports.models,
             analyzer: ports.analyzer,
+            trained: ports.trained,
+            is_adding_model: AtomicBool::new(false),
             recorder,
             library,
             settings,
@@ -247,8 +298,8 @@ impl VoiceSession {
             designer: Mutex::new(None),
         };
         // The models or the cloned voice may be gone since the effect was saved.
-        let target = session.settings.lock().voice.target();
-        if session.conversion(target).is_err() {
+        let voice = session.settings.lock().voice.clone();
+        if session.conversion(&voice).is_err() {
             session.settings.lock().voice.select(VoiceEffect::Natural);
         }
         session.send_to_engine();
@@ -260,15 +311,24 @@ impl VoiceSession {
         let voice = &settings.voice;
         let library = self.library.lock();
 
-        let built_in = EFFECTS.iter().map(|info| effect_view(info, voice));
-        let own_voice = |id: &str, name: &str, icon| EffectView {
-            effect: VoiceEffect::Cloned,
-            clone_id: Some(id.to_owned()),
-            name: Message::plain(name),
-            icon,
-            color: CLONE_COLOR.to_owned(),
-            needs_ai: VoiceEffect::Cloned.needs_ai(),
-            params: param_views(CLONE_PARAMS, voice),
+        let built_in = EFFECTS
+            .iter()
+            .map(|info| effect_view(info, voice, &library));
+        let own_voice = |id: &str, name: &str, icon| {
+            let target = Some(VoiceTarget::Own(id.to_owned()));
+            let (takes_trained_model, trained, params) =
+                voice_view(target, CLONE_PARAMS, voice, &library);
+            EffectView {
+                effect: VoiceEffect::Cloned,
+                clone_id: Some(id.to_owned()),
+                name: Message::plain(name),
+                icon,
+                color: CLONE_COLOR.to_owned(),
+                needs_ai: VoiceEffect::Cloned.needs_ai(),
+                params,
+                takes_trained_model,
+                trained,
+            }
         };
         let cloned = library
             .clones
@@ -369,7 +429,7 @@ impl VoiceSession {
         let mut candidate = self.settings.lock().voice.clone();
         for _ in 0..VoiceEffect::BUILT_IN.len() + clones.len() {
             candidate.select_next(&clones);
-            if self.conversion(candidate.target()).is_ok() {
+            if self.conversion(&candidate).is_ok() {
                 break;
             }
         }
@@ -555,8 +615,22 @@ impl VoiceSession {
 
     /// Deletes a voice for good. A cloned one takes the voices designed from it along.
     pub fn delete_clone(&self, id: &str) {
-        let removed = match self.library.change(|library| library.remove(id)) {
-            Ok(removed) => removed,
+        let removed = self.library.change(|library| {
+            let before = library.trained.clone();
+            let removed = library.remove(id);
+            let models: Vec<String> = removed
+                .iter()
+                .filter_map(|id| before.get(id).map(|model| model.id.clone()))
+                .collect();
+            (removed, models)
+        });
+        let removed = match removed {
+            Ok((removed, models)) => {
+                for model in models {
+                    self.trained.remove(&model);
+                }
+                removed
+            }
             Err(Failure(reason)) => {
                 self.events.emit(AppEvent::error(reason));
                 return;
@@ -580,6 +654,117 @@ impl VoiceSession {
         drop(waiting);
         self.events
             .emit(AppEvent::show(Message::text(TextKey::CloneDeleted)));
+        self.apply();
+    }
+
+    /// Adds the model the training kit exported to `folder` to the voice of an effect, which
+    /// then speaks through it. A model it had before is replaced.
+    pub async fn add_trained_model(
+        &self,
+        effect: VoiceEffect,
+        clone_id: Option<String>,
+        folder: PathBuf,
+    ) {
+        let Some(target) = ai_voice(effect, clone_id.as_deref())
+            .filter(|target| self.library.lock().takes_trained_model(target))
+        else {
+            return;
+        };
+        if !self.models.is_installed() {
+            self.events
+                .emit(AppEvent::error(Unready::NoModels.message()));
+            return;
+        }
+        if self.is_adding_model.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let added = self.trained.add(folder, TrainedModel::new_id()).await;
+        self.is_adding_model.store(false, Ordering::Relaxed);
+        let model = match added {
+            Ok(model) => model,
+            Err(Failure(reason)) => {
+                self.events.emit(AppEvent::error(reason));
+                return;
+            }
+        };
+
+        let new_id = model.id.clone();
+        // The voice may have been deleted while the model was checked.
+        let kept = self.library.change(|library| {
+            if !library.takes_trained_model(&target) {
+                return None;
+            }
+            Some(library.trained.insert(target.key(), model.clone()))
+        });
+        match kept {
+            Ok(Some(replaced)) => {
+                if let Some(old) = replaced {
+                    self.trained.remove(&old.id);
+                }
+            }
+            Ok(None) => {
+                self.trained.remove(&new_id);
+                return;
+            }
+            Err(Failure(reason)) => {
+                self.trained.remove(&new_id);
+                self.events.emit(AppEvent::error(reason));
+                return;
+            }
+        }
+        self.settings
+            .lock()
+            .voice
+            .set_engine(&target, VoiceEngine::Trained);
+        let name = Message::plain(model.name);
+        self.events.emit(AppEvent::show(Message::with(
+            TextKey::TrainedModelAdded,
+            [name],
+        )));
+        self.apply();
+    }
+
+    /// Takes the trained model off a voice, which goes back to the instant engine.
+    pub fn remove_trained_model(&self, effect: VoiceEffect, clone_id: Option<String>) {
+        let Some(target) = ai_voice(effect, clone_id.as_deref()) else {
+            return;
+        };
+        let removed = self
+            .library
+            .change(|library| library.trained.remove(&target.key()));
+        match removed {
+            Ok(Some(model)) => self.trained.remove(&model.id),
+            Ok(None) => return,
+            Err(Failure(reason)) => {
+                self.events.emit(AppEvent::error(reason));
+                return;
+            }
+        }
+        self.events
+            .emit(AppEvent::show(Message::text(TextKey::TrainedModelRemoved)));
+        self.reconsider();
+    }
+
+    /// Which engine a voice with a trained model speaks through.
+    pub fn set_engine(&self, effect: VoiceEffect, clone_id: Option<String>, engine: VoiceEngine) {
+        let Some(target) = ai_voice(effect, clone_id.as_deref()) else {
+            return;
+        };
+        self.settings.lock().voice.set_engine(&target, engine);
+        self.reconsider();
+    }
+
+    /// The voice in use with its engine changed, which may now need what the instant engine
+    /// needs: knowing the user's voice.
+    fn reconsider(&self) {
+        let voice = self.settings.lock().voice.clone();
+        if self.conversion(&voice).is_ok() {
+            self.apply();
+            return;
+        }
+        // Waits for what it needs, as when it was picked, and the voice stays natural meanwhile.
+        self.switch_to(voice);
+        self.settings.lock().voice.select(VoiceEffect::Natural);
         self.apply();
     }
 
@@ -689,7 +874,7 @@ impl VoiceSession {
         match waiting {
             Some(Waiting::Voice(choice)) => {
                 let candidate = self.candidate(&choice);
-                if self.conversion(candidate.target()) == Err(Unready::NotCalibrated) {
+                if self.conversion(&candidate) == Err(Unready::NotCalibrated) {
                     *self.waiting() = Some(Waiting::Voice(choice));
                     self.begin_listening();
                 } else {
@@ -704,7 +889,7 @@ impl VoiceSession {
     /// Takes `candidate` when the engine can run it, or keeps it waiting for the AI setup.
     /// Returns whether it was taken.
     fn switch_to(&self, candidate: VoiceSettings) -> bool {
-        if let Err(unready) = self.conversion(candidate.target()) {
+        if let Err(unready) = self.conversion(&candidate) {
             if unready != Unready::NoSuchVoice {
                 *self.waiting() = Some(Waiting::Voice(Choice::of(&candidate)));
             }
@@ -738,11 +923,24 @@ impl VoiceSession {
         candidate
     }
 
-    /// The speakers for the AI, or why it cannot speak yet.
-    fn conversion(&self, target: Option<VoiceTarget>) -> Result<Option<Conversion>, Unready> {
-        let Some(target) = target else {
+    /// What the AI does to the voice with `voice`, or why it cannot speak yet.
+    fn conversion(&self, voice: &VoiceSettings) -> Result<Option<Conversion>, Unready> {
+        let Some(target) = voice.target() else {
             return Ok(None);
         };
+        let model = self.library.lock().trained_model(&target).cloned();
+        if let Some(model) = model
+            && voice.engine(&target, true) == VoiceEngine::Trained
+        {
+            // A trained model needs the runtime of the AI models, and not the user's voice.
+            if !self.models.is_installed() {
+                return Err(Unready::NoModels);
+            }
+            return Ok(Some(Conversion::Trained {
+                model,
+                semitones: voice.trained_semitones(),
+            }));
+        }
         // Checked first, so a voice that is gone never waits for the setup.
         let target = match target {
             VoiceTarget::Preset(preset) => self.analyzer.preset(preset),
@@ -775,7 +973,7 @@ impl VoiceSession {
             .own
             .clone()
             .ok_or(Unready::NotCalibrated)?;
-        Ok(Conversion { source, target })
+        Ok(Conversion::Timbre { source, target })
     }
 
     fn send_to_engine(&self) {
@@ -790,10 +988,15 @@ impl VoiceSession {
             Some(conversion) => (Some(settings.own_voice_chain()), Some(conversion)),
             // Checked when the effect was picked, and only a delete removes what it needs,
             // which also moves to another effect.
-            None => (
-                settings.chain(),
-                self.conversion(settings.target()).unwrap_or_default(),
-            ),
+            None => {
+                let conversion = self.conversion(&settings).unwrap_or_default();
+                // A trained model sets the pitch itself, from the voice as it is.
+                let chain = match conversion {
+                    Some(Conversion::Trained { .. }) => Some(VoiceChain::untouched()),
+                    _ => settings.chain(),
+                };
+                (chain, conversion)
+            }
         };
         self.changer.set_voice(chain, conversion);
     }

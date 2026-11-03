@@ -8,7 +8,7 @@ use instantpad_application::ports::{
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
 use instantpad_domain::cloning::{
-    ClonedVoice, DesignedVoice, VoiceLibrary, VoiceRecipe, Voiceprint,
+    ClonedVoice, DesignedVoice, TrainedModel, VoiceLibrary, VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::cuts::{Cut, MIN_CUT_MS};
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
@@ -126,6 +126,16 @@ pub fn voice_library_repository(repository: &dyn VoiceLibraryRepository) {
                 blend: 0.25,
             },
         }],
+        trained: [(
+            "a".to_owned(),
+            TrainedModel {
+                id: "m".to_owned(),
+                name: "ana".to_owned(),
+                credit: "Recordings of Ana".to_owned(),
+                pitch_hz: 212.5,
+            },
+        )]
+        .into(),
     };
 
     repository.save(&library).expect("save the voices");

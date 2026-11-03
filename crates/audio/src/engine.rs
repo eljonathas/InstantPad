@@ -3,6 +3,7 @@
 //!   sounds       -> monitor output (what you hear)
 
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -11,8 +12,9 @@ use async_trait::async_trait;
 use instantpad_application::message::{Failure, TextKey};
 use instantpad_application::ports::{
     AudioDevice, AudioMix, AudioRouter, EventSink, NowPlaying, PlaybackTag, SoundPlayer,
-    SpeechConverter, VoiceChanger, VoiceRecorder,
+    SpeechConverter, VoiceChanger, VoiceRecorder, Waveform,
 };
+use instantpad_domain::cuts::Cut;
 use instantpad_domain::voice::{Conversion, VoiceChain};
 use tokio::sync::OnceCell;
 
@@ -20,6 +22,7 @@ use crate::ai::AiBridge;
 use crate::clip::{self, SoundClip};
 use crate::controls::{AtomicF32, Controls};
 use crate::devices;
+use crate::format::{CHANNELS, SAMPLE_RATE};
 use crate::mic::{self, MicSlot};
 use crate::mixer::{self, MixerHandle};
 use crate::recording::Recorder;
@@ -31,8 +34,10 @@ type Clips = HashMap<String, Arc<OnceCell<Arc<SoundClip>>>>;
 /// A sound that started, for the display. The newest comes last.
 struct Started {
     tag: PlaybackTag,
-    clip: Arc<SoundClip>,
     at: Instant,
+    seconds: f32,
+    /// The display bars of the part that plays: the whole clip, or its cut.
+    peaks: Vec<f32>,
 }
 
 /// One of the two outputs and the mixer that feeds it.
@@ -159,18 +164,32 @@ impl AudioEngine {
         Ok(clip.clone())
     }
 
-    fn remember(&self, clip: Arc<SoundClip>, tag: PlaybackTag) {
+    fn remember(&self, clip: &SoundClip, range: Range<usize>, tag: PlaybackTag) {
+        let seconds = range.len() as f32 / (SAMPLE_RATE as usize * CHANNELS) as f32;
+        let peaks = if range == clip.range(None) {
+            clip.peaks().to_vec()
+        } else {
+            clip.peaks_of(range)
+        };
         let mut started = self.started.lock().unwrap();
         started.retain(|item| item.tag != tag);
         started.push(Started {
             tag,
-            clip,
             at: Instant::now(),
+            seconds,
+            peaks,
         });
     }
 
-    fn play_on(&self, output: &Output, clip: &Arc<SoundClip>, volume: f32, tag: PlaybackTag) {
-        output.with_voices(|voices| voices.add(clip.clone(), volume, tag));
+    fn play_on(
+        &self,
+        output: &Output,
+        clip: &Arc<SoundClip>,
+        range: Range<usize>,
+        volume: f32,
+        tag: PlaybackTag,
+    ) {
+        output.with_voices(|voices| voices.add(clip.clone(), range, volume, tag));
     }
 }
 
@@ -180,21 +199,53 @@ impl SoundPlayer for AudioEngine {
         self.load(path).await.map(drop)
     }
 
-    async fn play(&self, path: &str, volume: f32, tag: PlaybackTag) -> Result<(), Failure> {
+    async fn play(
+        &self,
+        path: &str,
+        volume: f32,
+        tag: PlaybackTag,
+        cut: Option<Cut>,
+    ) -> Result<(), Failure> {
         let clip = self.load(path).await?;
+        let range = clip.range(cut);
         self.stop(tag);
-        self.play_on(&self.game, &clip, volume, tag);
-        self.play_on(&self.monitor, &clip, volume, tag);
-        self.remember(clip, tag);
+        self.play_on(&self.game, &clip, range.clone(), volume, tag);
+        self.play_on(&self.monitor, &clip, range.clone(), volume, tag);
+        self.remember(&clip, range, tag);
         Ok(())
     }
 
-    async fn preview(&self, path: &str, volume: f32, tag: PlaybackTag) -> Result<(), Failure> {
+    async fn preview(
+        &self,
+        path: &str,
+        volume: f32,
+        tag: PlaybackTag,
+        cut: Option<Cut>,
+    ) -> Result<(), Failure> {
         let clip = self.load(path).await?;
+        let range = clip.range(cut);
         self.stop(tag);
-        self.play_on(&self.monitor, &clip, volume, tag);
-        self.remember(clip, tag);
+        self.play_on(&self.monitor, &clip, range.clone(), volume, tag);
+        self.remember(&clip, range, tag);
         Ok(())
+    }
+
+    async fn waveform(
+        &self,
+        path: &str,
+        start_ms: u32,
+        end_ms: u32,
+        bars: u32,
+    ) -> Result<Waveform, Failure> {
+        let clip = self.load(path).await?;
+        Ok(Waveform {
+            duration_ms: clip.duration_ms(),
+            peaks: clip.waveform(start_ms, end_ms, bars as usize),
+        })
+    }
+
+    async fn levels(&self, path: &str, frame_ms: u32) -> Result<Vec<f32>, Failure> {
+        Ok(self.load(path).await?.levels(frame_ms))
     }
 
     fn forget(&self, path: &str) {
@@ -224,11 +275,10 @@ impl SoundPlayer for AudioEngine {
         started.retain(|item| self.is_playing(item.tag));
         let newest = started.last()?;
 
-        let duration = newest.clip.seconds();
         Some(NowPlaying {
-            position: newest.at.elapsed().as_secs_f32().min(duration),
-            duration,
-            peaks: newest.clip.peaks().to_vec(),
+            position: newest.at.elapsed().as_secs_f32().min(newest.seconds),
+            duration: newest.seconds,
+            peaks: newest.peaks.clone(),
         })
     }
 }
@@ -409,7 +459,7 @@ mod tests {
         let tag = PlaybackTag::of("a");
         assert_eq!(engine.now_playing(), None);
 
-        engine.play(file.path(), 1.0, tag).await.unwrap();
+        engine.play(file.path(), 1.0, tag, None).await.unwrap();
 
         let playing = engine.now_playing().unwrap();
         assert_eq!(playing.duration, 0.1);
@@ -426,8 +476,8 @@ mod tests {
         let short = wav(48_000, &[8192, 8192], 4800);
         let long = wav(48_000, &[8192, 8192], 9600);
         let (first, second) = (PlaybackTag::of("a"), PlaybackTag::of("b"));
-        engine.play(long.path(), 1.0, first).await.unwrap();
-        engine.play(short.path(), 1.0, second).await.unwrap();
+        engine.play(long.path(), 1.0, first, None).await.unwrap();
+        engine.play(short.path(), 1.0, second, None).await.unwrap();
 
         assert_eq!(engine.now_playing().unwrap().duration, 0.1);
 
@@ -443,7 +493,7 @@ mod tests {
         let file = wav(48_000, &[8192, 8192], 4800);
 
         engine
-            .play(file.path(), 1.0, PlaybackTag::of("a"))
+            .play(file.path(), 1.0, PlaybackTag::of("a"), None)
             .await
             .unwrap();
 
@@ -458,7 +508,7 @@ mod tests {
         let file = wav(48_000, &[8192, 8192], 4800);
 
         engine
-            .preview(file.path(), 1.0, PlaybackTag::of("a"))
+            .preview(file.path(), 1.0, PlaybackTag::of("a"), None)
             .await
             .unwrap();
 
@@ -473,8 +523,8 @@ mod tests {
         let file = wav(48_000, &[8192, 8192], 4800);
         let tag = PlaybackTag::of("a");
 
-        engine.play(file.path(), 1.0, tag).await.unwrap();
-        engine.play(file.path(), 1.0, tag).await.unwrap();
+        engine.play(file.path(), 1.0, tag, None).await.unwrap();
+        engine.play(file.path(), 1.0, tag, None).await.unwrap();
 
         // Two overlapping copies would be twice as loud.
         assert!((heard(&mut game) - 8192.0 / 32768.0).abs() < 1e-3);
@@ -486,7 +536,7 @@ mod tests {
         let file = wav(48_000, &[8192, 8192], 4800);
         let tag = PlaybackTag::of("a");
 
-        engine.play(file.path(), 1.0, tag).await.unwrap();
+        engine.play(file.path(), 1.0, tag, None).await.unwrap();
 
         assert!(!engine.is_playing(tag));
     }
@@ -497,13 +547,13 @@ mod tests {
         engine.attach_mixers();
         let file = wav(48_000, &[8192, 8192], 4800);
         let tag = PlaybackTag::of("a");
-        engine.play(file.path(), 1.0, tag).await.unwrap();
+        engine.play(file.path(), 1.0, tag, None).await.unwrap();
 
         engine.set_game_output(None).await.unwrap();
         engine.set_monitor_output(None).await.unwrap();
 
         assert!(!engine.is_playing(tag));
-        engine.play(file.path(), 1.0, tag).await.unwrap();
+        engine.play(file.path(), 1.0, tag, None).await.unwrap();
         assert!(!engine.is_playing(tag));
     }
 
@@ -513,7 +563,7 @@ mod tests {
         engine.attach_mixers();
         let file = wav(48_000, &[8192, 8192], 4800);
         let tag = PlaybackTag::of("a");
-        engine.play(file.path(), 1.0, tag).await.unwrap();
+        engine.play(file.path(), 1.0, tag, None).await.unwrap();
 
         let failure = engine.set_game_output(Some("nowhere:nothing")).await;
 
@@ -587,7 +637,7 @@ mod tests {
         let (mut game, mut monitor) = engine.attach_mixers();
         let file = wav(48_000, &[16384, 16384], 4800);
         engine
-            .play(file.path(), 1.0, PlaybackTag::of("a"))
+            .play(file.path(), 1.0, PlaybackTag::of("a"), None)
             .await
             .unwrap();
 

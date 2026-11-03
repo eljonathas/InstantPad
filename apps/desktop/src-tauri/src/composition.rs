@@ -4,6 +4,7 @@ use std::sync::{Arc, Once};
 
 use instantpad_application::board::BoardSession;
 use instantpad_application::cloning::CloningSession;
+use instantpad_application::cuts::CutSession;
 use instantpad_application::events::MeterFrame;
 use instantpad_application::favorites::Favorites;
 use instantpad_application::hotkeys::{HotkeyCommand, HotkeyService};
@@ -40,6 +41,7 @@ pub struct Core {
     pub updates: UpdateSession,
     pub voice: Arc<VoiceSession>,
     pub cloning: CloningSession,
+    pub cuts: CutSession,
     pub settings: Arc<Settings>,
     /// The interface can start more than once, as it does after a reload.
     pub background_work: Once,
@@ -99,7 +101,7 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
     let board = Arc::new(BoardSession::new(
         Arc::new(JsonBoardRepository::new(&folder)),
         engine.clone(),
-        files,
+        files.clone(),
         favorites.clone(),
         hotkeys.clone(),
         settings.clone(),
@@ -133,6 +135,13 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
             events.clone(),
         ),
         voice,
+        cuts: CutSession::new(
+            board.clone(),
+            library.clone(),
+            files.clone(),
+            engine.clone(),
+            events.clone(),
+        ),
         rows: SoundRows::new(
             board.clone(),
             library.clone(),

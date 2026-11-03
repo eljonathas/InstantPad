@@ -2,6 +2,7 @@
 
 pub mod board;
 pub mod cloning;
+pub mod cuts;
 pub mod hotkeys;
 pub mod palette;
 pub mod sounds;

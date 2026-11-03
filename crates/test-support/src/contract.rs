@@ -10,6 +10,7 @@ use instantpad_domain::board::PadBoard;
 use instantpad_domain::cloning::{
     ClonedVoice, DesignedVoice, VoiceLibrary, VoiceRecipe, Voiceprint,
 };
+use instantpad_domain::cuts::{Cut, MIN_CUT_MS};
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
 use instantpad_domain::sounds::SoundSource;
 
@@ -19,11 +20,11 @@ pub async fn sound_player(player: &dyn SoundPlayer, path: &str) {
 
     player.preload(path).await.expect("preload a good file");
     player
-        .play(path, 1.0, first)
+        .play(path, 1.0, first, None)
         .await
         .expect("play a good file");
     player
-        .preview(path, 1.0, second)
+        .preview(path, 1.0, second, None)
         .await
         .expect("preview a good file");
     assert!(player.is_playing(first));
@@ -35,6 +36,27 @@ pub async fn sound_player(player: &dyn SoundPlayer, path: &str) {
 
     player.stop_all();
     assert!(!player.is_playing(second));
+
+    // A cut plays only its piece, and the drawing of a sound has as many bars as asked.
+    let cut = Cut {
+        start_ms: 0,
+        end_ms: MIN_CUT_MS,
+    };
+    player
+        .play(path, 1.0, first, Some(cut))
+        .await
+        .expect("play a cut of a good file");
+    assert!(player.is_playing(first));
+    player.stop_all();
+    let drawn = player
+        .waveform(path, 0, u32::MAX, 32)
+        .await
+        .expect("draw a good file");
+    assert!(drawn.duration_ms > 0);
+    assert_eq!(drawn.peaks.len(), 32);
+    assert!(drawn.peaks.iter().all(|peak| (0.0..=1.0).contains(peak)));
+    let levels = player.levels(path, 10).await.expect("measure a good file");
+    assert!(levels.iter().all(|level| (0.0..=1.0).contains(level)));
 }
 
 /// `free` must be a key no other program holds.

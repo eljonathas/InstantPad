@@ -20,6 +20,7 @@ pub enum TextKey {
     CloneMissingName,
     CloneSaved,
     CloneVoice,
+    CutsPlaced,
     DevelopmentVersion,
     DeviceUnavailable,
     Downloading,

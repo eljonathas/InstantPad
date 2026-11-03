@@ -172,7 +172,7 @@ async fn one_sound_at_a_time_also_covers_the_rows() {
     let target = world.board.pad_on_screen(0);
     world
         .board
-        .place(&target, "a", "a.mp3", "#ff0000")
+        .place(&target, "a", "a.mp3", "#ff0000", None)
         .await
         .unwrap();
     world.board.press_pad(0).await;

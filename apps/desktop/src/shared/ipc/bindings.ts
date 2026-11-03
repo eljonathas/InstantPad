@@ -68,6 +68,13 @@ export const commands = {
 	previewDesignedVoice: (recipe: VoiceRecipe) => __TAURI_INVOKE<void>("preview_designed_voice", { recipe }),
 	endVoicePreview: () => __TAURI_INVOKE<void>("end_voice_preview"),
 	saveDesignedVoice: (name: string, recipe: VoiceRecipe) => __TAURI_INVOKE<void>("save_designed_voice", { name, recipe }),
+	openCutEditor: (source: CutSource) => typedError<CutEditorView, Failure>(__TAURI_INVOKE("open_cut_editor", { source })),
+	cutWaveform: (startMs: number, endMs: number, bars: number) => typedError<Waveform, Failure>(__TAURI_INVOKE("cut_waveform", { startMs, endMs, bars })),
+	detectCues: () => typedError<number[], Failure>(__TAURI_INVOKE("detect_cues")),
+	previewCut: (startMs: number, endMs: number) => typedError<null, Failure>(__TAURI_INVOKE("preview_cut", { startMs, endMs })),
+	stopCutPreview: () => __TAURI_INVOKE<void>("stop_cut_preview"),
+	placeCuts: (pieces: CutPiece[]) => typedError<number, Failure>(__TAURI_INVOKE("place_cuts", { pieces })),
+	closeCutEditor: () => __TAURI_INVOKE<void>("close_cut_editor"),
 	openCloning: () => __TAURI_INVOKE<void>("open_cloning"),
 	startCloneSample: () => __TAURI_INVOKE<void>("start_clone_sample"),
 	finishCloneSample: () => typedError<null, null>(__TAURI_INVOKE("finish_clone_sample")),
@@ -139,6 +146,34 @@ export type ClonedVoiceView = {
 	id: string,
 	name: string,
 };
+
+/**  What the editor opens with. */
+export type CutEditorView = {
+	name: string,
+	color: string,
+	durationMs: number,
+	/**  The cue points to start from: the start of the sound, or the cut of the pad. */
+	cues: number[],
+	/**  How many pads of the interface on screen have room for a piece. */
+	freePads: number,
+};
+
+/**  A piece the user wants on a pad. */
+export type CutPiece = {
+	name: string,
+	color: string,
+	startMs: number,
+	endMs: number,
+};
+
+/**  Where the sound to cut comes from. */
+export type CutSource = 
+/**  A sound of MyInstants, which is downloaded first. */
+{ kind: "catalog"; source: SoundSource } | 
+/**  A file on the computer, which is copied into the app first, like any imported sound. */
+{ kind: "file"; path: string } | 
+/**  The sound on a pad of the interface on screen. */
+{ kind: "pad"; slot: number };
 
 /**  The voice designer, which the backend keeps open so a failed save loses nothing. */
 export type DesignerView = {
@@ -320,6 +355,11 @@ export type SoundView = {
 	hasHotkey: boolean,
 	/**  A fully lit pad of this color needs dark text. */
 	isLight: boolean,
+	/**
+	 *  Where the piece the pad plays starts and ends, such as "0:01.2-0:02.5", or `None` when
+	 *  it plays the whole file.
+	 */
+	cut: string | null,
 };
 
 /**  Everything the interface needs to draw its first frame. */
@@ -336,7 +376,7 @@ export type StartView = {
  *  A key of the translated texts. The frontend owns the translations, so TypeScript refuses
  *  a variant that is missing from them.
  */
-export type TextKey = "AiCalibrationSaved" | "AiDownloadFailed" | "AiInstalled" | "AiListening" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneSaved" | "CloneVoice" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "MicrophoneBusy" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
+export type TextKey = "AiCalibrationSaved" | "AiDownloadFailed" | "AiInstalled" | "AiListening" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneSaved" | "CloneVoice" | "CutsPlaced" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "MicrophoneBusy" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
 
 export type UpdateView = {
 	status: Message,
@@ -374,6 +414,13 @@ export type VoiceView = {
 	clonedVoices: ClonedVoiceView[],
 	/**  `None` while the voice designer is closed. */
 	designer: DesignerView | null,
+};
+
+/**  A sound as the cut editor draws it. */
+export type Waveform = {
+	durationMs: number,
+	/**  From 0 to 1 of the loudest moment of the whole sound. */
+	peaks: number[],
 };
 
 /* Tauri Specta runtime */

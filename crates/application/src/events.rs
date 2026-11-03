@@ -25,6 +25,9 @@ pub struct SoundView {
     pub has_hotkey: bool,
     /// A fully lit pad of this color needs dark text.
     pub is_light: bool,
+    /// Where the piece the pad plays starts and ends, such as "0:01.2-0:02.5", or `None` when
+    /// it plays the whole file.
+    pub cut: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]

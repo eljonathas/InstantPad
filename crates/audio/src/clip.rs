@@ -1,9 +1,11 @@
 //! A sound fully decoded to the engine format.
 
 use std::fs::File;
+use std::ops::Range;
 use std::path::Path;
 
 use instantpad_application::message::{Failure, TextKey};
+use instantpad_domain::cuts::Cut;
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 use symphonia::core::codecs::audio::AudioDecoderOptions;
@@ -23,12 +25,77 @@ const PEAK_BARS: usize = 44;
 pub(crate) struct SoundClip {
     samples: Vec<f32>,
     peaks: Vec<f32>,
+    /// The loudest sample, so a part of the sound is drawn at the scale of the whole.
+    loudest: f32,
 }
 
 impl SoundClip {
     pub(crate) fn new(samples: Vec<f32>) -> Self {
         let peaks = peaks_of(&samples);
-        Self { samples, peaks }
+        let loudest = samples
+            .iter()
+            .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+        Self {
+            samples,
+            peaks,
+            loudest,
+        }
+    }
+
+    pub(crate) fn duration_ms(&self) -> u32 {
+        (self.samples.len() / CHANNELS * 1000 / SAMPLE_RATE as usize) as u32
+    }
+
+    /// The samples of `cut`, or of the whole clip. A cut that reaches past the end stops there.
+    pub(crate) fn range(&self, cut: Option<Cut>) -> Range<usize> {
+        let Some(cut) = cut else {
+            return 0..self.samples.len();
+        };
+        let at = |ms: u32| {
+            (ms as usize * SAMPLE_RATE as usize / 1000 * CHANNELS).min(self.samples.len())
+        };
+        at(cut.start_ms)..at(cut.end_ms)
+    }
+
+    /// The display bars of `range`, from 0 to 1.
+    pub(crate) fn peaks_of(&self, range: Range<usize>) -> Vec<f32> {
+        peaks_of(&self.samples[range])
+    }
+
+    /// How loud each of `bars` stretches of the part from `start_ms` to `end_ms` gets, from 0
+    /// to 1 of the loudest moment of the whole clip, so zooming in does not change the scale.
+    pub(crate) fn waveform(&self, start_ms: u32, end_ms: u32, bars: usize) -> Vec<f32> {
+        let range = self.range(Some(Cut {
+            start_ms,
+            end_ms: end_ms.max(start_ms),
+        }));
+        let part = &self.samples[range];
+        if bars == 0 || self.loudest == 0.0 {
+            return vec![0.0; bars];
+        }
+        let frames = part.len() / CHANNELS;
+        (0..bars)
+            .map(|bar| {
+                let from = frames * bar / bars * CHANNELS;
+                let to = (frames * (bar + 1) / bars * CHANNELS).max(from);
+                part[from..to]
+                    .iter()
+                    .fold(0.0_f32, |peak, sample| peak.max(sample.abs()))
+                    / self.loudest
+            })
+            .collect()
+    }
+
+    /// How loud the clip is along the way, one value per `frame_ms`, from 0 to 1.
+    pub(crate) fn levels(&self, frame_ms: u32) -> Vec<f32> {
+        let frame = (frame_ms as usize * SAMPLE_RATE as usize / 1000).max(1) * CHANNELS;
+        self.samples
+            .chunks(frame)
+            .map(|part| {
+                part.iter()
+                    .fold(0.0_f32, |peak, sample| peak.max(sample.abs()))
+            })
+            .collect()
     }
 
     /// Interleaved stereo at the engine rate.
@@ -39,10 +106,6 @@ impl SoundClip {
     /// The loudest moment of each stretch of the sound, from 0 to 1.
     pub(crate) fn peaks(&self) -> &[f32] {
         &self.peaks
-    }
-
-    pub(crate) fn seconds(&self) -> f32 {
-        (self.samples.len() / CHANNELS) as f32 / SAMPLE_RATE as f32
     }
 
     pub(crate) fn load(path: &str) -> Result<Self, Failure> {
@@ -177,6 +240,62 @@ pub(crate) mod tests {
 
     use super::*;
 
+    /// A second of stereo at the engine rate: quiet for the first half, loud for the second.
+    fn half_quiet_half_loud() -> SoundClip {
+        let half = SAMPLE_RATE as usize / 2 * CHANNELS;
+        SoundClip::new([vec![0.1; half], vec![0.8; half]].concat())
+    }
+
+    #[test]
+    fn a_cut_is_the_samples_between_its_start_and_its_end() {
+        let clip = half_quiet_half_loud();
+        let per_ms = SAMPLE_RATE as usize / 1000 * CHANNELS;
+
+        assert_eq!(clip.range(None), 0..clip.samples().len());
+        let cut = Cut {
+            start_ms: 250,
+            end_ms: 750,
+        };
+        assert_eq!(clip.range(Some(cut)), 250 * per_ms..750 * per_ms);
+        let past_the_end = Cut {
+            start_ms: 900,
+            end_ms: 5000,
+        };
+        assert_eq!(
+            clip.range(Some(past_the_end)),
+            900 * per_ms..clip.samples().len()
+        );
+        assert_eq!(clip.duration_ms(), 1000);
+    }
+
+    #[test]
+    fn the_waveform_of_a_part_keeps_the_scale_of_the_whole_sound() {
+        let clip = half_quiet_half_loud();
+
+        let whole = clip.waveform(0, 1000, 4);
+        let quiet_half = clip.waveform(0, 500, 2);
+
+        let close = |a: f32, b: f32| (a - b).abs() < 1e-6;
+        assert!(close(whole[0], 0.125) && close(whole[3], 1.0), "{whole:?}");
+        // Zoomed into the quiet half, it is still drawn quiet.
+        assert!(
+            quiet_half.iter().all(|&bar| close(bar, 0.125)),
+            "{quiet_half:?}"
+        );
+        assert_eq!(clip.waveform(0, 1000, 0), Vec::<f32>::new());
+        assert_eq!(clip.waveform(2000, 3000, 3), [0.0; 3]);
+    }
+
+    #[test]
+    fn the_levels_measure_each_frame_of_the_sound() {
+        let clip = half_quiet_half_loud();
+
+        let levels = clip.levels(10);
+
+        assert_eq!(levels.len(), 100);
+        assert!((levels[0] - 0.1).abs() < 1e-6 && (levels[99] - 0.8).abs() < 1e-6);
+    }
+
     #[test]
     fn the_peaks_follow_the_loud_and_quiet_parts_of_a_sound() {
         let quiet = vec![0.05; 48_000];
@@ -201,7 +320,7 @@ pub(crate) mod tests {
     fn a_clip_knows_how_long_it_lasts() {
         let clip = SoundClip::new(vec![0.0; SAMPLE_RATE as usize * CHANNELS / 2]);
 
-        assert_eq!(clip.seconds(), 0.5);
+        assert_eq!(clip.duration_ms(), 500);
     }
 
     /// A file in the temporary folder that goes away with the value.

@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use instantpad_domain::board::{InterfaceLayout, PadBoard, Sound};
+use instantpad_domain::cuts::Cut;
 use instantpad_domain::hotkeys::{Hotkey, NumericLayout};
 use instantpad_domain::palette;
 
@@ -340,6 +341,27 @@ impl BoardSession {
         })
     }
 
+    /// The first pad of the interface on screen with no sound, never one that has a sound.
+    pub fn free_pad(&self) -> Option<PadTarget> {
+        let state = self.lock();
+        let slot = state.board.first_free_slot(&state.active_id)?;
+        Some(PadTarget {
+            interface_id: state.active_id.clone(),
+            slot,
+        })
+    }
+
+    /// How many pads of the interface on screen have no sound.
+    pub fn free_pad_count(&self) -> u32 {
+        let state = self.lock();
+        state.board.free_slot_count(&state.active_id)
+    }
+
+    /// The sound on a pad of the interface on screen.
+    pub fn sound_on_pad(&self, slot: u32) -> Option<Sound> {
+        self.sound_in_active(slot)
+    }
+
     /// Lights the loading state of a pad while `work` runs, however it ends.
     pub async fn while_loading<T>(&self, target: &PadTarget, work: impl Future<Output = T>) -> T {
         self.lock().loading.push(target.clone());
@@ -356,12 +378,14 @@ impl BoardSession {
         result
     }
 
+    /// Puts a sound on a pad: the whole file, or only `cut` of it.
     pub async fn place(
         &self,
         target: &PadTarget,
         name: &str,
         path: &str,
         color: &str,
+        cut: Option<Cut>,
     ) -> Result<(), Failure> {
         self.player.forget(path);
         self.player.preload(path).await?;
@@ -382,7 +406,12 @@ impl BoardSession {
                 .board
                 .sound_at(interface_id, *slot)
                 .map(|sound| sound.path.clone());
-            state.board.place(interface_id, *slot, name, path, color);
+            let placed = state
+                .board
+                .place(interface_id, *slot, name, path, color)
+                .id
+                .clone();
+            state.board.set_cut(&placed, cut);
             if state.active_id == *interface_id {
                 state.target_slot = None;
             }
@@ -413,7 +442,7 @@ impl BoardSession {
                 let path = self.files.import(source_path)?;
                 let name = file_stem(source_path);
                 let color = palette::pad_color_for(target.slot);
-                self.place(&target, &name, &path, color).await
+                self.place(&target, &name, &path, color, None).await
             };
             if let Err(Failure(reason)) = self.while_loading(&target, placed).await {
                 self.events.emit(AppEvent::error(reason));
@@ -534,7 +563,12 @@ impl BoardSession {
         self.stop_others();
         let played = self
             .player
-            .play(&sound.path, sound.volume as f32, sound_tag(sound))
+            .play(
+                &sound.path,
+                sound.volume as f32,
+                sound_tag(sound),
+                sound.cut,
+            )
             .await;
         match played {
             Ok(()) => self.events.emit(AppEvent::sound(Message::plain(format!(
@@ -578,6 +612,7 @@ impl BoardSession {
                         volume: sound.volume,
                         has_hotkey: sound.hotkey.is_some(),
                         is_light: palette::is_light(&sound.color),
+                        cut: sound.cut.map(|cut| cut.label()),
                     }),
                 }
             })
@@ -629,7 +664,7 @@ impl BoardSession {
     }
 }
 
-fn file_stem(path: &str) -> String {
+pub(crate) fn file_stem(path: &str) -> String {
     std::path::Path::new(path)
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())

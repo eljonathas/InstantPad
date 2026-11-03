@@ -8,6 +8,7 @@ import { useText } from "../../shared/store/text";
 import { useAskHotkey } from "../../shared/ui/HotkeyDialog";
 import { whileHeld } from "../../shared/ui/hotkeyPause";
 import { useOverlay } from "../../shared/ui/overlay";
+import { cutEditor } from "../cuts/cutEditorStore";
 import { InterfaceDialog } from "./InterfaceDialog";
 import { interfaceMenu, padMenu } from "./menus";
 import { TextDialog } from "./TextDialog";
@@ -103,6 +104,7 @@ export function useBoardActions() {
         setShortcut: () => void setShortcut(slot),
         removeShortcut: () => void commands.clearPadHotkey(slot),
         rename: () => void rename(slot, sound!.name),
+        cut: () => void cutEditor.open({ kind: "pad", slot }),
         setVolume: (volume: number) => void commands.setPadVolume(slot, volume),
         setColor: (color: string) => void commands.setPadColor(slot, color),
         sendTo: (interfaceId: string) => void commands.sendToInterface(slot, interfaceId),

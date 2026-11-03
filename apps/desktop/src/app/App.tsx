@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { CutEditor } from "../features/cuts/CutEditor";
 import { CloneDialog } from "../features/voice/CloneDialog";
 import { UpdateDialog } from "../features/updates/UpdateDialog";
 import { DesignDialog } from "../features/voice/DesignDialog";
@@ -37,6 +38,7 @@ export function App() {
       <Device />
       <CloneDialog />
       <DesignDialog />
+      <CutEditor />
       <UpdateDialog />
     </OverlayProvider>
   );

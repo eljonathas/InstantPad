@@ -10,7 +10,7 @@ test("pictures of the panels", async ({ page }) => {
   await openApp(page);
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.clock.runFor(200);
-  await expect(page.locator(".sound-row:visible")).toHaveCount(8);
+  await expect(page.locator(".sound-row:visible")).toHaveCount(24);
 
   await page.screenshot({ path: "tests/e2e/screenshots/myinstants.png" });
 

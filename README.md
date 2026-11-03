@@ -99,6 +99,15 @@ Only one copy of the app runs at a time. Opening it again brings the existing wi
 
 Create as many interfaces as you want with **+**. Each has its own name, color and grid, up to 8 rows by 10 columns. The gear button (**Configure this interface**) configures the current one, and right-clicking a tab moves or deletes it.
 
+### Cutting a sound into pads
+
+The scissors key cuts a sound into pieces, each on a pad of its own, the way the hot cues of a DJ player split a track. It is on every MyInstants result, next to the folder for a file of the computer, and in the right-click menu of a pad. The file is never changed: each pad plays its piece of it.
+
+- **Detect cuts** marks a cue at the start of each sound after a pause, which splits a compilation of effects at once.
+- Click the waveform to move the playhead, and press **C** or double-click to mark a cue there. Drag a cue to move it, or nudge the selected one with the arrows; **Delete** removes it.
+- **Space** plays from the playhead, and **1** to **9** play each piece. The wheel zooms, and Shift with the wheel moves along the sound.
+- Name the pieces, untick the ones you do not want, and **Create** puts them on the free pads of the interface on screen. Pads that have a sound are never replaced.
+
 ### Voice effects
 
 The **Voice** key under the logo opens InstantVoice, where you change your own voice in calls and games. Click an effect to turn it on, and its knobs appear on the right. **Natural** turns effects off. The effect stays on when you go back to **Pad**, and the LED on the **Voice** key shows that it is running.

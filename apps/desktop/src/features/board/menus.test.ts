@@ -16,6 +16,7 @@ const sound: SoundView = {
   volume: 1,
   hasHotkey: false,
   isLight: false,
+  cut: null,
 };
 const loaded: PadView = { slot: 1, label: "02", shortcut: "Num2", isFavorite: false, isLoading: false, sound };
 const empty: PadView = { slot: 2, label: "03", shortcut: "Num3", isFavorite: false, isLoading: false, sound: null };
@@ -30,6 +31,7 @@ const actions = (): PadMenuActions => ({
   setShortcut: vi.fn(),
   removeShortcut: vi.fn(),
   rename: vi.fn(),
+  cut: vi.fn(),
   setVolume: vi.fn(),
   setColor: vi.fn(),
   sendTo: vi.fn(),
@@ -59,6 +61,7 @@ describe("pad menu", () => {
       "-",
       "Set shortcut...",
       "Rename...",
+      "Cut into pads...",
       "Volume",
       "Color",
       "Send to interface",
@@ -74,6 +77,12 @@ describe("pad menu", () => {
     expect(labels(menu)).toContain("Remove from favorites");
     expect(labels(menu)).toContain("Remove shortcut");
     expect(labels(menu)).not.toContain("Send to interface");
+  });
+
+  it("opens the cut editor on the pad", () => {
+    const run = actions();
+    item(padMenu(loaded, [], colors, t, run), "Cut into pads...").run!();
+    expect(run.cut).toHaveBeenCalled();
   });
 
   it("checks the current volume among 25, 50, 75, 100 and 150%", () => {

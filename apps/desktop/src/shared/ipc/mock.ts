@@ -7,6 +7,9 @@ import type {
   BoardView,
   Calibration,
   CloneStep,
+  CutEditorView,
+  CutPiece,
+  CutSource,
   EffectView,
   Hotkey,
   InterfaceLayout,
@@ -202,6 +205,35 @@ interface MockSound {
   color: string;
   volume: number;
   hotkey: Hotkey | null;
+  /** The piece of the file the pad plays, or null for the whole of it. */
+  cut: { startMs: number; endMs: number } | null;
+}
+
+/** Every sound the mock cuts lasts this long: four sounds with pauses between them. */
+const CUT_DURATION_MS = 8000;
+const CUT_SOUNDS = [
+  [0, 1500],
+  [2100, 3600],
+  [4300, 5600],
+  [6000, 7600],
+];
+
+/** How loud the mock sound is at `ms`: a swell inside each of its four sounds, silence between. */
+function cutLevel(ms: number) {
+  const sound = CUT_SOUNDS.find(([start, end]) => ms >= start && ms < end);
+  if (!sound) return 0;
+  const [start, end] = sound;
+  const inside = (ms - start) / (end - start);
+  return Math.sin(Math.PI * inside) * (0.6 + 0.4 * Math.abs(Math.sin(ms / 37)));
+}
+
+/** Like the backend: "0:01.2-0:02.5". */
+function cutLabel({ startMs, endMs }: { startMs: number; endMs: number }) {
+  const at = (ms: number) => {
+    const tenths = Math.floor(ms / 100);
+    return `${Math.floor(tenths / 600)}:${String(Math.floor(tenths / 10) % 60).padStart(2, "0")}.${tenths % 10}`;
+  };
+  return `${at(startMs)}-${at(endMs)}`;
 }
 
 const source = (name: string, index: number): SoundSource => {
@@ -295,6 +327,7 @@ function seed() {
     color: item.color,
     volume: 1,
     hotkey: null,
+    cut: null,
   }));
 
   return {
@@ -409,6 +442,7 @@ export function installMock() {
                 volume: sound.volume,
                 hasHotkey: !!sound.hotkey,
                 isLight: isLight(sound.color),
+                cut: sound.cut ? cutLabel(sound.cut) : null,
               }
             : null,
         };
@@ -640,7 +674,13 @@ export function installMock() {
     send({ kind: "display", data: { kind: "sound", message: plain(`${label(slot)} ${sound.name}`) } });
   }
 
-  function place(slot: number, name: string, path: string, color: string) {
+  function place(
+    slot: number,
+    name: string,
+    path: string,
+    color: string,
+    cut: { startMs: number; endMs: number } | null = null,
+  ) {
     backend.sounds = backend.sounds.filter((item) => !(item.interfaceId === backend.activeId && item.slot === slot));
     backend.sounds.push({
       id: `sound-${++counter}-${slot}`,
@@ -651,6 +691,7 @@ export function installMock() {
       color,
       volume: 1,
       hotkey: null,
+      cut,
     });
     backend.targetSlot = null;
     publish();
@@ -668,6 +709,8 @@ export function installMock() {
   }
 
   let failNextPage = false;
+  /** The sound open in the cut editor. */
+  let cutting: { name: string; path: string } | null = null;
   let trendingCatalog = catalog;
 
   const handlers: Record<string, (args: Args) => unknown> = {
@@ -806,6 +849,60 @@ export function installMock() {
         return Promise.reject(text("CatalogNoConnection"));
       }
       return pageOf(trendingCatalog, page as number);
+    },
+    open_cut_editor: ({ source }) => {
+      const from = source as CutSource;
+      let opened: { name: string; path: string; color: string; cues: number[] };
+      if (from.kind === "catalog") {
+        opened = { name: from.source.name, path: from.source.path, color: from.source.color, cues: [0] };
+      } else if (from.kind === "file") {
+        const name = from.path.split(/[/\\]/).pop()!.replace(/\.[^.]+$/, "");
+        opened = { name, path: from.path, color: PAD_COLORS[0], cues: [0] };
+      } else {
+        const sound = soundAt(from.slot);
+        if (!sound) {
+          fail(text("SoundFileMissing"));
+          return Promise.reject(text("SoundFileMissing"));
+        }
+        const cues = sound.cut
+          ? [sound.cut.startMs, ...(sound.cut.endMs < CUT_DURATION_MS ? [sound.cut.endMs] : [])]
+          : [0];
+        opened = { name: sound.name, path: sound.path, color: sound.color, cues };
+      }
+      cutting = { name: opened.name, path: opened.path };
+      return {
+        name: opened.name,
+        color: opened.color,
+        durationMs: CUT_DURATION_MS,
+        cues: opened.cues,
+        freePads: freeSlots().length,
+      } satisfies CutEditorView;
+    },
+    cut_waveform: ({ startMs, endMs, bars }) => {
+      if (!cutting) return Promise.reject(text("SoundFileMissing"));
+      const [from, to, count] = [startMs as number, endMs as number, bars as number];
+      const peaks = Array.from({ length: count }, (_, bar) => cutLevel(from + ((bar + 0.5) / count) * (to - from)));
+      return { durationMs: CUT_DURATION_MS, peaks };
+    },
+    detect_cues: () => (cutting ? CUT_SOUNDS.map(([start]) => Math.max(0, start - 10)) : Promise.reject(text("SoundFileMissing"))),
+    preview_cut: () => (cutting ? null : Promise.reject(text("SoundFileMissing"))),
+    stop_cut_preview: () => null,
+    place_cuts: ({ pieces }) => {
+      if (!cutting) return Promise.reject(text("SoundFileMissing"));
+      const { path } = cutting;
+      const free = freeSlots();
+      const wanted = pieces as CutPiece[];
+      wanted.slice(0, free.length).forEach((piece, index) => {
+        place(free[index], piece.name.trim() || "-", path, piece.color, { startMs: piece.startMs, endMs: piece.endMs });
+      });
+      const placed = Math.min(free.length, wanted.length);
+      if (wanted.length > free.length) fail(text("InterfaceFullHint"));
+      if (placed > 0) show({ kind: "text", key: "CutsPlaced", args: [plain(String(placed))] });
+      cutting = null;
+      return placed;
+    },
+    close_cut_editor: () => {
+      cutting = null;
     },
     // Only in the browser: the trending sounds become a list long enough to scroll.
     mock_long_catalog: () => {

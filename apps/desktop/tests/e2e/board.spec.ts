@@ -99,6 +99,7 @@ test("the menu of a pad with a sound", async ({ page }) => {
     "Download to computer...",
     "Set shortcut...",
     "Rename...",
+    "Cut into pads...",
     "Volume",
     "Color",
     "Send to interface",

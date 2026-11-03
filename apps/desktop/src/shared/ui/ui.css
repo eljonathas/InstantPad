@@ -132,6 +132,10 @@
   --icon: var(--icon-fullscreen);
 }
 
+.icon-cut {
+  --icon: var(--icon-cut);
+}
+
 .icon-search {
   --icon: var(--icon-search);
 }

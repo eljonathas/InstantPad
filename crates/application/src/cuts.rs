@@ -98,8 +98,17 @@ impl CutSession {
     }
 
     /// Opens a sound in the editor, closing the one that was open. A sound that is not on the
-    /// computer yet is downloaded, and a file of the computer is copied into the app.
+    /// computer yet is downloaded, and a file of the computer is copied into the app. What went
+    /// wrong is also shown on the display, since the editor never opened to show it.
     pub async fn open(&self, source: CutSource) -> Result<CutEditorView, Failure> {
+        let opened = self.try_open(source).await;
+        if let Err(Failure(reason)) = &opened {
+            self.events.emit(AppEvent::error(reason.clone()));
+        }
+        opened
+    }
+
+    async fn try_open(&self, source: CutSource) -> Result<CutEditorView, Failure> {
         self.close();
         let (path, name, color, cut) = match source {
             CutSource::Catalog { source } => {

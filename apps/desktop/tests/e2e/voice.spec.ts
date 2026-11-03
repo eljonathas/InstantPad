@@ -54,7 +54,7 @@ test("the effect keeps working on the Pad screen, and its LED says so", async ({
 test("MyInstants keeps its results across the two screens", async ({ page }) => {
   await page.getByRole("tab", { name: "Pad" }).click();
 
-  await expect(page.locator(".sound-row:visible")).toHaveCount(8);
+  await expect(page.locator(".sound-row:visible")).toHaveCount(24);
 });
 
 test("hearing the voice switches on and shows the keys for the game", async ({ page }) => {

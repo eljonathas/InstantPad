@@ -6,6 +6,7 @@ import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { holdHotkeys } from "../../shared/ui/hotkeyPause";
 import { SoundRow } from "../../shared/ui/SoundRow";
+import { cutEditor } from "../cuts/cutEditorStore";
 import { SoundSkeletons } from "./SoundSkeletons";
 import "./Browser.css";
 
@@ -99,6 +100,11 @@ export function Browser() {
     if (query.trim()) show(query.trim(), 1);
   }
 
+  async function cutFromComputer() {
+    const [path] = await pickAudioFiles(t, false);
+    if (path) await cutEditor.open({ kind: "file", path });
+  }
+
   async function addFromComputer() {
     const paths = await pickAudioFiles(t, true);
     if (paths.length > 0) await commands.importFiles(paths, null);
@@ -144,6 +150,14 @@ export function Browser() {
           onClick={() => void addFromComputer()}
         >
           <i className="icon icon-folder" />
+        </button>
+        <button
+          className="key key-bare browser-key"
+          title={t("CutFromComputer")}
+          aria-label={t("CutFromComputer")}
+          onClick={() => void cutFromComputer()}
+        >
+          <i className="icon icon-cut" />
         </button>
       </div>
       <div className="browser-status">

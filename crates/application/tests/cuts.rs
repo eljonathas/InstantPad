@@ -159,6 +159,7 @@ async fn a_file_that_cannot_be_opened_is_not_kept() {
 
     assert_eq!(failure, Err(Failure::text(TextKey::SoundHasNoAudio)));
     assert!(!editor.world.files.exists("store/broken.mp3"));
+    assert!(editor.saw(&AppEvent::error(Message::text(TextKey::SoundHasNoAudio))));
 }
 
 #[tokio::test]

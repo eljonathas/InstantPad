@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -8,12 +9,12 @@ use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{
     AppUpdater, AudioDevice, AudioMix, AudioRouter, BoardRepository, CatalogPage, EventSink,
     FavoritesRepository, HotkeyHost, NowPlaying, PlaybackTag, SettingsRepository, SoundCatalog,
-    SoundFileStore, SoundPlayer, SpeechConverter, SystemAudio, VirtualCable, VoiceAnalyzer,
-    VoiceChanger, VoiceLibraryRepository, VoiceModels, VoiceRecorder, Waveform,
+    SoundFileStore, SoundPlayer, SpeechConverter, SystemAudio, TrainedVoiceModels, VirtualCable,
+    VoiceAnalyzer, VoiceChanger, VoiceLibraryRepository, VoiceModels, VoiceRecorder, Waveform,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
-use instantpad_domain::cloning::{VoiceLibrary, Voiceprint};
+use instantpad_domain::cloning::{TrainedModel, VoiceLibrary, Voiceprint};
 use instantpad_domain::cuts::Cut;
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
@@ -598,6 +599,7 @@ impl VoiceAnalyzer for FakeAnalyzer {
 #[derive(Default)]
 pub struct FakeConverter {
     pub started: Mutex<Vec<Conversion>>,
+    pub retuned: Mutex<Vec<f32>>,
 }
 
 impl SpeechConverter for FakeConverter {
@@ -605,8 +607,47 @@ impl SpeechConverter for FakeConverter {
         self.started.lock().unwrap().push(conversion.clone());
     }
 
+    fn retune(&self, semitones: f32) {
+        self.retuned.lock().unwrap().push(semitones);
+    }
+
     fn convert(&self, speech: &[f32]) -> Result<Vec<f32>, Failure> {
         Ok(speech.to_vec())
+    }
+}
+
+/// Keeps what it was asked to add, and adds a model named after the folder.
+#[derive(Default)]
+pub struct FakeTrainedModels {
+    pub added: Mutex<Vec<(PathBuf, String)>>,
+    pub removed: Mutex<Vec<String>>,
+    /// Makes adding fail, like a folder the kit did not export.
+    pub fails: Mutex<Option<Failure>>,
+}
+
+#[async_trait]
+impl TrainedVoiceModels for FakeTrainedModels {
+    async fn add(&self, folder: PathBuf, id: String) -> Result<TrainedModel, Failure> {
+        if let Some(failure) = self.fails.lock().unwrap().clone() {
+            return Err(failure);
+        }
+        self.added
+            .lock()
+            .unwrap()
+            .push((folder.clone(), id.clone()));
+        let name = folder
+            .file_name()
+            .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+        Ok(TrainedModel {
+            id,
+            name,
+            credit: "Recordings".to_owned(),
+            pitch_hz: 210.0,
+        })
+    }
+
+    fn remove(&self, id: &str) {
+        self.removed.lock().unwrap().push(id.to_owned());
     }
 }
 

@@ -5,3 +5,4 @@
 - [0003: AI voices run locally, on models downloaded on demand](0003-local-ai-voices.md)
 - [0004: A voice is only cloned with its owner present](0004-voice-cloning-consent.md) (superseded by 0005)
 - [0005: Cloning a voice asks for a sample and a name](0005-voice-cloning-without-checks.md)
+- [0006: A voice can speak through a model trained on it](0006-trained-voice-models.md)

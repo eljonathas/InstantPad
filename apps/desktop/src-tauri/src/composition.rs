@@ -117,6 +117,7 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
             changer: engine.clone(),
             models: ai.clone(),
             analyzer: ai.clone(),
+            trained: ai.clone(),
         },
         recorder.clone(),
         voices.clone(),

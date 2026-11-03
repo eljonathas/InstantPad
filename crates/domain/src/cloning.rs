@@ -1,11 +1,13 @@
 //! Rules for cloning a voice: only from a sample long enough to be faithful. Voices designed
 //! from cloned ones live and die with them.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
 
-use crate::voice::VoicePreset;
+use crate::voice::{VoicePreset, VoiceTarget};
 
 /// Below this, the sample is too short for the AI to catch the voice.
 pub const MIN_SAMPLE_SECONDS: u32 = 20;
@@ -101,6 +103,29 @@ pub enum DesignRefusal {
     UnknownVoice,
 }
 
+/// A model trained on one voice, which speaks with it far more like it than a voiceprint does,
+/// and needs a faster processor. The user trains it with the kit in `tools/voice-training` and
+/// adds it to one of the AI voices.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrainedModel {
+    /// The folder of its files, among the models of the app.
+    pub id: String,
+    /// What the training called it.
+    pub name: String,
+    /// Where its recordings came from.
+    pub credit: String,
+    /// The pitch its voice usually speaks at, which the user's voice is moved to.
+    pub pitch_hz: f32,
+}
+
+impl TrainedModel {
+    /// A folder name for a model being added, which no other model has.
+    pub fn new_id() -> String {
+        Uuid::new_v4().simple().to_string()
+    }
+}
+
 /// The voices the AI knows: the user's own, the ones they cloned and the ones they designed.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -109,6 +134,8 @@ pub struct VoiceLibrary {
     pub own: Option<Voiceprint>,
     pub clones: Vec<ClonedVoice>,
     pub designs: Vec<DesignedVoice>,
+    /// The trained model of each voice that has one, by [`VoiceTarget::key`].
+    pub trained: BTreeMap<String, TrainedModel>,
 }
 
 impl VoiceLibrary {
@@ -215,7 +242,24 @@ impl VoiceLibrary {
             }
             !goes
         });
+        for id in &removed {
+            self.trained.remove(id);
+        }
         removed
+    }
+
+    /// The trained model of a voice, when it has one.
+    pub fn trained_model(&self, target: &VoiceTarget) -> Option<&TrainedModel> {
+        self.trained.get(&target.key())
+    }
+
+    /// Whether a trained model can be added to the voice: a voice that is there and is not
+    /// designed, because a design is a recipe of other voices rather than a voice of its own.
+    pub fn takes_trained_model(&self, target: &VoiceTarget) -> bool {
+        match target {
+            VoiceTarget::Preset(preset) => *preset == VoicePreset::Feminine,
+            VoiceTarget::Own(id) => self.clone_voice(id).is_some(),
+        }
     }
 }
 

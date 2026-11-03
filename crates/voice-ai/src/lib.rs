@@ -5,21 +5,29 @@ mod pack;
 mod presets;
 mod resample;
 mod runtime;
+mod rvc;
 mod stft;
 mod stream;
+mod trained;
+mod yin;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use async_trait::async_trait;
 use instantpad_application::message::Failure;
-use instantpad_application::ports::{SpeechConverter, VoiceAnalyzer, VoiceModels};
-use instantpad_domain::cloning::Voiceprint;
+use instantpad_application::ports::{
+    SpeechConverter, TrainedVoiceModels, VoiceAnalyzer, VoiceModels,
+};
+use instantpad_domain::cloning::{TrainedModel, Voiceprint};
 use instantpad_domain::voice::{Conversion, VoicePreset};
+use ort::session::Session;
+use ort::value::{Tensor, TensorRef};
 
 use crate::openvoice::Spectrogram;
 use crate::resample::{SPEECH_RATE, StreamResampler, resample};
 use crate::runtime::{Cached, load_failed, session};
+use crate::rvc::{FEATURES, Models, TrainedStream, Words};
 use crate::stream::Stream;
 
 // The smallest blocks of speech that 48 kHz and 22.05 kHz divide into, one way and the other.
@@ -31,7 +39,11 @@ pub struct OnnxVoices {
     /// The only model that stays loaded, because the conversion runs all the time. The one that
     /// hears a voice serves a calibration or a clone now and then, and is loaded for each.
     tone_color: Cached,
+    /// What the trained voices hear with, which stays loaded while one of them speaks.
+    content: Cached,
     requested: Mutex<Option<Conversion>>,
+    /// A new pitch for the trained voice that speaks, asked for since the last time.
+    retuned: Mutex<Option<f32>>,
     /// The conversion in progress, which only the thread that converts uses.
     conversion: Mutex<Option<Running>>,
 }
@@ -42,7 +54,9 @@ impl OnnxVoices {
         Self {
             folder: folder.to_owned(),
             tone_color: Cached::new(folder, pack::TONE_COLOR),
+            content: Cached::new(folder, rvc::CONTENT),
             requested: Mutex::new(None),
+            retuned: Mutex::new(None),
             conversion: Mutex::new(None),
         }
     }
@@ -99,8 +113,59 @@ impl VoiceAnalyzer for OnnxVoices {
     }
 }
 
+#[async_trait]
+impl TrainedVoiceModels for OnnxVoices {
+    async fn add(&self, folder: PathBuf, id: String) -> Result<TrainedModel, Failure> {
+        let models = self.folder.clone();
+        blocking(move || {
+            let model = trained::add(&models, &folder, &id)?;
+            // Loading it is the only way to know the runtime can run it.
+            if let Err(failure) = session(&models, &synthesizer_path(&model)) {
+                trained::remove(&models, &id);
+                return Err(failure);
+            }
+            Ok(model)
+        })
+        .await
+    }
+
+    fn remove(&self, id: &str) {
+        trained::remove(&self.folder, id);
+    }
+}
+
 /// What a conversion keeps between one stretch of speech and the next.
-struct Running {
+/// Both kinds keep resamplers far larger than the rest, so they are boxed.
+enum Running {
+    Timbre(Box<Timbre>),
+    Trained {
+        stream: Box<TrainedStream>,
+        synthesizer: Session,
+    },
+}
+
+impl Running {
+    /// Loads what the conversion needs that is not loaded yet.
+    fn start(folder: &Path, conversion: &Conversion) -> Result<Self, Failure> {
+        Ok(match conversion {
+            Conversion::Timbre { source, target } => {
+                Self::Timbre(Box::new(Timbre::new(source, target)))
+            }
+            Conversion::Trained { model, semitones } => Self::Trained {
+                stream: Box::new(TrainedStream::new(model.pitch_hz, *semitones)),
+                synthesizer: session(folder, &synthesizer_path(model))?,
+            },
+        })
+    }
+}
+
+/// The synthesizer of a trained model, from the model folder.
+fn synthesizer_path(model: &TrainedModel) -> String {
+    format!("{}/{}/{}", rvc::TRAINED, model.id, rvc::SYNTHESIZER)
+}
+
+/// What a conversion of the timbre keeps.
+struct Timbre {
     source: Vec<f32>,
     target: Vec<f32>,
     down: StreamResampler,
@@ -111,17 +176,74 @@ struct Running {
     heard: Vec<f32>,
 }
 
-impl Running {
-    fn new(conversion: &Conversion) -> Self {
+impl Timbre {
+    fn new(source: &Voiceprint, target: &Voiceprint) -> Self {
         Self {
-            source: conversion.source.values().to_vec(),
-            target: conversion.target.values().to_vec(),
+            source: source.values().to_vec(),
+            target: target.values().to_vec(),
             down: StreamResampler::new(SPEECH_RATE, openvoice::RATE, DOWN_BLOCK),
             stream: Stream::default(),
             up: StreamResampler::new(openvoice::RATE, SPEECH_RATE, UP_BLOCK),
             spectrogram: Spectrogram::new(),
             heard: Vec::new(),
         }
+    }
+
+    fn convert(&mut self, tone_color: &Cached, speech: &[f32]) -> Result<Vec<f32>, Failure> {
+        self.heard.clear();
+        self.down.push(speech, &mut self.heard);
+        let converted = self.stream.convert(&self.heard, &mut |window| {
+            tone_color.with(|session| {
+                openvoice::convert(
+                    session,
+                    &mut self.spectrogram,
+                    window,
+                    &self.source,
+                    &self.target,
+                )
+            })
+        })?;
+
+        let mut converted_speech = Vec::new();
+        self.up.push(&converted, &mut converted_speech);
+        Ok(converted_speech)
+    }
+}
+
+/// The models of a trained voice as ONNX Runtime runs them.
+struct TrainedModels<'a> {
+    content: &'a Cached,
+    synthesizer: &'a mut Session,
+}
+
+impl Models for TrainedModels<'_> {
+    fn content(&mut self, speech: &[f32]) -> Result<Vec<f32>, Failure> {
+        self.content.with(|session| {
+            let outputs = session.run(ort::inputs![
+                "audio" => TensorRef::from_array_view(([1, speech.len()], speech))?,
+            ])?;
+            let (_, features) = outputs["features"].try_extract_tensor::<f32>()?;
+            Ok(features.to_vec())
+        })
+    }
+
+    fn speak(&mut self, words: &Words) -> Result<Vec<f32>, Failure> {
+        let frames = words.frames();
+        let spoken = words.pitchf.len();
+        let flow = words.noise.len() / 192;
+        let mut run = || -> ort::Result<Vec<f32>> {
+            let outputs = self.synthesizer.run(ort::inputs![
+                "phone" => TensorRef::from_array_view(([1, frames, FEATURES], words.phone))?,
+                "phone_lengths" => Tensor::from_array(([1], vec![frames as i64]))?,
+                "pitch" => TensorRef::from_array_view(([1, frames], words.pitch))?,
+                "pitchf" => TensorRef::from_array_view(([1, spoken], words.pitchf))?,
+                "sid" => Tensor::from_array(([1], vec![0_i64]))?,
+                "noise" => TensorRef::from_array_view(([1, 192, flow], words.noise))?,
+            ])?;
+            let (_, audio) = outputs["audio"].try_extract_tensor::<f32>()?;
+            Ok(audio.to_vec())
+        };
+        run().map_err(load_failed)
     }
 }
 
@@ -130,36 +252,51 @@ impl SpeechConverter for OnnxVoices {
     /// in the middle of a stretch. The thread that converts starts over at its next call, and
     /// that is where the model loads.
     fn start(&self, conversion: &Conversion) {
+        // Cleared first, so a conversion that starts in between never takes the pitch of the
+        // one before.
+        *self.retuned.lock().unwrap() = None;
         *self.requested.lock().unwrap() = Some(conversion.clone());
+    }
+
+    fn retune(&self, semitones: f32) {
+        *self.retuned.lock().unwrap() = Some(semitones);
     }
 
     fn convert(&self, speech: &[f32]) -> Result<Vec<f32>, Failure> {
         let mut conversion = self.conversion.lock().unwrap();
         if let Some(speakers) = self.take_request() {
-            *conversion = Some(Running::new(&speakers));
+            *conversion = None;
+            let mut running = Running::start(&self.folder, &speakers)?;
+            // Both models load and run once now, in the first call of the conversion, which
+            // may take long. Loading HuBERT at the first block instead, once the conversion
+            // counts as warm, would pile up a second of voice and be taken for falling behind.
+            if let Running::Trained { synthesizer, .. } = &mut running {
+                rvc::warm_up(&mut TrainedModels {
+                    content: &self.content,
+                    synthesizer,
+                })?;
+            }
+            *conversion = Some(running);
         }
+        let retuned = self.retuned.lock().unwrap().take();
         // With nobody to turn the voice into yet, nothing comes out.
-        let Some(running) = conversion.as_mut() else {
-            return Ok(Vec::new());
-        };
-
-        running.heard.clear();
-        running.down.push(speech, &mut running.heard);
-        let converted = running.stream.convert(&running.heard, &mut |window| {
-            self.tone_color.with(|session| {
-                openvoice::convert(
-                    session,
-                    &mut running.spectrogram,
-                    window,
-                    &running.source,
-                    &running.target,
-                )
-            })
-        })?;
-
-        let mut converted_speech = Vec::new();
-        running.up.push(&converted, &mut converted_speech);
-        Ok(converted_speech)
+        match conversion.as_mut() {
+            None => Ok(Vec::new()),
+            Some(Running::Timbre(timbre)) => timbre.convert(&self.tone_color, speech),
+            Some(Running::Trained {
+                stream,
+                synthesizer,
+            }) => {
+                if let Some(semitones) = retuned {
+                    stream.retune(semitones);
+                }
+                let mut models = TrainedModels {
+                    content: &self.content,
+                    synthesizer,
+                };
+                stream.convert(speech, &mut models)
+            }
+        }
     }
 }
 
@@ -175,7 +312,7 @@ mod tests {
 
     fn conversion(source: VoicePreset, target: VoicePreset) -> Conversion {
         let voices = empty_folder();
-        Conversion {
+        Conversion::Timbre {
             source: voices.preset(source),
             target: voices.preset(target),
         }

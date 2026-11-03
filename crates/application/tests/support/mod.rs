@@ -21,8 +21,8 @@ use instantpad_domain::cloning::{
 use instantpad_domain::voice::VoiceSettings;
 use instantpad_test_support::fakes::{
     FakeAnalyzer, FakeCatalog, FakeFileStore, FakeHotkeyHost, FakeModels, FakePlayer, FakeRecorder,
-    FakeVoiceChanger, InMemoryBoard, InMemoryFavorites, InMemorySettings, InMemoryVoiceLibrary,
-    RecordingEvents,
+    FakeTrainedModels, FakeVoiceChanger, InMemoryBoard, InMemoryFavorites, InMemorySettings,
+    InMemoryVoiceLibrary, RecordingEvents,
 };
 
 pub struct World {
@@ -113,6 +113,7 @@ pub struct VoiceWorld {
     pub changer: Arc<FakeVoiceChanger>,
     pub models: Arc<FakeModels>,
     pub analyzer: Arc<FakeAnalyzer>,
+    pub trained: Arc<FakeTrainedModels>,
     pub recorder: Arc<FakeRecorder>,
     /// The recorder as the use cases share it.
     pub microphone: Arc<SharedRecorder>,
@@ -160,6 +161,7 @@ impl VoiceWorld {
         let models = Arc::new(FakeModels::default());
         *models.is_installed.lock().unwrap() = has_models;
         let analyzer = Arc::new(FakeAnalyzer::default());
+        let trained = Arc::new(FakeTrainedModels::default());
         let recorder = Arc::new(FakeRecorder::default());
         let microphone = Arc::new(SharedRecorder::new(recorder.clone()));
         let repository = Arc::new(InMemoryVoiceLibrary {
@@ -179,6 +181,7 @@ impl VoiceWorld {
                 changer: changer.clone(),
                 models: models.clone(),
                 analyzer: analyzer.clone(),
+                trained: trained.clone(),
             },
             microphone.clone(),
             library.clone(),
@@ -190,6 +193,7 @@ impl VoiceWorld {
             changer,
             models,
             analyzer,
+            trained,
             recorder,
             microphone,
             repository,

@@ -1,5 +1,7 @@
+use std::path::PathBuf;
+
 use instantpad_domain::cloning::VoiceRecipe;
-use instantpad_domain::voice::{VoiceEffect, VoiceParam};
+use instantpad_domain::voice::{VoiceEffect, VoiceEngine, VoiceParam};
 use tauri::State;
 
 use crate::composition::Core;
@@ -75,4 +77,36 @@ pub fn end_voice_preview(core: State<'_, Core>) {
 #[specta::specta]
 pub fn save_designed_voice(core: State<'_, Core>, name: String, recipe: VoiceRecipe) {
     core.voice.save_design(&name, recipe);
+}
+
+/// Adds the voice the training kit exported to `folder` to an AI voice.
+#[tauri::command]
+#[specta::specta]
+pub async fn add_trained_model(
+    core: State<'_, Core>,
+    effect: VoiceEffect,
+    clone_id: Option<String>,
+    folder: String,
+) -> Result<(), ()> {
+    core.voice
+        .add_trained_model(effect, clone_id, PathBuf::from(folder))
+        .await;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn remove_trained_model(core: State<'_, Core>, effect: VoiceEffect, clone_id: Option<String>) {
+    core.voice.remove_trained_model(effect, clone_id);
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_voice_engine(
+    core: State<'_, Core>,
+    effect: VoiceEffect,
+    clone_id: Option<String>,
+    engine: VoiceEngine,
+) {
+    core.voice.set_engine(effect, clone_id, engine);
 }

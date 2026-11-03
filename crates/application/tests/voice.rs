@@ -9,7 +9,7 @@ use instantpad_domain::cloning::{
     DEFAULT_BLEND, DEFAULT_TIMBRE, MIN_CALIBRATION_SECONDS, VoiceLibrary, VoiceRecipe, Voiceprint,
 };
 use instantpad_domain::voice::{
-    PitchShape, VoiceEffect, VoiceParam, VoicePreset, VoiceSettings, VoiceTarget,
+    Conversion, PitchShape, VoiceEffect, VoiceParam, VoicePreset, VoiceSettings, VoiceTarget,
 };
 use instantpad_test_support::fakes::FakeAnalyzer;
 use support::{VoiceWorld, cloned_voice, own_voice, poll_once, speech, talking};
@@ -72,10 +72,10 @@ fn an_ai_effect_hands_the_engine_its_chain_and_the_voice_of_the_preset() {
 
     assert_eq!(world.voice.view().active, VoiceEffect::FeminineAi);
     assert_eq!(pitch_of(&world), 8.0);
-    let conversion = world.changer.conversion.lock().unwrap().clone().unwrap();
-    assert_eq!(conversion.source, own_voice());
+    let (source, target) = speakers(&world);
+    assert_eq!(source, own_voice());
     assert_eq!(
-        conversion.target,
+        target,
         FakeAnalyzer::default().preset(VoicePreset::Feminine)
     );
 }
@@ -102,8 +102,8 @@ fn a_cloned_voice_hands_the_engine_its_voiceprint() {
         active(&world.voice.view()),
         (VoiceEffect::Cloned, Some("a"))
     );
-    let conversion = world.changer.conversion.lock().unwrap().clone().unwrap();
-    assert_eq!(conversion.target, cloned_voice("a", "Ana").voiceprint);
+    let (_, target) = speakers(&world);
+    assert_eq!(target, cloned_voice("a", "Ana").voiceprint);
     assert_eq!(
         world.settings.lock().voice.target(),
         Some(VoiceTarget::Own("a".to_owned()))
@@ -541,14 +541,15 @@ fn assert_close(heard: &Voiceprint, expected: [f32; 2]) {
 }
 
 fn target_of(world: &VoiceWorld) -> Voiceprint {
-    world
-        .changer
-        .conversion
-        .lock()
-        .unwrap()
-        .clone()
-        .unwrap()
-        .target
+    speakers(world).1
+}
+
+/// The user and the voice the engine was asked to change the timbre between.
+fn speakers(world: &VoiceWorld) -> (Voiceprint, Voiceprint) {
+    match world.changer.conversion.lock().unwrap().clone() {
+        Some(Conversion::Timbre { source, target }) => (source, target),
+        other => panic!("expected a change of timbre, got {other:?}"),
+    }
 }
 
 /// Two cloned voices that sound different, and the models and the own voice ready.
@@ -585,10 +586,10 @@ fn a_preview_sends_the_designed_voice_with_the_pitch_of_the_own_voice() {
     let chain = world.changer.chain.lock().unwrap().unwrap();
     assert_eq!(chain, world.settings.lock().voice.own_voice_chain());
     assert_eq!(chain.pitch, PitchShape::Fixed { semitones: 8.0 });
-    let conversion = world.changer.conversion.lock().unwrap().clone().unwrap();
-    assert_eq!(conversion.source, own_voice());
+    let (source, target) = speakers(&world);
+    assert_eq!(source, own_voice());
     // The voice of "a" moved 0.6 of the way to the masculine preset.
-    assert_close(&conversion.target, [0.24, -0.28]);
+    assert_close(&target, [0.24, -0.28]);
     assert_eq!(world.voice.view().active, VoiceEffect::Natural);
     assert!(designs(&world).is_empty());
 }

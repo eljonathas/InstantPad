@@ -1,8 +1,10 @@
 //! Every port the use cases depend on. Adapters live in other crates.
 
+use std::path::PathBuf;
+
 use async_trait::async_trait;
 use instantpad_domain::board::PadBoard;
-use instantpad_domain::cloning::{VoiceLibrary, Voiceprint};
+use instantpad_domain::cloning::{TrainedModel, VoiceLibrary, Voiceprint};
 use instantpad_domain::cuts::Cut;
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
@@ -179,6 +181,18 @@ pub trait VoiceModels: Send + Sync {
     async fn install(&self, progress: &(dyn Fn(u8) + Send + Sync)) -> Result<(), Failure>;
 }
 
+/// Models trained on a voice with the kit in `tools/voice-training`, which the user adds to one
+/// of the AI voices.
+#[async_trait]
+pub trait TrainedVoiceModels: Send + Sync {
+    /// Checks the voice the kit exported to `folder` and keeps a copy of it as the model `id`.
+    /// The AI models must be installed, because the check loads it.
+    async fn add(&self, folder: PathBuf, id: String) -> Result<TrainedModel, Failure>;
+
+    /// Deletes the files of a model no voice uses anymore.
+    fn remove(&self, id: &str);
+}
+
 /// Listens to speech with the AI models, which must be installed. Speech is mono at 48 kHz.
 #[async_trait]
 pub trait VoiceAnalyzer: Send + Sync {
@@ -194,6 +208,10 @@ pub trait SpeechConverter: Send + Sync {
     /// Starts over with new speakers, dropping anything half converted. Cheap: the work, and
     /// any failure, comes with the next `convert`.
     fn start(&self, conversion: &Conversion);
+
+    /// Moves the pitch of the trained voice that speaks, without starting over, which a knob
+    /// asks for at every step.
+    fn retune(&self, _semitones: f32) {}
 
     /// Takes the next stretch of voice and returns the converted voice that is ready, which
     /// comes out later and in larger pieces than it went in.

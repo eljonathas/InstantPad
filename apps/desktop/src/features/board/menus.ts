@@ -12,6 +12,7 @@ export interface PadMenuActions {
   setShortcut: () => void;
   removeShortcut: () => void;
   rename: () => void;
+  cut: () => void;
   setVolume: (volume: number) => void;
   setColor: (color: string) => void;
   sendTo: (interfaceId: string) => void;
@@ -36,6 +37,7 @@ export function padMenu(
     { label: t("MenuSetShortcut"), run: run.setShortcut },
     ...(sound.hasHotkey ? [{ label: t("MenuRemoveShortcut"), run: run.removeShortcut }] : []),
     { label: t("MenuRename"), run: run.rename },
+    { label: t("MenuCutIntoPads"), run: run.cut },
     {
       label: t("Volume"),
       children: VOLUME_PERCENTS.map((percent) => ({

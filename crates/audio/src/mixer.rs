@@ -4,6 +4,7 @@
 //! frees or blocks. [`MixerHandle`] stays with the control side and talks to it through
 //! lock-free queues.
 
+use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -31,15 +32,17 @@ struct Voice {
     clip: Arc<SoundClip>,
     volume: f32,
     position: usize,
+    /// Where the voice stops, as a sample index into the clip: its end, or the end of a cut.
+    end: usize,
 }
 
 impl Voice {
     fn finished(&self) -> bool {
-        self.position >= self.clip.samples().len()
+        self.position >= self.end
     }
 
     fn mix_into(&mut self, block: &mut [f32]) {
-        let rest = &self.clip.samples()[self.position..];
+        let rest = &self.clip.samples()[self.position..self.end];
         let mixed = block.len().min(rest.len());
         for (out, sample) in block.iter_mut().zip(rest) {
             *out += sample * self.volume;
@@ -93,7 +96,14 @@ pub(crate) fn pair(controls: Arc<Controls>, mic: Option<MicSlot>) -> (Mixer, Mix
 }
 
 impl MixerHandle {
-    pub(crate) fn add(&mut self, clip: Arc<SoundClip>, volume: f32, tag: PlaybackTag) {
+    /// Plays the samples of `range` of the clip, which must be inside it.
+    pub(crate) fn add(
+        &mut self,
+        clip: Arc<SoundClip>,
+        range: Range<usize>,
+        volume: f32,
+        tag: PlaybackTag,
+    ) {
         self.collect_finished();
         let id = self.next_id;
         self.next_id += 1;
@@ -102,12 +112,20 @@ impl MixerHandle {
             tag,
             clip,
             volume,
-            position: 0,
+            position: range.start,
+            end: range.end,
         };
         // A full queue means the callback is not running, and this voice would never finish.
         if self.commands.push(Command::Add(voice)).is_ok() {
             self.playing.push((id, tag));
         }
+    }
+
+    /// Plays the whole clip.
+    #[cfg(test)]
+    pub(crate) fn add_whole(&mut self, clip: Arc<SoundClip>, volume: f32, tag: PlaybackTag) {
+        let range = clip.range(None);
+        self.add(clip, range, volume, tag);
     }
 
     pub(crate) fn remove(&mut self, tag: PlaybackTag) {
@@ -262,7 +280,7 @@ mod tests {
         let tag = PlaybackTag::of("a");
 
         for _ in 0..RETURN_CAPACITY * 2 {
-            handle.add(clip(0.1, 2), 1.0, tag);
+            handle.add_whole(clip(0.1, 2), 1.0, tag);
             mixer.render(&mut [0.0; 4]);
         }
 
@@ -273,7 +291,7 @@ mod tests {
     fn finished_voices_leave_the_mixer() {
         let (mut mixer, mut handle, _) = mixer();
         let tag = PlaybackTag::of("a");
-        handle.add(clip(0.1, 100), 1.0, tag);
+        handle.add_whole(clip(0.1, 100), 1.0, tag);
         assert!(handle.is_playing(tag));
 
         mixer.render(&mut [0.0; 200]);
@@ -282,11 +300,26 @@ mod tests {
     }
 
     #[test]
+    fn a_voice_plays_only_its_range_and_ends_there() {
+        let (mut mixer, mut handle, _) = mixer();
+        let ramp: Vec<f32> = (0..100).map(|n| n as f32 / 1000.0).collect();
+        let tag = PlaybackTag::of("a");
+        handle.add(Arc::new(SoundClip::new(ramp.clone())), 20..40, 1.0, tag);
+
+        let mut block = [0.0; 100];
+        mixer.render(&mut block);
+
+        assert_eq!(block[..20], ramp[20..40]);
+        assert!(block[20..].iter().all(|&sample| sample == 0.0));
+        assert!(!handle.is_playing(tag));
+    }
+
+    #[test]
     fn overlapping_sounds_never_clip() {
         let (mut mixer, mut handle, controls) = mixer();
         let tag = PlaybackTag::of("a");
-        handle.add(clip(0.9, 4800), 1.0, tag);
-        handle.add(clip(0.9, 4800), 1.0, tag);
+        handle.add_whole(clip(0.9, 4800), 1.0, tag);
+        handle.add_whole(clip(0.9, 4800), 1.0, tag);
 
         let mut block = [0.0; 4800];
         mixer.render(&mut block);
@@ -307,7 +340,7 @@ mod tests {
     fn sound_volume_scales_the_voices() {
         let (mut mixer, mut handle, controls) = mixer();
         controls.sound_volume.store(0.5);
-        handle.add(clip(0.4, 4800), 1.0, PlaybackTag::of("a"));
+        handle.add_whole(clip(0.4, 4800), 1.0, PlaybackTag::of("a"));
 
         let mut block = [0.0; 100];
         mixer.render(&mut block);
@@ -318,7 +351,7 @@ mod tests {
     #[test]
     fn a_voice_volume_scales_only_that_voice() {
         let (mut mixer, mut handle, _) = mixer();
-        handle.add(clip(0.4, 4800), 0.5, PlaybackTag::of("a"));
+        handle.add_whole(clip(0.4, 4800), 0.5, PlaybackTag::of("a"));
 
         let mut block = [0.0; 100];
         mixer.render(&mut block);
@@ -330,8 +363,8 @@ mod tests {
     fn stopping_by_tag_leaves_other_sounds_playing() {
         let (mut mixer, mut handle, _) = mixer();
         let (stopped, kept) = (PlaybackTag::of("stopped"), PlaybackTag::of("kept"));
-        handle.add(clip(0.1, 4800), 1.0, stopped);
-        handle.add(clip(0.2, 4800), 1.0, kept);
+        handle.add_whole(clip(0.1, 4800), 1.0, stopped);
+        handle.add_whole(clip(0.2, 4800), 1.0, kept);
 
         handle.remove(stopped);
         let mut block = [0.0; 100];
@@ -346,7 +379,7 @@ mod tests {
     fn clearing_stops_every_sound() {
         let (mut mixer, mut handle, _) = mixer();
         let tag = PlaybackTag::of("a");
-        handle.add(clip(0.1, 4800), 1.0, tag);
+        handle.add_whole(clip(0.1, 4800), 1.0, tag);
 
         handle.clear();
         let mut block = [1.0; 100];
@@ -361,7 +394,7 @@ mod tests {
         let (mut mixer, mut handle, _) = mixer();
         let tag = PlaybackTag::of("a");
         for _ in 0..=MAX_VOICES {
-            handle.add(clip(0.001, 100), 1.0, tag);
+            handle.add_whole(clip(0.001, 100), 1.0, tag);
         }
 
         mixer.render(&mut [0.0; 50]);

@@ -172,7 +172,7 @@ async fn one_sound_at_a_time_also_covers_the_rows() {
     let target = world.board.pad_on_screen(0);
     world
         .board
-        .place(&target, "a", "a.mp3", "#ff0000")
+        .place(&target, "a", "a.mp3", "#ff0000", None)
         .await
         .unwrap();
     world.board.press_pad(0).await;
@@ -401,6 +401,17 @@ async fn press_again_to_stop_starts_off_and_is_remembered() {
 
     assert!(setup.session.view().press_again_to_stop);
     assert!(setup.world.settings.lock().press_again_to_stop);
+}
+
+#[tokio::test]
+async fn quiet_updates_start_off_and_are_remembered() {
+    let setup = setup();
+    assert!(!setup.session.view().quiet_updates);
+
+    setup.session.set_quiet_updates(true);
+
+    assert!(setup.session.view().quiet_updates);
+    assert!(setup.world.settings.lock().quiet_updates);
 }
 
 #[tokio::test]

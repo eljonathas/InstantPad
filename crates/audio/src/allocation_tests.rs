@@ -150,9 +150,9 @@ fn mixing_allocates_and_frees_nothing() {
     let (mut mixer, mut handle, controls) = game_mixer();
     controls.sound_volume.store(0.7);
     let (kept, stopped) = (PlaybackTag::of("kept"), PlaybackTag::of("stopped"));
-    handle.add(clip(0.6, 10_000), 0.9, kept);
-    handle.add(clip(0.6, 10_000), 0.9, stopped);
-    handle.add(clip(0.5, 100), 1.0, kept);
+    handle.add_whole(clip(0.6, 10_000), 0.9, kept);
+    handle.add_whole(clip(0.6, 10_000), 0.9, stopped);
+    handle.add_whole(clip(0.5, 100), 1.0, kept);
     handle.remove(stopped);
     let mut block = vec![0.0; samples_for(30)];
 
@@ -170,12 +170,12 @@ fn mixing_allocates_and_frees_nothing() {
 fn stopping_everything_and_starting_more_than_fit_allocates_and_frees_nothing() {
     let (mut mixer, mut handle, _) = game_mixer();
     for index in 0..100 {
-        handle.add(clip(0.1, 1000), 1.0, PlaybackTag(index));
+        handle.add_whole(clip(0.1, 1000), 1.0, PlaybackTag(index));
     }
     let mut block = vec![0.0; samples_for(10)];
     mixer.render(&mut block);
     handle.clear();
-    handle.add(clip(0.1, 1000), 1.0, PlaybackTag(0));
+    handle.add_whole(clip(0.1, 1000), 1.0, PlaybackTag(0));
 
     let requests = requests_during(|| {
         mixer.render(&mut block);
@@ -366,7 +366,7 @@ fn capturing_integers_at_the_engine_rate_allocates_and_frees_nothing() {
 #[test]
 fn playing_on_a_device_that_needs_conversion_allocates_and_frees_nothing() {
     let (mixer, mut handle, _) = game_mixer();
-    handle.add(clip(0.4, 20_000), 1.0, PlaybackTag::of("a"));
+    handle.add_whole(clip(0.4, 20_000), 1.0, PlaybackTag::of("a"));
     let mut playback = Playback::new(mixer, Some(Conversion::new(6, 44_100).unwrap()));
     let mut block = vec![0.0; 6 * 441];
 

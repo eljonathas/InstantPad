@@ -132,6 +132,10 @@
   --icon: var(--icon-fullscreen);
 }
 
+.icon-cut {
+  --icon: var(--icon-cut);
+}
+
 .icon-search {
   --icon: var(--icon-search);
 }
@@ -278,4 +282,71 @@ select.field option {
 
 body[data-dragging] {
   cursor: grabbing;
+}
+
+/* Switch: a setting that is on or off */
+.switch {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  width: 100%;
+  margin: 0 0 var(--space-6);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.switch-label {
+  color: var(--color-white);
+}
+
+.switch-hint {
+  color: var(--color-lcd-dim);
+}
+
+.switch-track {
+  position: relative;
+  flex: none;
+  width: var(--switch-width);
+  height: var(--switch-height);
+  margin-top: var(--space-1);
+  border-radius: var(--switch-height);
+  background: var(--color-led-off);
+  transition: background var(--switch-time);
+}
+
+.switch-thumb {
+  position: absolute;
+  top: var(--switch-gap);
+  left: var(--switch-gap);
+  width: var(--switch-thumb);
+  height: var(--switch-thumb);
+  border-radius: 50%;
+  background: var(--color-white);
+  transition: transform var(--switch-time);
+}
+
+.switch[aria-checked="true"] .switch-track {
+  background: var(--color-accent);
+}
+
+.switch[aria-checked="true"] .switch-thumb {
+  transform: translateX(calc(var(--switch-width) - var(--switch-thumb) - 2 * var(--switch-gap)));
+}
+
+.switch:focus-visible .switch-track {
+  outline: var(--border-width) solid var(--color-accent);
+  outline-offset: var(--switch-gap);
 }

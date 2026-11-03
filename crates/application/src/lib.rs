@@ -2,6 +2,7 @@
 
 pub mod board;
 pub mod cloning;
+pub mod cuts;
 pub mod events;
 pub mod favorites;
 pub mod hotkeys;

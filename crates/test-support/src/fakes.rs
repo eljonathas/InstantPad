@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -9,11 +9,12 @@ use instantpad_application::ports::{
     AppUpdater, AudioDevice, AudioMix, AudioRouter, BoardRepository, CatalogPage, EventSink,
     FavoritesRepository, HotkeyHost, NowPlaying, PlaybackTag, SettingsRepository, SoundCatalog,
     SoundFileStore, SoundPlayer, SpeechConverter, SystemAudio, VirtualCable, VoiceAnalyzer,
-    VoiceChanger, VoiceLibraryRepository, VoiceModels, VoiceRecorder,
+    VoiceChanger, VoiceLibraryRepository, VoiceModels, VoiceRecorder, Waveform,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
 use instantpad_domain::cloning::{VoiceLibrary, Voiceprint};
+use instantpad_domain::cuts::Cut;
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
 use instantpad_domain::voice::{Conversion, VoiceChain, VoicePreset};
@@ -33,6 +34,14 @@ pub struct FakePlayer {
     pub forgotten: Mutex<Vec<String>>,
     /// Paths that fail like a file that cannot be decoded.
     pub broken: Mutex<HashSet<String>>,
+    /// The cut each play and preview asked for, in order.
+    pub cuts: Mutex<Vec<Option<Cut>>>,
+    /// How long each sound lasts. A sound not here lasts ten seconds.
+    pub durations: Mutex<HashMap<String, u32>>,
+    /// How loud each sound is along the way, one value per 10 ms. Silent when not here.
+    pub levels: Mutex<HashMap<String, Vec<f32>>>,
+    /// Runs while a sound is being loaded, for what the user does meanwhile.
+    pub meanwhile: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
 }
 
 impl FakePlayer {
@@ -47,21 +56,70 @@ impl FakePlayer {
 #[async_trait]
 impl SoundPlayer for FakePlayer {
     async fn preload(&self, path: &str) -> Result<(), Failure> {
+        if let Some(meanwhile) = &*self.meanwhile.lock().unwrap() {
+            meanwhile();
+        }
         self.check(path)
     }
 
-    async fn play(&self, path: &str, _volume: f32, tag: PlaybackTag) -> Result<(), Failure> {
+    async fn play(
+        &self,
+        path: &str,
+        _volume: f32,
+        tag: PlaybackTag,
+        cut: Option<Cut>,
+    ) -> Result<(), Failure> {
         self.check(path)?;
+        self.cuts.lock().unwrap().push(cut);
         self.played.lock().unwrap().push(path.to_owned());
         self.playing.lock().unwrap().insert(tag);
         Ok(())
     }
 
-    async fn preview(&self, path: &str, _volume: f32, tag: PlaybackTag) -> Result<(), Failure> {
+    async fn preview(
+        &self,
+        path: &str,
+        _volume: f32,
+        tag: PlaybackTag,
+        cut: Option<Cut>,
+    ) -> Result<(), Failure> {
         self.check(path)?;
+        self.cuts.lock().unwrap().push(cut);
         self.previewed.lock().unwrap().push(path.to_owned());
         self.playing.lock().unwrap().insert(tag);
         Ok(())
+    }
+
+    async fn waveform(
+        &self,
+        path: &str,
+        _start_ms: u32,
+        _end_ms: u32,
+        bars: u32,
+    ) -> Result<Waveform, Failure> {
+        self.check(path)?;
+        let duration_ms = self
+            .durations
+            .lock()
+            .unwrap()
+            .get(path)
+            .copied()
+            .unwrap_or(10_000);
+        Ok(Waveform {
+            duration_ms,
+            peaks: vec![0.5; bars as usize],
+        })
+    }
+
+    async fn levels(&self, path: &str, _frame_ms: u32) -> Result<Vec<f32>, Failure> {
+        self.check(path)?;
+        Ok(self
+            .levels
+            .lock()
+            .unwrap()
+            .get(path)
+            .cloned()
+            .unwrap_or_default())
     }
 
     fn forget(&self, path: &str) {

@@ -58,7 +58,7 @@ Também dá para baixar o `.dmg` e arrastar o InstantPad para Aplicativos. Nesse
 
 ### Atualizações
 
-O InstantPad procura uma versão nova ao abrir e baixa em segundo plano, conferindo a assinatura. A versão nova é aplicada quando você fecha o app, ou na hora com **Reiniciar agora** em **Ajustes**. Ele nunca reinicia sozinho, então uma atualização não interrompe sua partida.
+O InstantPad procura uma versão nova ao abrir e baixa em segundo plano, conferindo a assinatura. Quando o download termina, uma janela avisa, uma vez por versão, com **Reiniciar agora** e **Depois**. Marque a caixa nela para a janela não aparecer mais: a versão nova fica esperando em **Ajustes**, em **Atualização**, onde o interruptor traz a janela de volta. De um jeito ou de outro, a versão nova é aplicada quando você fecha o app, ou na hora com **Reiniciar agora**. Ele nunca reinicia sozinho, então uma atualização não interrompe sua partida.
 
 ## Configure o jogo ou o Discord
 
@@ -98,6 +98,15 @@ Só uma cópia do app roda por vez. Abrir de novo traz a janela que já existe p
 ### Interfaces
 
 Crie quantas interfaces quiser com **+**. Cada uma tem nome, cor e grade próprios, de até 8 linhas por 10 colunas. A engrenagem (**Configurar esta interface**) configura a interface atual, e o botão direito numa aba move ou exclui.
+
+### Cortar um som em pads
+
+A tecla da tesoura corta um som em trechos, cada um num pad, como os hot cues de uma CDJ dividem uma faixa. Ela está em cada resultado do MyInstants, ao lado da pasta para um arquivo do computador, e no menu do botão direito de um pad. O arquivo nunca é alterado: cada pad toca o seu trecho dele.
+
+- **Detectar cortes** marca um cue no começo de cada som depois de uma pausa, o que divide uma compilação de efeitos de uma vez.
+- Clique na forma de onda para mover a agulha, e aperte **C** ou clique duas vezes para marcar um cue ali. Arraste um cue para movê-lo, ou ajuste o selecionado com as setas; **Delete** apaga.
+- **Espaço** toca a partir da agulha, e **1** a **9** tocam cada trecho. A roda do mouse dá zoom, e Shift com a roda anda pelo som.
+- Dê nome aos trechos, desmarque os que não quiser, e **Criar** põe cada um num pad livre da interface na tela. Pads que já têm som nunca são substituídos.
 
 ### Efeitos de voz
 

@@ -101,6 +101,12 @@
   mask: var(--volume-icon) center / contain no-repeat;
 }
 
+/* A pad that plays a piece of its file. */
+.pad-cut {
+  width: var(--font-pad-label);
+  height: var(--font-pad-label);
+}
+
 .pad-star {
   right: var(--pad-star-right);
   bottom: var(--pad-star-bottom);

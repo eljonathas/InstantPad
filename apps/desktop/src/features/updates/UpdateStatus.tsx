@@ -1,11 +1,13 @@
 import { commands } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
+import { Switch } from "../../shared/ui/Switch";
 
 /** How the background update is going, and the key that restarts into it. */
 export function UpdateStatus() {
   const { t, render } = useText();
   const update = useBackend((state) => state.update);
+  const isQuiet = useBackend((state) => state.setup.quietUpdates);
 
   return (
     <section>
@@ -20,6 +22,12 @@ export function UpdateStatus() {
           {t("RestartNow")}
         </button>
       )}
+      <Switch
+        label={t("UpdateWindow")}
+        hint={t("UpdateWindowHint")}
+        on={!isQuiet}
+        onChange={(on) => void commands.setQuietUpdates(!on)}
+      />
     </section>
   );
 }

@@ -125,7 +125,7 @@ mod tests {
     fn playback(channels: usize, rate: u32, level: f32, frames: usize) -> Playback {
         let (mixer, mut handle) = mixer::pair(Arc::new(Controls::new()), None);
         let clip = Arc::new(SoundClip::new(vec![level; frames * CHANNELS]));
-        handle.add(clip, 1.0, PlaybackTag::of("a"));
+        handle.add_whole(clip, 1.0, PlaybackTag::of("a"));
         Playback::new(mixer, Some(Conversion::new(channels, rate).unwrap()))
     }
 

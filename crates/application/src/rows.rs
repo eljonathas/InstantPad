@@ -42,7 +42,7 @@ impl SoundRows {
             let file = self.file_to_hear(&source).await?;
             self.board.stop_others();
             let tag = PlaybackTag::of(&source.path);
-            self.player.preview(&file, FULL_VOLUME, tag).await?;
+            self.player.preview(&file, FULL_VOLUME, tag, None).await?;
             self.let_go_of(&file, &source);
             Ok(())
         };
@@ -54,7 +54,7 @@ impl SoundRows {
             let file = self.file_to_hear(&source).await?;
             self.board.stop_others();
             let tag = PlaybackTag::of(&source.path);
-            self.player.play(&file, FULL_VOLUME, tag).await?;
+            self.player.play(&file, FULL_VOLUME, tag, None).await?;
             self.let_go_of(&file, &source);
             Ok(())
         };
@@ -76,7 +76,7 @@ impl SoundRows {
         let result = async {
             self.downloading(&source).await?;
             self.board
-                .place(&target, &source.name, &source.path, &source.color)
+                .place(&target, &source.name, &source.path, &source.color, None)
                 .await
         };
         if let Err(failure) = self.board.while_loading(&target, result).await {

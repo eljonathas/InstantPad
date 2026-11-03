@@ -23,7 +23,7 @@ async fn fill(world: &World, slot: u32, name: &str) {
     let target = world.board.pad_on_screen(slot);
     world
         .board
-        .place(&target, name, &path, "#ff0000")
+        .place(&target, name, &path, "#ff0000", None)
         .await
         .unwrap();
 }
@@ -312,7 +312,7 @@ async fn a_sound_lands_on_the_interface_it_was_aimed_at_even_if_the_user_moved_o
 
     world
         .board
-        .place(&main, "a", "a.mp3", "#ff0000")
+        .place(&main, "a", "a.mp3", "#ff0000", None)
         .await
         .unwrap();
 
@@ -337,7 +337,7 @@ async fn a_pad_that_stopped_existing_while_loading_takes_nothing() {
 
     world
         .board
-        .place(&far, "a", "a.mp3", "#ff0000")
+        .place(&far, "a", "a.mp3", "#ff0000", None)
         .await
         .unwrap();
 

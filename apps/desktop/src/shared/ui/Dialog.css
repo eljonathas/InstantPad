@@ -23,6 +23,12 @@
   width: var(--dialog-width-wide);
 }
 
+.dialog[data-large] {
+  width: var(--dialog-width-large);
+  max-height: 100%;
+  overflow-y: auto;
+}
+
 .dialog-title {
   margin: 0 0 var(--dialog-padding);
   font-size: var(--font-key);
@@ -55,4 +61,24 @@
   margin: 0 0 var(--space-7);
   color: var(--color-dialog-label);
   font-size: var(--font-status);
+}
+
+.dialog-text {
+  margin: 0 0 var(--space-5);
+}
+
+.dialog-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-7);
+  cursor: pointer;
+  color: var(--color-dialog-label);
+  font-size: var(--font-status);
+}
+
+.dialog-check input {
+  flex: none;
+  margin-top: var(--space-1);
+  accent-color: var(--color-accent);
 }

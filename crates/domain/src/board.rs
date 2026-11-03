@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
+
+use crate::cuts::Cut;
 use specta::Type;
 use thiserror::Error;
 use uuid::Uuid;
@@ -80,6 +82,9 @@ pub struct Sound {
     pub interface_id: String,
     /// Position inside the interface, left to right, top to bottom.
     pub slot: u32,
+    /// The piece of the file the pad plays, or `None` for the whole of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cut: Option<Cut>,
 }
 
 /// All interfaces and the sounds on their pads, with the rules that keep them consistent.
@@ -132,6 +137,25 @@ impl PadBoard {
     pub fn first_free_slot(&self, interface_id: &str) -> Option<u32> {
         let target = self.interface(interface_id)?;
         (0..target.layout.capacity()).find(|&slot| self.sound_at(interface_id, slot).is_none())
+    }
+
+    /// How many pads of the interface have no sound.
+    pub fn free_slot_count(&self, interface_id: &str) -> u32 {
+        let Some(interface) = self.interface(interface_id) else {
+            return 0;
+        };
+        let taken = self
+            .sounds_of(interface_id)
+            .filter(|sound| sound.slot < interface.layout.capacity())
+            .count() as u32;
+        interface.layout.capacity().saturating_sub(taken)
+    }
+
+    /// Sets the piece of its file a sound plays, or the whole file with `None`.
+    pub fn set_cut(&mut self, sound_id: &str, cut: Option<Cut>) {
+        if let Some(sound) = self.sound_mut(sound_id) {
+            sound.cut = cut;
+        }
     }
 
     /// Returns the id of the new interface.
@@ -223,6 +247,7 @@ impl PadBoard {
             hotkey: None,
             interface_id: interface_id.to_owned(),
             slot,
+            cut: None,
         });
         &self.sounds[self.sounds.len() - 1]
     }

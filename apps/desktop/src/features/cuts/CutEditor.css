@@ -1,0 +1,128 @@
+.cut-screen {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  border-radius: var(--radius-screen);
+  background: var(--color-screen-back);
+  border: var(--border-width) solid var(--color-screen-line);
+}
+
+.cut-wave {
+  display: block;
+  width: 100%;
+  height: var(--cut-wave-height);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.cut-ruler {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+  color: var(--color-lcd-dim);
+  font-size: var(--font-status);
+  font-variant-numeric: tabular-nums;
+}
+
+.cut-time {
+  color: var(--color-lcd);
+}
+
+.cut-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.cut-tools .key {
+  height: var(--dialog-button-height);
+}
+
+.cut-play {
+  min-width: var(--dialog-button-width);
+}
+
+.cut-gap {
+  flex: 1;
+}
+
+.cut-zoom {
+  width: var(--dialog-button-height);
+  font-weight: var(--weight-bold);
+}
+
+.cut-notice {
+  margin: 0 0 var(--space-5);
+  color: var(--color-amber);
+  font-size: var(--font-status);
+}
+
+.cut-heading {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-dialog-label);
+  font-weight: var(--weight-semibold);
+  color: var(--color-silk);
+}
+
+.cut-pieces {
+  max-height: var(--cut-list-height);
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.cut-piece {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+}
+
+.cut-piece[data-left] {
+  opacity: 0.45;
+}
+
+.cut-swatch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--cut-swatch-size);
+  height: var(--cut-swatch-size);
+  border-radius: var(--radius-key);
+  color: var(--color-black);
+  font-size: var(--font-status);
+  font-weight: var(--weight-bold);
+}
+
+.cut-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.cut-range {
+  flex: none;
+  color: var(--color-lcd-dim);
+  font-size: var(--font-status);
+  font-variant-numeric: tabular-nums;
+}
+
+.cut-piece-play {
+  flex: none;
+  width: var(--cut-swatch-size);
+  height: var(--cut-swatch-size);
+  padding: 0;
+}
+
+.cut-include {
+  flex: none;
+  accent-color: var(--color-accent);
+}
+
+.cut-create {
+  min-width: var(--dialog-button-width);
+  width: auto !important;
+  padding: 0 var(--space-6);
+}

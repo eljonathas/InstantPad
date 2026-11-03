@@ -6,6 +6,7 @@ import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { holdHotkeys } from "../../shared/ui/hotkeyPause";
 import { SoundRow } from "../../shared/ui/SoundRow";
+import { cutEditor } from "../cuts/cutEditorStore";
 import { SoundSkeletons } from "./SoundSkeletons";
 import "./Browser.css";
 
@@ -22,6 +23,8 @@ interface Results {
 
 const SKELETONS_OF_A_LIST = 12;
 const SKELETONS_OF_MORE = 3;
+/** The next page starts loading this far before the end of the list comes into view. */
+const LOAD_AHEAD = "0px 0px 240px 0px";
 
 const NOTHING: Results = { search: null, sounds: [], page: 1, hasMore: false, status: { kind: "loading" } };
 
@@ -34,6 +37,7 @@ export function Browser() {
   const [results, setResults] = useState(NOTHING);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
+  const end = useRef<HTMLLIElement>(null);
   const holding = useRef<(() => void) | null>(null);
   const latest = useRef(0);
 
@@ -61,11 +65,32 @@ export function Browser() {
     if (started) void load(null, 1);
   }, [started, region, load]);
 
-  function show(search: string | null, page: number) {
-    setResults((before) => ({ ...before, search, page, hasMore: false, status: { kind: "loading" } }));
-    if (page === 1) list.current?.scrollTo({ top: 0 });
-    void load(search, page);
-  }
+  const show = useCallback(
+    (search: string | null, page: number) => {
+      setResults((before) => ({ ...before, search, page, hasMore: false, status: { kind: "loading" } }));
+      if (page === 1) list.current?.scrollTo({ top: 0 });
+      void load(search, page);
+    },
+    [load],
+  );
+
+  // The next page loads when the end of the list comes near, so scrolling never runs out
+  // while there is more. A list too short to scroll keeps loading until it fills the panel.
+  const canLoadMore = results.hasMore && results.status.kind === "shown";
+  useEffect(() => {
+    const target = end.current;
+    if (!canLoadMore || !target) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        show(results.search, results.page + 1);
+      },
+      { root: list.current, rootMargin: LOAD_AHEAD },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [canLoadMore, results.search, results.page, show]);
 
   useEffect(() => () => holding.current?.(), []);
 
@@ -73,6 +98,11 @@ export function Browser() {
     // Hands the numeric keys back to the pads as soon as the typing is over.
     input.current?.blur();
     if (query.trim()) show(query.trim(), 1);
+  }
+
+  async function cutFromComputer() {
+    const [path] = await pickAudioFiles(t, false);
+    if (path) await cutEditor.open({ kind: "file", path });
   }
 
   async function addFromComputer() {
@@ -83,6 +113,8 @@ export function Browser() {
   const { status, sounds, search: shown } = results;
   const isLoading = status.kind === "loading";
   const isNewList = isLoading && results.page === 1;
+  // A next page that failed waits for the user, so a lost connection is not asked again and again.
+  const failedMore = status.kind === "failed" && results.page > 1;
   const line =
     isLoading
       ? t("Loading")
@@ -119,6 +151,14 @@ export function Browser() {
         >
           <i className="icon icon-folder" />
         </button>
+        <button
+          className="key key-bare browser-key"
+          title={t("CutFromComputer")}
+          aria-label={t("CutFromComputer")}
+          onClick={() => void cutFromComputer()}
+        >
+          <i className="icon icon-cut" />
+        </button>
       </div>
       <div className="browser-status">
         <span className="screen-text browser-line" role="status">
@@ -136,10 +176,11 @@ export function Browser() {
       <ul ref={list} className="sound-list" aria-busy={isLoading}>
         {!isNewList && sounds.map((sound) => <SoundRow key={sound.path} source={sound} />)}
         {isLoading && <SoundSkeletons count={isNewList ? SKELETONS_OF_A_LIST : SKELETONS_OF_MORE} />}
+        {canLoadMore && <li ref={end} className="sound-list-end" aria-hidden="true" />}
       </ul>
-      {results.hasMore && (
-        <button className="key browser-more" onClick={() => show(shown, results.page + 1)}>
-          {t("LoadMore")}
+      {failedMore && (
+        <button className="key browser-more" onClick={() => show(shown, results.page)}>
+          {t("TryAgain")}
         </button>
       )}
     </section>

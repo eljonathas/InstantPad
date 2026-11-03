@@ -65,6 +65,7 @@ let state: BackendState = {
     stopHotkey: null,
     oneSoundAtATime: true,
     pressAgainToStop: false,
+    quietUpdates: false,
   },
   favorites: [],
   display: { main: "NoAudioPlaying", isSound: false, status: null, hint: null },

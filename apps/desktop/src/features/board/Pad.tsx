@@ -35,6 +35,7 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
     sound ? `${pad.label} ${sound.name}` : pad.label,
     pad.shortcut,
     sound ? `${t("Volume")} ${volume}%` : "",
+    sound?.cut ? t("PadCut", [sound.cut]) : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -90,6 +91,7 @@ export const Pad = memo(function Pad({ pad, isTarget, onMenu }: PadProps) {
               {volume}
               <span className="pad-volume-unit">%</span>
             </span>
+            {sound.cut && <i className="icon icon-cut pad-cut" aria-hidden="true" />}
           </span>
         )}
         <span className="pad-name">{sound && <span className="pad-name-text">{sound.name}</span>}</span>

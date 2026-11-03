@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use instantpad_domain::board::PadBoard;
 use instantpad_domain::cloning::{VoiceLibrary, Voiceprint};
+use instantpad_domain::cuts::Cut;
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
 use instantpad_domain::voice::{Conversion, VoiceChain, VoicePreset};
@@ -33,6 +34,16 @@ impl PlaybackTag {
     }
 }
 
+/// A sound as the cut editor draws it.
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Waveform {
+    pub duration_ms: u32,
+    /// From 0 to 1 of the loudest moment of the whole sound.
+    #[specta(type = Vec<u32>)]
+    pub peaks: Vec<f32>,
+}
+
 /// The sound the display follows.
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -54,11 +65,37 @@ pub trait SoundPlayer: Send + Sync {
     /// Decodes ahead of time, so the first press of a pad has no delay.
     async fn preload(&self, path: &str) -> Result<(), Failure>;
 
-    /// Plays for the game and for you. Pressing again restarts the sound.
-    async fn play(&self, path: &str, volume: f32, tag: PlaybackTag) -> Result<(), Failure>;
+    /// Plays for the game and for you, only `cut` when there is one. Pressing again restarts
+    /// the sound.
+    async fn play(
+        &self,
+        path: &str,
+        volume: f32,
+        tag: PlaybackTag,
+        cut: Option<Cut>,
+    ) -> Result<(), Failure>;
 
-    /// Plays only for you, to try a sound out.
-    async fn preview(&self, path: &str, volume: f32, tag: PlaybackTag) -> Result<(), Failure>;
+    /// Plays only for you, to try a sound out, only `cut` when there is one.
+    async fn preview(
+        &self,
+        path: &str,
+        volume: f32,
+        tag: PlaybackTag,
+        cut: Option<Cut>,
+    ) -> Result<(), Failure>;
+
+    /// How long the sound lasts, and how loud each of `bars` stretches from `start_ms` to
+    /// `end_ms` gets, at the scale of the whole sound, for drawing it.
+    async fn waveform(
+        &self,
+        path: &str,
+        start_ms: u32,
+        end_ms: u32,
+        bars: u32,
+    ) -> Result<Waveform, Failure>;
+
+    /// How loud the sound is along the way, one value from 0 to 1 per `frame_ms`.
+    async fn levels(&self, path: &str, frame_ms: u32) -> Result<Vec<f32>, Failure>;
 
     /// Drops the decoded audio, for when the file on disk has changed.
     fn forget(&self, path: &str);

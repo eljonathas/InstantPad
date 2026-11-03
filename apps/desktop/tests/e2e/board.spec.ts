@@ -25,7 +25,7 @@ test("a second press starts a playing pad over by default", async ({ page }) => 
 
 test("with press again to stop, a second press stops the pad", async ({ page }) => {
   await page.getByRole("tab", { name: "Settings" }).click();
-  await page.getByRole("button", { name: "Press again to stop" }).click();
+  await page.getByRole("switch", { name: "Press again to stop" }).click();
   const vine = pad(page, "01 Vine boom");
 
   await vine.dispatchEvent("pointerdown", { button: 0 });
@@ -99,6 +99,7 @@ test("the menu of a pad with a sound", async ({ page }) => {
     "Download to computer...",
     "Set shortcut...",
     "Rename...",
+    "Cut into pads...",
     "Volume",
     "Color",
     "Send to interface",

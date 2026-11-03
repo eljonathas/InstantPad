@@ -1,6 +1,7 @@
 import { commands, type SoundSource } from "../ipc";
 import { useBackend } from "../store/backend";
 import { useText } from "../store/text";
+import { cutEditor } from "../../features/cuts/cutEditorStore";
 import { beginDrag } from "./drag";
 import "./SoundRow.css";
 
@@ -41,6 +42,14 @@ export function SoundRow({ source }: { source: SoundSource }) {
         onClick={() => commands.addToPad(source, null)}
       >
         {t("AddToPad")}
+      </button>
+      <button
+        className="key sound-icon"
+        title={t("CutIntoPads")}
+        aria-label={t("CutIntoPads")}
+        onClick={() => void cutEditor.open({ kind: "catalog", source })}
+      >
+        <i className="icon icon-cut" />
       </button>
       <button className="key key-star sound-icon" title={t("Favorite")} onClick={() => commands.toggleFavorite(source)}>
         {isFavorite ? "★" : "☆"}

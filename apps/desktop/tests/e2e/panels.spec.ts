@@ -1,11 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { emptyPad, openApp, pad, row } from "./support";
 
 test.beforeEach(async ({ page }) => openApp(page));
 
 test("MyInstants shows the trending sounds first", async ({ page }) => {
-  await expect(page.getByRole("status").filter({ hasText: "Trending in United States (8)" })).toBeVisible();
-  await expect(page.locator(".sound-row:visible")).toHaveCount(8);
+  await expect(page.getByRole("status").filter({ hasText: "Trending in United States" })).toBeVisible();
+  await expect(row(page, "Vine boom")).toBeVisible();
 });
 
 test("search on Enter and on the button, then trending again", async ({ page }) => {
@@ -20,7 +20,7 @@ test("search on Enter and on the button, then trending again", async ({ page }) 
   await expect(page.getByRole("status").filter({ hasText: "Nothing found" })).toBeVisible();
 
   await page.getByRole("button", { name: "Trending", exact: true }).click();
-  await expect(page.locator(".sound-row:visible")).toHaveCount(8);
+  await expect(page.getByRole("status").filter({ hasText: "Trending in United States" })).toBeVisible();
 });
 
 test("a search shows skeletons in place of the old list until it answers", async ({ page }) => {
@@ -34,28 +34,86 @@ test("a search shows skeletons in place of the old list until it answers", async
   await expect(page.locator(".sound-skeleton")).toHaveCount(0);
 });
 
-test("a list longer than the panel scrolls inside it", async ({ page }) => {
-  const more = page.getByRole("button", { name: "Load more" });
-  await more.click();
-  await expect(page.locator(".sound-row:visible")).toHaveCount(16);
-  await more.click();
-  await expect(page.locator(".sound-row:visible")).toHaveCount(24);
-
+async function scrollToTheEnd(page: Page) {
   const list = page.locator(".sound-list:visible");
-  const box = (await list.boundingBox())!;
-  expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  await list.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+}
 
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.wheel(0, 5000);
-  await expect(row(page, "Surprise")).toBeInViewport();
+test("a list too short to scroll keeps loading until there is no more", async ({ page }) => {
+  await expect(page.getByRole("status").filter({ hasText: "(24)" })).toBeVisible();
+  await expect(page.locator(".sound-row:visible")).toHaveCount(24);
 });
 
-test("Load more appends the next page", async ({ page }) => {
-  await page.getByRole("button", { name: "Load more" }).click();
-  await expect(page.locator(".sound-row:visible")).toHaveCount(16);
-  await page.getByRole("button", { name: "Load more" }).click();
-  await expect(page.locator(".sound-row:visible")).toHaveCount(24);
-  await expect(page.getByRole("button", { name: "Load more" })).toHaveCount(0);
+/** Sends a command that only the mock knows, for what a test cannot do through the interface. */
+async function mock(page: Page, command: string) {
+  await page.evaluate(
+    (command) =>
+      (
+        window as unknown as { __TAURI_INTERNALS__: { invoke: (command: string, args: unknown) => unknown } }
+      ).__TAURI_INTERNALS__.invoke(command, {}),
+    command,
+  );
+}
+
+const rows = (page: Page) => page.locator(".sound-row:visible");
+
+/** How many rows the list holds once it stopped loading. */
+async function settledRows(page: Page) {
+  await expect(page.locator(".sound-skeleton")).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await expect(page.locator(".sound-skeleton")).toHaveCount(0);
+  return rows(page).count();
+}
+
+test.describe("with more trending sounds than the list shows", () => {
+  test.beforeEach(async ({ page }) => {
+    await mock(page, "mock_long_catalog");
+    await page.getByRole("button", { name: "Trending", exact: true }).click();
+  });
+
+  test("the list fills the panel and stops, then scrolls inside it", async ({ page }) => {
+    const shown = await settledRows(page);
+    expect(shown).toBeGreaterThan(8);
+    expect(shown).toBeLessThan(100);
+
+    const list = page.locator(".sound-list:visible");
+    const box = (await list.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 100_000);
+    await expect(rows(page).last()).toBeInViewport();
+  });
+
+  test("scrolling to the end loads the next page, until there is no more", async ({ page }) => {
+    let shown = await settledRows(page);
+
+    while (shown < 100) {
+      await scrollToTheEnd(page);
+      await expect.poll(() => rows(page).count()).toBeGreaterThan(shown);
+      shown = await settledRows(page);
+    }
+
+    await expect(page.getByRole("status").filter({ hasText: "(100)" })).toBeVisible();
+    await expect(page.locator(".sound-list-end")).toHaveCount(0);
+    await scrollToTheEnd(page);
+    expect(await settledRows(page)).toBe(100);
+  });
+
+  test("a next page that fails waits for Try again instead of asking again and again", async ({ page }) => {
+    const shown = await settledRows(page);
+    await mock(page, "mock_fail_next_page");
+
+    await scrollToTheEnd(page);
+
+    const again = page.getByRole("button", { name: "Try again" });
+    await expect(again).toBeVisible();
+    await scrollToTheEnd(page);
+    expect(await settledRows(page)).toBe(shown);
+
+    await again.click();
+    await expect.poll(() => rows(page).count()).toBeGreaterThan(shown);
+    await expect(again).toHaveCount(0);
+  });
 });
 
 test("the star follows the favorites", async ({ page }) => {
@@ -82,22 +140,22 @@ test("a sound row has no button to save it to the computer", async ({ page }) =>
 
 test("one sound at a time starts on and switches off in the settings", async ({ page }) => {
   await page.getByRole("tab", { name: "Settings" }).click();
-  const toggle = page.getByRole("button", { name: "One sound at a time" });
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const toggle = page.getByRole("switch", { name: "One sound at a time" });
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
 
   await toggle.click();
 
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
 });
 
 test("press again to stop starts off and switches on in the settings", async ({ page }) => {
   await page.getByRole("tab", { name: "Settings" }).click();
-  const toggle = page.getByRole("button", { name: "Press again to stop" });
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  const toggle = page.getByRole("switch", { name: "Press again to stop" });
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
 
   await toggle.click();
 
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
 });
 
 test("settings show the routing and follow the numeric scheme", async ({ page }) => {
@@ -134,10 +192,10 @@ test("the trending sounds follow the country chosen in the settings", async ({ p
   await page.getByLabel("Trending sounds from").selectOption("br");
   await page.getByRole("tab", { name: "MyInstants" }).click();
 
-  await expect(page.getByRole("status").filter({ hasText: "Trending in Brazil (8)" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Trending in Brazil" })).toBeVisible();
 
   await page.getByRole("tab", { name: "Settings" }).click();
   await page.getByLabel("Trending sounds from").selectOption("");
   await page.getByRole("tab", { name: "MyInstants" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Trending in United States (8)" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Trending in United States" })).toBeVisible();
 });

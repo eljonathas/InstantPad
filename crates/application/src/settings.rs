@@ -28,6 +28,8 @@ pub struct AppSettings {
     pub one_sound_at_a_time: bool,
     /// Pressing a pad that is playing stops it instead of starting it over.
     pub press_again_to_stop: bool,
+    /// A version that is ready to install is only shown in the settings, not in a window.
+    pub quiet_updates: bool,
     pub voice: VoiceSettings,
     /// The country of the trending sounds. `None` follows the system.
     pub trending_region: Option<String>,
@@ -49,6 +51,7 @@ impl Default for AppSettings {
             stop_hotkey: None,
             one_sound_at_a_time: true,
             press_again_to_stop: false,
+            quiet_updates: false,
             voice: VoiceSettings::default(),
             trending_region: None,
         }

@@ -14,6 +14,8 @@ use tokio::io::AsyncWriteExt;
 use crate::pins::Pinned;
 
 const STALLED_AFTER: Duration = Duration::from_secs(30);
+/// How often a download that waits for the network looks whether it was stopped.
+const STOP_CHECK: Duration = Duration::from_millis(200);
 const BLOCK: usize = 1 << 20;
 
 /// Why a download did not end with the file.
@@ -70,7 +72,9 @@ pub(crate) async fn fetch(
         if have > 0 {
             request = request.header(RANGE, format!("bytes={have}-"));
         }
-        let mut response = request.send().await?.error_for_status()?;
+        let mut response = unless_stopped(stop, request.send())
+            .await??
+            .error_for_status()?;
         // A server that sends the whole file again is started over.
         if have > 0 && response.status() != StatusCode::PARTIAL_CONTENT {
             have = 0;
@@ -83,11 +87,17 @@ pub(crate) async fn fetch(
             .open(&partial)
             .await?;
         arrived(have);
-        while let Some(chunk) = response.chunk().await? {
-            if stop.load(Ordering::Relaxed) {
-                written.flush().await?;
-                return Err(Interrupted::Stopped);
-            }
+        loop {
+            let next = match unless_stopped(stop, response.chunk()).await {
+                Ok(next) => next?,
+                Err(stopped) => {
+                    written.flush().await?;
+                    return Err(stopped);
+                }
+            };
+            let Some(chunk) = next else {
+                break;
+            };
             have += chunk.len() as u64;
             // A server that sends more than was pinned is not sending the pinned file.
             if have > file.size {
@@ -109,6 +119,23 @@ pub(crate) async fn fetch(
     }
     fs::rename(&partial, target).await?;
     Ok(())
+}
+
+/// Waits for `work`, unless `stop` is set meanwhile: a server that stalls answers only after
+/// [`STALLED_AFTER`], and the user who stops the download should not wait for it.
+async fn unless_stopped<T>(
+    stop: &AtomicBool,
+    work: impl Future<Output = T>,
+) -> Result<T, Interrupted> {
+    let mut work = std::pin::pin!(work);
+    loop {
+        if stop.load(Ordering::Relaxed) {
+            return Err(Interrupted::Stopped);
+        }
+        if let Ok(done) = tokio::time::timeout(STOP_CHECK, work.as_mut()).await {
+            return Ok(done);
+        }
+    }
 }
 
 fn unexpected(url: &str) -> Interrupted {
@@ -149,6 +176,31 @@ mod tests {
             hash,
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[tokio::test]
+    async fn stopping_does_not_wait_for_a_server_that_stalls() {
+        let stop = AtomicBool::new(false);
+        let started = std::time::Instant::now();
+
+        let waited = unless_stopped(&stop, async {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            stop.store(true, Ordering::Relaxed);
+            std::future::pending::<()>().await;
+        })
+        .await;
+
+        assert!(matches!(waited, Err(Interrupted::Stopped)));
+        assert!(started.elapsed() < STALLED_AFTER);
+    }
+
+    #[tokio::test]
+    async fn what_ends_before_a_stop_is_kept() {
+        let stop = AtomicBool::new(false);
+
+        let waited = unless_stopped(&stop, async { 7 }).await;
+
+        assert!(matches!(waited, Ok(7)));
     }
 
     #[test]

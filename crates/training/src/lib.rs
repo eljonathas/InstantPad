@@ -22,11 +22,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use instantpad_application::message::{Failure, Message};
+use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{
     Outcome, TrainingProgress, TrainingRun, TrainingStage, TrainingTools, VoiceTrainer,
 };
@@ -50,6 +50,18 @@ const LAST_LINES: usize = 3;
 /// the tools is 120 characters into the folder.
 #[cfg(target_os = "windows")]
 const MAX_HOME_CHARACTERS: usize = 130;
+/// The tools in the folder, besides RVC, which `remove_tools` deletes.
+const TOOLS: [&str; 9] = [
+    "tools.json",
+    "voicekit.py",
+    "uv",
+    "python",
+    "venv",
+    "cache",
+    "wheels",
+    "downloads",
+    "bin",
+];
 
 /// What is installed, kept in `tools.json`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -66,19 +78,36 @@ pub struct KitTrainer {
     stopping: AtomicBool,
     running: process::Slot,
     installed: Mutex<Option<Installed>>,
+    /// What an install that stopped or failed left on disk, which removing the tools frees.
+    leftover_megabytes: AtomicU32,
 }
 
 impl KitTrainer {
     pub fn new(home: &Path) -> Self {
-        let installed = fs::read_to_string(home.join("tools.json"))
+        let installed: Option<Installed> = fs::read_to_string(home.join("tools.json"))
             .ok()
             .and_then(|text| serde_json::from_str(&text).ok());
+        let leftover = if installed.is_some() {
+            0
+        } else {
+            tools_on_disk(home)
+        };
         Self {
             home: home.to_owned(),
             stopping: AtomicBool::new(false),
             running: Mutex::new(None),
             installed: Mutex::new(installed),
+            leftover_megabytes: AtomicU32::new(leftover),
         }
+    }
+
+    /// Measures what an install left, once it ended without the tools.
+    async fn measure_leftover(&self) {
+        let home = self.home.clone();
+        let megabytes = tokio::task::spawn_blocking(move || tools_on_disk(&home))
+            .await
+            .unwrap_or(0);
+        self.leftover_megabytes.store(megabytes, Ordering::Relaxed);
     }
 
     fn uv(&self) -> PathBuf {
@@ -276,7 +305,7 @@ impl KitTrainer {
             return Err(Interrupted::Stopped);
         }
         let mut last = Vec::new();
-        let status = process::run(command, &self.running, &mut |line| {
+        let status = process::run(command, &self.running, &self.stopping, &mut |line| {
             remember(&mut last, line);
             on_line(line);
         })
@@ -299,12 +328,15 @@ impl KitTrainer {
         log: &mut fs::File,
         progress: &(dyn Fn(TrainingProgress) + Send + Sync),
     ) -> Result<Outcome<Option<PathBuf>>, Failure> {
+        if self.stopped() {
+            return Ok(Outcome::Stopped);
+        }
         let mut command = self.kit()?;
         command.args(arguments);
         let mut error = None;
         let mut exported = None;
         let mut last = Vec::new();
-        let status = process::run(command, &self.running, &mut |line| {
+        let status = process::run(command, &self.running, &self.stopping, &mut |line| {
             let _ = writeln!(log, "{line}");
             match events::parse(line) {
                 Some(KitEvent::Stage(stage)) => progress(TrainingProgress::Stage(stage)),
@@ -374,7 +406,7 @@ fn unpack_uv(archive: &Path, entry: &str, target: &Path) -> Result<(), Interrupt
     Ok(())
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
 fn unpack_uv(archive: &Path, entry: &str, target: &Path) -> Result<(), Interrupted> {
     use std::os::unix::fs::PermissionsExt;
 
@@ -394,6 +426,55 @@ fn unpack_uv(archive: &Path, entry: &str, target: &Path) -> Result<(), Interrupt
     Err(Interrupted::Failed(format!(
         "{entry} is not in the archive of uv"
     )))
+}
+
+/// Other systems do not train in the app (see `is_supported`), but the app still builds there.
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+fn unpack_uv(_archive: &Path, _entry: &str, _target: &Path) -> Result<(), Interrupted> {
+    Err(Interrupted::Failed(
+        "this system does not train voices".to_owned(),
+    ))
+}
+
+/// The bytes of a file, or of everything in a folder. Links are not followed: a venv links to
+/// its Python.
+fn disk_bytes(path: &Path) -> u64 {
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return 0;
+    };
+    if !metadata.is_dir() {
+        return metadata.len();
+    }
+    fs::read_dir(path).map_or(0, |entries| {
+        entries
+            .flatten()
+            .map(|entry| disk_bytes(&entry.path()))
+            .sum()
+    })
+}
+
+/// The bytes of everything in `folder` except the entries named in `keep`.
+fn disk_bytes_but(folder: &Path, keep: &[&str]) -> u64 {
+    fs::read_dir(folder).map_or(0, |entries| {
+        entries
+            .flatten()
+            .filter(|entry| !keep.iter().any(|kept| entry.file_name() == *kept))
+            .map(|entry| disk_bytes(&entry.path()))
+            .sum()
+    })
+}
+
+/// What `remove_tools` would free in `home`, in megabytes.
+fn tools_on_disk(home: &Path) -> u32 {
+    let rvc = home.join("rvc");
+    let bytes = TOOLS
+        .iter()
+        .map(|tool| disk_bytes(&home.join(tool)))
+        .sum::<u64>()
+        + disk_bytes_but(&rvc, &[EXPERIMENTS, "assets"])
+        + disk_bytes_but(&rvc.join("assets"), &["weights"])
+        + disk_bytes(&rvc.join(EXPERIMENTS).join("mute"));
+    u32::try_from(bytes.div_ceil(BYTES_PER_MEGABYTE)).unwrap_or(u32::MAX)
 }
 
 /// Deletes everything in `folder` except the entries named in `keep`.
@@ -474,9 +555,10 @@ impl VoiceTrainer for KitTrainer {
     }
 
     fn installed_megabytes(&self) -> u32 {
-        self.installed_lock()
-            .as_ref()
-            .map_or(0, |installed| installed.megabytes)
+        self.installed_lock().as_ref().map_or_else(
+            || self.leftover_megabytes.load(Ordering::Relaxed),
+            |installed| installed.megabytes,
+        )
     }
 
     fn free_megabytes(&self) -> Option<u64> {
@@ -497,13 +579,21 @@ impl VoiceTrainer for KitTrainer {
             let length = self.home.as_os_str().len();
             if length > MAX_HOME_CHARACTERS {
                 return Err(failed(format!(
-                    "the folder {} is {length} characters long, and Windows needs it under                      {MAX_HOME_CHARACTERS}",
+                    "the folder {} is {length} characters long, and Windows needs it under \
+                     {MAX_HOME_CHARACTERS}",
                     self.home.display()
                 )));
             }
         }
         fs::create_dir_all(&self.home).map_err(failed)?;
-        match self.install_tools(device.is_card(), progress).await {
+        let installed = self.install_tools(device.is_card(), progress).await;
+        if installed.is_ok() {
+            self.leftover_megabytes.store(0, Ordering::Relaxed);
+        } else {
+            // What downloaded so far stays for the next try, and can be removed meanwhile.
+            self.measure_leftover().await;
+        }
+        match installed {
             Ok(()) => Ok(Outcome::Done(())),
             Err(Interrupted::Stopped) => Ok(Outcome::Stopped),
             Err(Interrupted::Failed(reason)) => Err(failed(reason)),
@@ -511,23 +601,14 @@ impl VoiceTrainer for KitTrainer {
     }
 
     fn stop(&self) {
-        self.stopping.store(true, Ordering::Relaxed);
+        // Set before looking in the slot: see `process::run`.
+        self.stopping.store(true, Ordering::SeqCst);
         process::end(&self.running);
     }
 
     fn remove_tools(&self) {
         *self.installed_lock() = None;
-        for tool in [
-            "tools.json",
-            "voicekit.py",
-            "uv",
-            "python",
-            "venv",
-            "cache",
-            "wheels",
-            "downloads",
-            "bin",
-        ] {
+        for tool in TOOLS {
             let path = self.home.join(tool);
             let _ = if path.is_dir() {
                 fs::remove_dir_all(&path)
@@ -540,6 +621,9 @@ impl VoiceTrainer for KitTrainer {
         remove_all_but(&rvc, &[EXPERIMENTS, "assets"]);
         remove_all_but(&rvc.join("assets"), &["weights"]);
         let _ = fs::remove_dir_all(rvc.join(EXPERIMENTS).join("mute"));
+        // Whatever could not be deleted, such as a file another program holds open.
+        self.leftover_megabytes
+            .store(tools_on_disk(&self.home), Ordering::Relaxed);
     }
 
     async fn keep_take(&self, job: &str, take: &str, speech: Vec<f32>) -> Result<(), Failure> {
@@ -552,16 +636,23 @@ impl VoiceTrainer for KitTrainer {
             fs::create_dir_all(&dataset)?;
             // Written aside and moved in once whole, so a crash never leaves half a take.
             let partial = dataset.join(format!("{take}.part"));
-            let mut file = std::io::BufWriter::new(fs::File::create(&partial)?);
-            wav::write(&mut file, &speech, SPEECH_RATE)?;
-            file.into_inner()
-                .map_err(|error| error.into_error())?
-                .sync_all()?;
-            fs::rename(&partial, dataset.join(format!("{take}.wav")))
+            let written = (|| {
+                let mut file = std::io::BufWriter::new(fs::File::create(&partial)?);
+                wav::write(&mut file, &speech, SPEECH_RATE)?;
+                file.into_inner()
+                    .map_err(|error| error.into_error())?
+                    .sync_all()?;
+                fs::rename(&partial, dataset.join(format!("{take}.wav")))
+            })();
+            // A take that could not be written, such as on a full disk, leaves nothing behind.
+            if written.is_err() {
+                let _ = fs::remove_file(&partial);
+            }
+            written
         })
         .await
-        .map_err(failed)?
-        .map_err(failed)
+        .map_err(|error| Failure::because(TextKey::SaveFailed, error))?
+        .map_err(|error| Failure::because(TextKey::SaveFailed, error))
     }
 
     fn remove_take(&self, job: &str, take: &str) {

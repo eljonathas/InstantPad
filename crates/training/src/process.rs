@@ -3,6 +3,7 @@
 
 use std::io::{self, BufRead, BufReader};
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// The processes of one program and everything it started.
@@ -33,10 +34,12 @@ impl Group {
 pub(crate) type Slot = Mutex<Option<Arc<Group>>>;
 
 /// Runs `command` to its end, handing over each line it writes to its output or its errors, and
-/// keeps its group in `slot` meanwhile.
+/// keeps its group in `slot` meanwhile. A program started once `stopping` is set is ended at
+/// once: [`end`] found nothing to end if it came before the program was in `slot`.
 pub(crate) async fn run(
     mut command: Command,
     slot: &Slot,
+    stopping: &AtomicBool,
     on_line: &mut (dyn FnMut(&str) + Send),
 ) -> io::Result<ExitStatus> {
     // One pipe for both, so the lines come in the order they were written.
@@ -51,6 +54,11 @@ pub(crate) async fn run(
     drop(command);
     let group = Arc::new(contain(&child)?);
     *slot.lock().expect("process lock poisoned") = Some(group.clone());
+    // Read after the program is in the slot, and `stop` sets it before it looks in the slot, so
+    // one of the two always ends the program.
+    if stopping.load(Ordering::SeqCst) {
+        group.end();
+    }
 
     let (lines, mut received) = tokio::sync::mpsc::unbounded_channel();
     std::thread::spawn(move || {
@@ -211,9 +219,14 @@ mod tests {
         let slot = Mutex::new(None);
         let mut lines = Vec::new();
 
-        let status = run(shell("echo one&& echo two 1>&2"), &slot, &mut |line| {
-            lines.push(line.trim().to_owned());
-        })
+        let status = run(
+            shell("echo one&& echo two 1>&2"),
+            &slot,
+            &AtomicBool::new(false),
+            &mut |line| {
+                lines.push(line.trim().to_owned());
+            },
+        )
         .await
         .unwrap();
 
@@ -222,15 +235,18 @@ mod tests {
         assert!(slot.lock().unwrap().is_none());
     }
 
+    fn long_script() -> &'static str {
+        if cfg!(target_os = "windows") {
+            "ping -n 30 127.0.0.1 > NUL"
+        } else {
+            "sleep 30"
+        }
+    }
+
     #[tokio::test]
     async fn ending_the_slot_ends_the_program_and_what_it_started() {
         let slot = Arc::new(Mutex::new(None));
         let started = Instant::now();
-        let script = if cfg!(target_os = "windows") {
-            "ping -n 30 127.0.0.1 > NUL"
-        } else {
-            "sleep 30"
-        };
         let ender = slot.clone();
         tokio::spawn(async move {
             while ender.lock().unwrap().is_none() {
@@ -239,7 +255,30 @@ mod tests {
             end(&ender);
         });
 
-        let status = run(shell(script), &slot, &mut |_| {}).await.unwrap();
+        let status = run(
+            shell(long_script()),
+            &slot,
+            &AtomicBool::new(false),
+            &mut |_| {},
+        )
+        .await
+        .unwrap();
+
+        assert!(!status.success());
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[tokio::test]
+    async fn a_program_that_starts_after_a_stop_is_ended_at_once() {
+        let slot = Mutex::new(None);
+        let started = Instant::now();
+        // The stop came while nothing was in the slot, so ending it found nothing.
+        let stopping = AtomicBool::new(true);
+        end(&slot);
+
+        let status = run(shell(long_script()), &slot, &stopping, &mut |_| {})
+            .await
+            .unwrap();
 
         assert!(!status.success());
         assert!(started.elapsed() < Duration::from_secs(10));

@@ -3,6 +3,7 @@
 
 use std::fs;
 
+use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::VoiceTrainer;
 use instantpad_test_support::contract;
 use instantpad_training::KitTrainer;
@@ -80,6 +81,50 @@ fn removing_the_tools_keeps_what_trainings_made() {
     ] {
         assert!(path.join(kept).exists(), "{kept} should be kept");
     }
+}
+
+#[tokio::test]
+async fn a_take_that_cannot_be_written_says_so_in_words_for_the_user() {
+    let home = tempfile::tempdir().unwrap();
+    // A file where the folder of the takes should go, which no take can be written into.
+    fs::create_dir_all(home.path().join("voices/voice-1")).unwrap();
+    fs::write(home.path().join("voices/voice-1/dataset"), "").unwrap();
+    let trainer = KitTrainer::new(home.path());
+
+    let Failure(message) = trainer
+        .keep_take("voice-1", "take-1", vec![0.0; 4800])
+        .await
+        .unwrap_err();
+
+    let Message::Text { key, .. } = message else {
+        panic!("expected a translated message, got {message:?}");
+    };
+    assert_eq!(key, TextKey::SaveFailed);
+}
+
+#[test]
+fn an_install_that_stopped_halfway_can_be_removed_too() {
+    let home = tempfile::tempdir().unwrap();
+    let path = home.path();
+    // What a download stopped halfway leaves: wheels, one of them partial, and no tools.json.
+    fs::create_dir_all(path.join("wheels")).unwrap();
+    fs::write(path.join("wheels/numpy.whl"), vec![0; 1_500_000]).unwrap();
+    fs::write(path.join("wheels/torch.part"), vec![0; 1_500_000]).unwrap();
+    fs::create_dir_all(path.join("voices/voice-1/dataset")).unwrap();
+    fs::write(
+        path.join("voices/voice-1/dataset/take-1.wav"),
+        vec![0; 5_000_000],
+    )
+    .unwrap();
+
+    let trainer = KitTrainer::new(path);
+    assert_eq!(trainer.installed_megabytes(), 3, "the takes are not tools");
+
+    trainer.remove_tools();
+
+    assert!(!path.join("wheels").exists());
+    assert!(path.join("voices/voice-1/dataset/take-1.wav").exists());
+    assert_eq!(trainer.installed_megabytes(), 0);
 }
 
 #[test]

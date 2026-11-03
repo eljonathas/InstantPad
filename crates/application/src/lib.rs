@@ -15,6 +15,7 @@ pub mod routing;
 pub mod rows;
 pub mod settings;
 pub mod setup;
+pub mod training;
 pub mod updates;
 pub mod voice;
 pub mod voice_library;

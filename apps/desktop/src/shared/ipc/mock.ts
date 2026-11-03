@@ -885,7 +885,13 @@ export function installMock() {
       return { durationMs: CUT_DURATION_MS, peaks };
     },
     detect_cues: () => (cutting ? CUT_SOUNDS.map(([start]) => Math.max(0, start - 10)) : Promise.reject(text("SoundFileMissing"))),
-    preview_cut: () => (cutting ? null : Promise.reject(text("SoundFileMissing"))),
+    // Like the backend, which takes whole milliseconds as u32 and refuses a fraction of one.
+    preview_cut: ({ startMs, endMs }) => {
+      if (!Number.isInteger(startMs) || !Number.isInteger(endMs)) {
+        return Promise.reject(new Error(`invalid type: floating point ${startMs}, expected u32`));
+      }
+      return cutting ? null : Promise.reject(text("SoundFileMissing"));
+    },
     stop_cut_preview: () => null,
     place_cuts: ({ pieces }) => {
       if (!cutting) return Promise.reject(text("SoundFileMissing"));

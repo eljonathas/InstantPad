@@ -6,10 +6,11 @@ const FRAME_MILLISECONDS: usize = 20;
 const LOUDER_THAN_THE_ROOM: f32 = 3.0;
 /// Below this the microphone hears nothing, whatever the room.
 const SILENCE: f32 = 0.004;
-/// The room is never taken to be louder than this. Someone who talks the whole time, with no
-/// pause, is louder than this for most of the recording, and the room would otherwise be
-/// estimated from their own voice, which would then never count.
-const MAX_ROOM: f32 = 0.01;
+/// The room is never taken louder than this share of the loudest moment. Someone who talks the
+/// whole time, with no pause, makes the quietest tenth of the recording their own voice, which
+/// would then never count; a voice is always far louder than its quietest syllables. A steady
+/// noise under the voice, however loud, stays below it and is left out.
+const ROOM_BELOW_LOUDEST: f32 = 0.1;
 /// Speech is louder at its loudest than at its quietest by at least this much. A recording
 /// that is not is silence, a steady noise or a hum, whatever its level.
 const SPEECH_SWING: f32 = 2.0;
@@ -24,8 +25,9 @@ const BRIDGED_FRAMES: usize = 8;
 /// A frame counts as talk when it is clearly louder than the room. The room is what the
 /// quietest tenth of the recording sounds like, so a fan or a steady hum is not taken for a
 /// voice, and neither are pauses or a click of the keyboard. Someone who never pauses makes the
-/// quietest tenth their own voice, so the room is never taken louder than [`MAX_ROOM`], and a
-/// recording that stays at one level throughout, loud or quiet, is no voice at all.
+/// quietest tenth their own voice, so the room is never taken louder than a tenth of the
+/// loudest moment, and a recording that stays at one level throughout, loud or quiet, is no
+/// voice at all.
 pub fn voiced(speech: &[f32], rate: usize) -> Vec<f32> {
     // A rate too low for a frame still makes one of a single sample, which never panics.
     let frame = (rate * FRAME_MILLISECONDS / 1000).max(1);
@@ -44,7 +46,7 @@ pub fn voiced(speech: &[f32], rate: usize) -> Vec<f32> {
     if loud < SILENCE || loud < quiet * SPEECH_SWING {
         return Vec::new();
     }
-    let room = quiet.min(MAX_ROOM);
+    let room = quiet.min(loud * ROOM_BELOW_LOUDEST);
     let threshold = (room * LOUDER_THAN_THE_ROOM).max(SILENCE);
 
     let mut talking = Vec::new();

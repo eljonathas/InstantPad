@@ -2,6 +2,7 @@
 //! a DJ player split a track, and the pieces between them put on pads of their own. The file
 //! is never changed: each pad keeps the piece it plays.
 
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use instantpad_domain::cuts::{self, Cut};
@@ -66,6 +67,8 @@ pub struct CutPiece {
 /// The sound open in the editor.
 #[derive(Clone)]
 struct Editing {
+    /// Counts the sounds opened, so the end of a placing never closes a sound opened since.
+    id: u64,
     path: String,
     duration_ms: u32,
 }
@@ -77,6 +80,9 @@ pub struct CutSession {
     player: Arc<dyn SoundPlayer>,
     events: Arc<dyn EventSink>,
     editing: Mutex<Option<Editing>>,
+    opened: AtomicU64,
+    /// Set while the pieces are put on pads. Closing then would delete the file they need.
+    is_placing: AtomicBool,
 }
 
 impl CutSession {
@@ -94,6 +100,8 @@ impl CutSession {
             player,
             events,
             editing: Mutex::new(None),
+            opened: AtomicU64::new(0),
+            is_placing: AtomicBool::new(false),
         }
     }
 
@@ -141,7 +149,19 @@ impl CutSession {
             Some(cut) => vec![cut.start_ms],
             None => vec![0],
         };
-        *self.editing() = Some(Editing { path, duration_ms });
+        let id = self.opened.fetch_add(1, Ordering::Relaxed) + 1;
+        // Another sound may have opened while this one downloaded; this one takes its place.
+        let previous = self.editing().replace(Editing {
+            id,
+            path,
+            duration_ms,
+        });
+        // A sound still being placed releases its own file when the placing ends.
+        if let Some(previous) = previous
+            && !self.is_placing.load(Ordering::Relaxed)
+        {
+            self.board.release_file(&previous.path);
+        }
         Ok(CutEditorView {
             name,
             color,
@@ -192,6 +212,29 @@ impl CutSession {
     /// cannot be placed, the rest are not, and the user is told. Returns how many were placed.
     pub async fn place(&self, pieces: Vec<CutPiece>) -> Result<u32, Failure> {
         let editing = self.open_sound()?;
+        if self.is_placing.swap(true, Ordering::Relaxed) {
+            return Ok(0);
+        }
+        let placed = self.place_pieces(&editing, pieces).await;
+        self.is_placing.store(false, Ordering::Relaxed);
+        {
+            let mut current = self.editing();
+            if current.as_ref().is_some_and(|open| open.id == editing.id) {
+                *current = None;
+            }
+        }
+        if placed > 0 {
+            self.events.emit(AppEvent::show(Message::with(
+                TextKey::CutsPlaced,
+                [Message::plain(placed.to_string())],
+            )));
+        }
+        // A file nothing took is not kept, such as a download that was only cut.
+        self.board.release_file(&editing.path);
+        Ok(placed)
+    }
+
+    async fn place_pieces(&self, editing: &Editing, pieces: Vec<CutPiece>) -> u32 {
         self.stop_preview();
         let mut placed = 0;
         for piece in pieces {
@@ -215,21 +258,16 @@ impl CutSession {
             }
             placed += 1;
         }
-        *self.editing() = None;
-        if placed > 0 {
-            self.events.emit(AppEvent::show(Message::with(
-                TextKey::CutsPlaced,
-                [Message::plain(placed.to_string())],
-            )));
-        }
-        // A file nothing took is not kept, such as a download that was only cut.
-        self.board.release_file(&editing.path);
-        Ok(placed)
+        placed
     }
 
     /// Closes the editor without placing anything. A file that came for the editor alone, a
     /// download or a copy of a file of the computer, goes with it.
     pub fn close(&self) {
+        // The pieces being placed need the file; the placing closes the editor when it is done.
+        if self.is_placing.load(Ordering::Relaxed) {
+            return;
+        }
         let Some(editing) = self.editing().take() else {
             return;
         };

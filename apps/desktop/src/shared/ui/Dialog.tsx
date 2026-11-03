@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import "./Dialog.css";
 import { holdHotkeys } from "./hotkeyPause";
 
@@ -9,18 +9,44 @@ interface DialogProps {
   isWide?: boolean;
   /** For an editor, which needs most of the window. */
   isLarge?: boolean;
+  /**
+   * Whether the global keys stay off while it is open, as they should while the user types or
+   * works in a dialog. A dialog that opens by itself, such as the one of an update, leaves them
+   * on, since the user may be in a game when it opens.
+   */
+  holdsHotkeys?: boolean;
   children: ReactNode;
 }
 
-/** The frame of every dialog. Esc cancels, and the global hotkeys stay off while it is open. */
-export function Dialog({ title, onCancel, isWide, isLarge, children }: DialogProps) {
-  useEffect(() => holdHotkeys(), []);
+/** The dialogs open, the one on top last. Only the one on top answers to the keys. */
+const open: { id: string; title: string }[] = [];
+
+/** The title of the dialog on top, or null when none is open. */
+export function topDialog() {
+  return open.length > 0 ? open[open.length - 1].title : null;
+}
+
+/** The frame of every dialog. Esc cancels the one on top, and the global hotkeys stay off while it is open. */
+export function Dialog({ title, onCancel, isWide, isLarge, holdsHotkeys = true, children }: DialogProps) {
+  const id = useId();
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onCancel();
+    open.push({ id, title });
+    return () => void open.splice(
+      open.findIndex((item) => item.id === id),
+      1,
+    );
+  }, [id, title]);
+
+  useEffect(() => (holdsHotkeys ? holdHotkeys() : undefined), [holdsHotkeys]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && open[open.length - 1]?.id === id) onCancel();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [onCancel, id]);
 
   return (
     <div className="dialog-backdrop">

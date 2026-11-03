@@ -26,7 +26,7 @@ export function UpdateDialog() {
   }
 
   return (
-    <Dialog title={t("UpdateReady")} onCancel={later}>
+    <Dialog title={t("UpdateReady")} onCancel={later} holdsHotkeys={false}>
       <p className="dialog-text" role="status">
         {render(update.status)}
       </p>

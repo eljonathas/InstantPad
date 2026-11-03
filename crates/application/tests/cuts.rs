@@ -1,5 +1,7 @@
 mod support;
 
+use std::sync::Arc;
+
 use instantpad_application::cuts::{CutPiece, CutSession, CutSource};
 use instantpad_application::events::AppEvent;
 use instantpad_application::message::{Failure, Message, TextKey};
@@ -381,4 +383,45 @@ async fn opening_another_sound_closes_the_one_that_was_open() {
 
     assert!(!editor.world.files.exists("store/first.mp3"));
     assert!(editor.world.files.exists("store/second.mp3"));
+}
+
+#[tokio::test]
+async fn closing_while_the_pieces_are_placed_keeps_the_file_they_need() {
+    let editor = Arc::new(Editor::new());
+    editor.opens_a_file("memes", 4000).await;
+    let closer = editor.clone();
+    *editor.world.player.meanwhile.lock().unwrap() = Some(Box::new(move || closer.cuts.close()));
+
+    let placed = editor
+        .cuts
+        .place(vec![piece("Bruh", 0, 1000), piece("Boom", 1000, 2000)])
+        .await
+        .unwrap();
+
+    assert_eq!(placed, 2);
+    assert!(editor.world.files.exists("store/memes.mp3"));
+    assert_eq!(editor.pad(1).unwrap().0, "Boom");
+    // The placing closed the editor once it was done.
+    *editor.world.player.meanwhile.lock().unwrap() = None;
+    assert_eq!(editor.cuts.detect().await, Err(missing()));
+}
+
+#[tokio::test]
+async fn a_second_create_while_the_first_places_does_nothing() {
+    let editor = Arc::new(Editor::new());
+    editor.opens_a_file("memes", 4000).await;
+    let again = editor.clone();
+    *editor.world.player.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        let placed = support::poll_once(again.cuts.place(vec![piece("Again", 2000, 3000)]));
+        assert_eq!(placed, Some(Ok(0)));
+    }));
+
+    editor
+        .cuts
+        .place(vec![piece("Bruh", 0, 1000)])
+        .await
+        .unwrap();
+
+    assert_eq!(editor.pad(0).unwrap().0, "Bruh");
+    assert!(editor.pad(1).is_none());
 }

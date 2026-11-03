@@ -175,3 +175,15 @@ fn a_few_words_in_a_long_silence_still_count() {
     assert!(heard >= 90 * FRAME, "{heard}");
     assert!(heard <= 100 * FRAME, "{heard}");
 }
+
+#[test]
+fn a_loud_steady_noise_under_a_voice_is_left_out_whatever_its_level() {
+    // A noise of about -30 dBFS, well above what a quiet room makes, under a louder voice.
+    let noise = hum(100, 0.06);
+    let speech = [noise.clone(), nonstop(200, 0.4), noise].concat();
+
+    let heard = voiced(&speech, RATE).len();
+
+    assert!(heard >= 100 * FRAME, "{heard}");
+    assert!(heard <= 200 * FRAME, "{heard}");
+}

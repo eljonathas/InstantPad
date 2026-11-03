@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { commands, type CutEditorView } from "../../shared/ipc";
 import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
-import { Dialog } from "../../shared/ui/Dialog";
+import { Dialog, topDialog } from "../../shared/ui/Dialog";
 import { cutEditor, useCutEditor } from "./cutEditorStore";
 import { clock, msToX, pan, pieceAt, piecesOf, xToMs, zoom, type View } from "./cutMath";
 import "./CutEditor.css";
@@ -44,12 +44,14 @@ function Editor({ opened }: { opened: CutEditorView }) {
   const { t } = useText();
   const colors = useBackend((state) => state.limits.padColors);
   const { durationMs } = opened;
+  const title = t("CutIntoPadsTitle", [opened.name]);
 
   const nextId = useRef(0);
   const [cues, setCues] = useState<Cue[]>(() => opened.cues.map((ms) => ({ id: nextId.current++, ms })));
   const [selected, setSelected] = useState<number | null>(null);
   const [playhead, setPlayhead] = useState(0);
   const [view, setView] = useState<View>({ startMs: 0, endMs: durationMs });
+  // Keyed by the cue that starts the piece, so a name stays with its piece when cues come and go.
   const [names, setNames] = useState<Record<number, string>>({});
   const [left, setLeft] = useState<Set<number>>(new Set());
   const [playing, setPlaying] = useState<Playing | null>(null);
@@ -57,9 +59,12 @@ function Editor({ opened }: { opened: CutEditorView }) {
   const [isPlacing, setIsPlacing] = useState(false);
 
   const pieces = useMemo(() => piecesOf(cues.map((cue) => cue.ms), durationMs), [cues, durationMs]);
-  const nameOf = (index: number) => names[index] ?? `${opened.name} ${index + 1}`;
+  /** The cue each piece starts at. */
+  const cueOf = (index: number) => cues.find((cue) => cue.ms === pieces[index]?.startMs)?.id ?? -1;
+  const nameOf = (index: number) => names[cueOf(index)] ?? `${opened.name} ${index + 1}`;
+  const isLeft = (index: number) => left.has(cueOf(index));
   const colorOf = (index: number) => (colors.length > 0 ? colors[index % colors.length] : opened.color);
-  const chosen = pieces.map((_, index) => index).filter((index) => !left.has(index));
+  const chosen = pieces.map((_, index) => index).filter((index) => !isLeft(index));
   const tooMany = chosen.length > opened.freePads;
 
   // ---- Hearing ----
@@ -69,7 +74,9 @@ function Editor({ opened }: { opened: CutEditorView }) {
     setPlaying(null);
   }, []);
 
-  const play = useCallback(async (fromMs: number, toMs: number) => {
+  // The backend takes whole milliseconds, and the playhead moves in fractions of one.
+  const play = useCallback(async (from: number, to: number) => {
+    const [fromMs, toMs] = [Math.round(from), Math.round(to)];
     const answer = await commands.previewCut(fromMs, toMs);
     if (answer.status === "ok") setPlaying({ fromMs, toMs, startedAt: performance.now() });
   }, []);
@@ -185,7 +192,7 @@ function Editor({ opened }: { opened: CutEditorView }) {
     // Each piece tinted with the color its pad gets.
     pieces.forEach((piece, index) => {
       context.fillStyle = colorOf(index);
-      context.globalAlpha = left.has(index) ? 0.05 : 0.2;
+      context.globalAlpha = isLeft(index) ? 0.05 : 0.2;
       context.fillRect(x(piece.startMs), 0, x(piece.endMs) - x(piece.startMs), height);
     });
     context.globalAlpha = 1;
@@ -196,7 +203,7 @@ function Editor({ opened }: { opened: CutEditorView }) {
       drawn.peaks.forEach((peak, bar) => {
         const ms = drawn.view.startMs + ((bar + 0.5) / drawn.peaks.length) * (drawn.view.endMs - drawn.view.startMs);
         const index = pieceAt(pieces, ms);
-        context.fillStyle = index >= 0 && !left.has(index) ? lit : dim;
+        context.fillStyle = index >= 0 && !isLeft(index) ? lit : dim;
         const half = Math.max(0.5, peak * (middle - 4));
         context.fillRect(x(ms) - 0.5, middle - half, 1, half * 2);
       });
@@ -287,7 +294,10 @@ function Editor({ opened }: { opened: CutEditorView }) {
   const keys = useRef<(event: KeyboardEvent) => void>(() => {});
   keys.current = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
+    if (topDialog() !== title) return;
     if (target?.closest("input, select, textarea") || event.ctrlKey || event.metaKey || event.altKey) return;
+    // Space and Enter on a focused key press that key, as everywhere else.
+    if ((event.code === "Space" || event.key === "Enter") && target?.closest("button")) return;
     if (event.code === "Space") {
       event.preventDefault();
       togglePlay();
@@ -328,10 +338,14 @@ function Editor({ opened }: { opened: CutEditorView }) {
   }
 
   const zoomBy = (factor: number) => setView(zoom(view, factor, playhead, durationMs));
+  // While the pieces go to the pads, the editor stays: closing would drop the file they need.
+  const cancel = () => {
+    if (!isPlacing) cutEditor.cancel();
+  };
   const createLabel = chosen.length === 1 ? t("CutCreateOne") : t("CutCreate", [String(chosen.length)]);
 
   return (
-    <Dialog title={t("CutIntoPadsTitle", [opened.name])} isLarge onCancel={cutEditor.cancel}>
+    <Dialog title={title} isLarge onCancel={cancel}>
       <div className="cut-screen">
         <canvas
           ref={canvas}
@@ -385,7 +399,7 @@ function Editor({ opened }: { opened: CutEditorView }) {
       ) : (
         <ol className="cut-pieces">
           {pieces.map((piece, index) => (
-            <li key={`${index}-${piece.startMs}`} className="cut-piece" data-left={left.has(index) ? "" : undefined}>
+            <li key={cueOf(index)} className="cut-piece" data-left={isLeft(index) ? "" : undefined}>
               <span className="cut-swatch" style={{ background: colorOf(index) }}>
                 {index + 1}
               </span>
@@ -393,7 +407,7 @@ function Editor({ opened }: { opened: CutEditorView }) {
                 className="field cut-name"
                 aria-label={t("CutPieceName", [String(index + 1)])}
                 value={nameOf(index)}
-                onChange={(event) => setNames((before) => ({ ...before, [index]: event.target.value }))}
+                onChange={(event) => setNames((before) => ({ ...before, [cueOf(index)]: event.target.value }))}
               />
               <span className="cut-range screen-text">
                 {clock(piece.startMs)}–{clock(piece.endMs)}
@@ -411,12 +425,13 @@ function Editor({ opened }: { opened: CutEditorView }) {
                 type="checkbox"
                 className="cut-include"
                 aria-label={t("CutPieceInclude", [String(index + 1)])}
-                checked={!left.has(index)}
+                checked={!isLeft(index)}
                 onChange={() =>
                   setLeft((before) => {
                     const next = new Set(before);
-                    if (next.has(index)) next.delete(index);
-                    else next.add(index);
+                    const cue = cueOf(index);
+                    if (next.has(cue)) next.delete(cue);
+                    else next.add(cue);
                     return next;
                   })
                 }
@@ -429,7 +444,7 @@ function Editor({ opened }: { opened: CutEditorView }) {
       <p className="dialog-tip">{t("CutHelp")}</p>
       {tooMany && <p className="cut-notice">{t("CutTooMany", [String(opened.freePads)])}</p>}
       <div className="dialog-buttons">
-        <button type="button" className="key" onClick={cutEditor.cancel}>
+        <button type="button" className="key" disabled={isPlacing} onClick={cancel}>
           {t("Cancel")}
         </button>
         <button

@@ -54,7 +54,10 @@ impl SoundClip {
         let at = |ms: u32| {
             (ms as usize * SAMPLE_RATE as usize / 1000 * CHANNELS).min(self.samples.len())
         };
-        at(cut.start_ms)..at(cut.end_ms)
+        let end = at(cut.end_ms);
+        // A cut that ends before it starts, from a damaged file, plays nothing rather than
+        // slicing backwards in the audio callback.
+        at(cut.start_ms).min(end)..end
     }
 
     /// The display bars of `range`, from 0 to 1.
@@ -266,6 +269,21 @@ pub(crate) mod tests {
             900 * per_ms..clip.samples().len()
         );
         assert_eq!(clip.duration_ms(), 1000);
+    }
+
+    #[test]
+    fn a_cut_that_ends_before_it_starts_plays_nothing() {
+        let clip = half_quiet_half_loud();
+        let backwards = Cut {
+            start_ms: 800,
+            end_ms: 200,
+        };
+
+        let range = clip.range(Some(backwards));
+
+        assert!(range.is_empty(), "{range:?}");
+        assert!(range.end <= clip.samples().len());
+        assert!(clip.peaks_of(range).iter().all(|peak| *peak == 0.0));
     }
 
     #[test]

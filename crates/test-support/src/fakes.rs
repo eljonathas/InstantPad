@@ -40,6 +40,8 @@ pub struct FakePlayer {
     pub durations: Mutex<HashMap<String, u32>>,
     /// How loud each sound is along the way, one value per 10 ms. Silent when not here.
     pub levels: Mutex<HashMap<String, Vec<f32>>>,
+    /// Runs while a sound is being loaded, for what the user does meanwhile.
+    pub meanwhile: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
 }
 
 impl FakePlayer {
@@ -54,6 +56,9 @@ impl FakePlayer {
 #[async_trait]
 impl SoundPlayer for FakePlayer {
     async fn preload(&self, path: &str) -> Result<(), Failure> {
+        if let Some(meanwhile) = &*self.meanwhile.lock().unwrap() {
+            meanwhile();
+        }
         self.check(path)
     }
 

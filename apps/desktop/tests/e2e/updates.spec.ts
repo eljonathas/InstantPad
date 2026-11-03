@@ -77,3 +77,26 @@ test("Esc closes the window without silencing it", async ({ page }) => {
   await updateArrives(page, "9.9.10");
   await expect(dialog(page)).toBeVisible();
 });
+
+test("the window opens by itself, so it leaves the global keys on", async ({ page }) => {
+  const calls = await recordCommands(page);
+
+  await updateArrives(page, "9.9.9");
+
+  await expect(dialog(page)).toBeVisible();
+  expect((await calls()).filter((call) => call === "pause_hotkeys")).toHaveLength(0);
+});
+
+test("Esc closes only the window on top", async ({ page }) => {
+  await page.locator(".sound-row:visible", { hasText: "Airhorn" }).getByRole("button", { name: "Cut into pads" }).click();
+  const cutEditor = page.getByRole("dialog", { name: "Cut into pads: Airhorn" });
+  await expect(cutEditor).toBeVisible();
+  await updateArrives(page, "9.9.9");
+
+  await page.keyboard.press("Escape");
+
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(cutEditor).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(cutEditor).toHaveCount(0);
+});

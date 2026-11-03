@@ -157,3 +157,46 @@ test("a piece is played from its key in the list", async ({ page }) => {
   await expect.poll(async () => (await calls()).filter((call) => call === "preview_cut").length).toBe(1);
   await expect(editor(page).getByLabel("Playhead")).toContainText("0:04.");
 });
+
+test("playing again after stopping halfway plays", async ({ page }) => {
+  const calls = await recordCommands(page);
+  await openAirhorn(page);
+  const play = editor(page).locator(".cut-play");
+
+  await play.click();
+  await expect(play).toHaveText("Stop");
+  await page.waitForTimeout(250);
+  await play.click();
+  await expect(play).toHaveText("Play");
+  await play.click();
+
+  await expect(play).toHaveText("Stop");
+  await expect.poll(async () => (await calls()).filter((call) => call === "preview_cut").length).toBe(2);
+});
+
+test("Space on a focused key presses that key instead of playing", async ({ page }) => {
+  const calls = await recordCommands(page);
+  await openAirhorn(page);
+
+  await editor(page).getByRole("button", { name: "Cancel" }).focus();
+  await page.keyboard.press("Space");
+
+  await expect(editor(page)).toHaveCount(0);
+  expect((await calls()).filter((call) => call === "preview_cut")).toHaveLength(0);
+});
+
+test("a name and a left out piece stay with their piece when a cue is added before it", async ({ page }) => {
+  await openAirhorn(page);
+  await editor(page).getByRole("button", { name: "Detect cuts" }).click();
+  await editor(page).getByLabel("Name of piece 3").fill("Horn");
+  await editor(page).getByLabel("Make a pad of piece 4").uncheck();
+
+  // A cue early in the first piece makes every later piece one further down the list.
+  await clickWaveform(page, 0.08);
+  await page.keyboard.press("c");
+
+  await expect(pieces(page)).toHaveCount(5);
+  await expect(editor(page).getByLabel("Name of piece 4")).toHaveValue("Horn");
+  await expect(editor(page).getByLabel("Make a pad of piece 5")).not.toBeChecked();
+  await expect(editor(page).getByLabel("Make a pad of piece 4")).toBeChecked();
+});

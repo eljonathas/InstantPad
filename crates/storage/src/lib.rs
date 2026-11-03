@@ -1,4 +1,5 @@
-//! Adapters that keep the board, favorites, settings, voices and sound files on disk.
+//! Adapters that keep the board, favorites, settings, voices, the training in progress and
+//! sound files on disk.
 
 mod data_folder;
 mod json_file;
@@ -7,7 +8,7 @@ mod sound_store;
 
 pub use data_folder::AppDataFolder;
 pub use repositories::{
-    JsonBoardRepository, JsonFavoritesRepository, JsonSettingsRepository,
+    JsonBoardRepository, JsonFavoritesRepository, JsonSettingsRepository, JsonTrainingRepository,
     JsonVoiceLibraryRepository,
 };
 pub use sound_store::FolderSoundStore;

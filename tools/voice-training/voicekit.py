@@ -182,6 +182,7 @@ def download(url: str, target: Path, size: int, digest: str) -> None:
                     done += len(block)
                     if time.monotonic() - shown > 2 or done == size:
                         shown = time.monotonic()
+                        event(download=target.name, done=done, size=size)
                         print(
                             f"\r    {target.name}: {done / 1e6:.0f} of {size / 1e6:.0f} MB",
                             end="",

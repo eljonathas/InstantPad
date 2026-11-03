@@ -46,6 +46,12 @@ impl AppDataFolder {
         &self.previews
     }
 
+    /// Where the tools that train voices are installed, and the trainings work. Made only when
+    /// the user installs them.
+    pub fn voice_training(&self) -> PathBuf {
+        self.root.join("voice-training")
+    }
+
     /// Where the AI voice models are downloaded to.
     pub fn voice_models(&self) -> &Path {
         &self.voice_models

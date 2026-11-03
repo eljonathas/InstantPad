@@ -85,6 +85,18 @@ export const commands = {
 	importCloneSample: (path: string) => typedError<null, null>(__TAURI_INVOKE("import_clone_sample", { path })),
 	saveClonedVoice: (name: string) => __TAURI_INVOKE<void>("save_cloned_voice", { name }),
 	closeCloning: () => __TAURI_INVOKE<void>("close_cloning"),
+	openTraining: (cloneId: string) => typedError<null, null>(__TAURI_INVOKE("open_training", { cloneId })),
+	acceptTraining: () => typedError<null, null>(__TAURI_INVOKE("accept_training")),
+	startTrainingTake: () => __TAURI_INVOKE<void>("start_training_take"),
+	finishTrainingTake: () => typedError<null, null>(__TAURI_INVOKE("finish_training_take")),
+	importTrainingTake: (path: string) => typedError<null, null>(__TAURI_INVOKE("import_training_take", { path })),
+	removeTrainingTake: (id: string) => __TAURI_INVOKE<void>("remove_training_take", { id }),
+	/**  Resolves when the training ends, is stopped or fails, which can take a day. */
+	trainVoice: () => typedError<null, null>(__TAURI_INVOKE("train_voice")),
+	stopTraining: () => __TAURI_INVOKE<void>("stop_training"),
+	discardTraining: () => __TAURI_INVOKE<void>("discard_training"),
+	closeTraining: () => __TAURI_INVOKE<void>("close_training"),
+	removeTrainingTools: () => __TAURI_INVOKE<void>("remove_training_tools"),
 };
 
 /** Events */
@@ -110,7 +122,7 @@ export type AiView = {
 	waiting: Message | null,
 };
 
-export type AppEvent = { kind: "board"; data: BoardView } | { kind: "favorites"; data: SoundSource[] } | { kind: "setup"; data: SetupView } | { kind: "driverStatus"; data: Message } | { kind: "update"; data: UpdateView } | { kind: "voice"; data: VoiceView } | { kind: "cloning"; data: CloneStep } | { kind: "display"; data: DisplayEvent };
+export type AppEvent = { kind: "board"; data: BoardView } | { kind: "favorites"; data: SoundSource[] } | { kind: "setup"; data: SetupView } | { kind: "driverStatus"; data: Message } | { kind: "update"; data: UpdateView } | { kind: "voice"; data: VoiceView } | { kind: "cloning"; data: CloneStep } | { kind: "training"; data: TrainStep } | { kind: "display"; data: DisplayEvent };
 
 export type AudioDevice = {
 	id: string,
@@ -311,6 +323,11 @@ export type ParamView = {
 	text: string,
 };
 
+/**  Why a training runs on the processor. */
+export type ProcessorReason = 
+/**  No NVIDIA card, which includes every AMD and Intel one. */
+"noCard" | "smallCard" | "oldDriver";
+
 export type SetupView = {
 	microphones: AudioDevice[],
 	gameOutputs: AudioDevice[],
@@ -380,17 +397,85 @@ export type StartView = {
 	voice: VoiceView,
 };
 
+/**  A stretch of speech the voice learns from, recorded or taken from a file. */
+export type Take = {
+	/**  Also the name of its file in the training's folder. */
+	id: string,
+	seconds: number,
+};
+
 /**
  *  A key of the translated texts. The frontend owns the translations, so TypeScript refuses
  *  a variant that is missing from them.
  */
-export type TextKey = "AiCalibrationSaved" | "AiDownloadFailed" | "AiInstalled" | "AiListening" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AiTrainedTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneSaved" | "CloneVoice" | "CutsPlaced" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "MicrophoneBusy" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "TrainedModelAdded" | "TrainedModelInvalid" | "TrainedModelRemoved" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
+export type TextKey = "AiCalibrationSaved" | "AiDownloadFailed" | "AiInstalled" | "AiListening" | "AiLoadFailed" | "AiNotCalibrated" | "AiNotInstalled" | "AiTooSlow" | "AiTrainedTooSlow" | "AudioDeviceNotResponding" | "CatalogNoConnection" | "CloneDeleted" | "CloneMissingName" | "CloneSaved" | "CloneVoice" | "CutsPlaced" | "DevelopmentVersion" | "DeviceUnavailable" | "Downloading" | "DownloadingVersion" | "DriverDownloading" | "DriverFailed" | "DriverInstallCanceled" | "DriverOpeningPage" | "DriverOpeningSetup" | "DriverSearching" | "DriverSetupMissing" | "DriverSignatureInvalid" | "DriverSignatureUnreadable" | "DriverSignerUnexpected" | "DriverVerifying" | "EffectCycle" | "EffectDeep" | "EffectFeminine" | "EffectFeminineAi" | "EffectGhost" | "EffectNatural" | "EffectOgre" | "EffectThin" | "EmptyPad" | "FailedSound" | "GameMicrophoneHint" | "HotkeyInUse" | "InGameSound" | "InterfaceFull" | "InterfaceFullHint" | "Listening" | "MicStopped" | "MicrophoneBusy" | "Missing" | "NoDriverHint" | "Ok" | "OutputStopped" | "PadSelected" | "ParamEcho" | "ParamFormant" | "ParamGrowl" | "ParamHigh" | "ParamIntensity" | "ParamLow" | "ParamPitch" | "ParamTime" | "ParamWhisper" | "RoutingStatus" | "SampleTooLong" | "SampleTooShort" | "SaveFailed" | "Saved" | "SentTo" | "SoundCopyFailed" | "SoundDownloadFailed" | "SoundFileMissing" | "SoundHasNoAudio" | "SoundOpenFailed" | "SoundSaveFailed" | "Stopped" | "SystemOutputOnCableHint" | "TakeTooShort" | "TrainedModelAdded" | "TrainedModelInvalid" | "TrainedModelRemoved" | "TrainingAlreadyRunning" | "TrainingDone" | "TrainingFailed" | "TrainingFull" | "TrainingInstallFailed" | "TrainingPaused" | "TrainingToolsRemoved" | "TrainingUnsupported" | "UpdateDownloadFailed" | "Version" | "VersionInstalled";
+
+/**
+ *  Where the user is in training a model of a cloned voice. Each step only opens once the one
+ *  before is done.
+ */
+export type TrainStep = { step: "closed" } | 
+/**  Looking for a graphics card. */
+{ step: "checking" } | 
+/**  Where the voice trains, what that downloads and the room it needs, for the user to agree. */
+{ step: "prepare"; voice: string; device: TrainingDevice; 
+/**  The NVIDIA card, when there is one, even if it is not used. */
+card: string | null; downloadMegabytes: number; neededMegabytes: number; 
+/**  Set when the disk is short of room, which stops the training from starting. */
+missingMegabytes: number | null; 
+/**  How long 40 minutes of speech take to train. */
+estimatedSeconds: number; problem: Message | null } | { step: "installing"; voice: string; percent: number } | 
+/**  The speech the voice learns from, recorded or picked from files. */
+{ step: "takes"; voice: string; takes: Take[]; seconds: number; minSeconds: number; maxSeconds: number; maxTakeSeconds: number; isRecording: boolean; 
+/**  A take being written or a file being read. */
+isBusy: boolean; 
+/**  How long the speech gathered so far takes to train. */
+estimatedSeconds: number; problem: Message | null } | { step: "training"; voice: string; device: TrainingDevice; stage: TrainingStage; epoch: number; epochs: number; 
+/**  Known once an epoch has run. */
+remainingSeconds: number | null; isRunning: boolean; problem: Message | null };
 
 /**  A trained model, with the engine the voice speaks through. */
 export type TrainedView = {
 	name: string,
 	credit: string,
 	engine: VoiceEngine,
+};
+
+/**  Where the training runs, which also sets which build of PyTorch it needs. */
+export type TrainingDevice = { kind: "card" } | { kind: "processor"; reason: ProcessorReason };
+
+export type TrainingJobView = {
+	cloneId: string,
+	phase: TrainingPhase,
+};
+
+export type TrainingPhase = 
+/**  The speech is still being gathered. */
+{ kind: "takes"; seconds: number; minSeconds: number } | { kind: "installing"; percent: number } | { kind: "running"; epoch: number; epochs: number } | 
+/**  Stopped by the user or by closing the app, and goes on from `epoch`. */
+{ kind: "paused"; epoch: number; epochs: number };
+
+/**  What a training is doing, as the kit reports it. */
+export type TrainingStage = 
+/**  Cutting the speech into pieces. */
+"cutting" | 
+/**  Finding the pitch of each piece. */
+"pitch" | 
+/**  Finding the words of each piece. */
+"words" | 
+/**  Going through the pieces, epoch after epoch. */
+"learning" | 
+/**  Writing and checking the voice for the app. */
+"exporting";
+
+/**  What the voice screen shows of training models in the app. */
+export type TrainingSummary = {
+	/**  Whether the app trains voices on this system. */
+	isSupported: boolean,
+	/**  The training in progress, of one cloned voice. */
+	job: TrainingJobView | null,
+	/**  What removing the training tools frees, or 0 when they are not there. */
+	toolsMegabytes: number,
 };
 
 export type UpdateView = {
@@ -441,6 +526,7 @@ export type VoiceView = {
 	clonedVoices: ClonedVoiceView[],
 	/**  `None` while the voice designer is closed. */
 	designer: DesignerView | null,
+	training: TrainingSummary,
 };
 
 /**  A sound as the cut editor draws it. */

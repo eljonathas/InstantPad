@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Pins what the voice training needs, for setup.sh and for the app.
 
-    uv run --python 3.12 tools/voice-training/pin.py
+    uv run --no-project --python 3.12 tools/voice-training/pin.py
 
 For each computer the app trains on (Windows and Linux, with an NVIDIA card or the processor)
 it resolves requirements.txt, PyTorch and FFmpeg at the versions in requirements.lock, and
 writes two files to environments/:
 
-- <computer>.lock, the requirements with their SHA-256, which setup.sh installs from;
+- <computer>.lock, the requirements with their SHA-256, to read what changed in review;
 - <computer>.json, every wheel of that computer with its address, size and SHA-256, which the
   app downloads one by one, so it can show the progress and resume a download that stopped.
 

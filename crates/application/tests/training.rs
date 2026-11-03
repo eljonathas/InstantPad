@@ -212,7 +212,10 @@ fn a_disk_short_of_room_is_told_and_nothing_downloads() {
 fn agreeing_installs_the_tools_for_the_device_then_asks_for_speech() {
     let world = TrainingWorld::new().with_card().ready_for_takes();
 
-    assert_eq!(*world.trainer.tools.lock().unwrap(), Some(TrainingDevice::Card));
+    assert_eq!(
+        *world.trainer.tools.lock().unwrap(),
+        Some(TrainingDevice::Card)
+    );
     assert!(matches!(world.step(), TrainStep::Takes { seconds: 0, .. }));
     let job = world.job().expect("the training is saved");
     assert_eq!(job.clone_id, ANA);
@@ -302,7 +305,10 @@ fn takes_are_written_to_the_training_and_add_up() {
     let job = world.job().unwrap();
     let written = world.trainer.takes.lock().unwrap().clone();
     assert_eq!(written.len(), 2);
-    assert_eq!(written[0], (job.id.clone(), takes[0].id.clone(), 120 * 48_000));
+    assert_eq!(
+        written[0],
+        (job.id.clone(), takes[0].id.clone(), 120 * 48_000)
+    );
 }
 
 #[test]
@@ -332,13 +338,34 @@ fn a_take_longer_than_the_longest_is_cut() {
 
     let written = world.trainer.takes.lock().unwrap().clone();
     assert_eq!(written[0].2, MAX_TAKE_SECONDS as usize * 48_000);
+    // The dialog says how long a take can be, so a take cut there is no problem.
     assert!(matches!(
         world.step(),
-        TrainStep::Takes {
-            problem: Some(_),
-            ..
-        }
+        TrainStep::Takes { problem: None, .. }
     ));
+}
+
+#[test]
+fn a_take_past_the_most_speech_a_training_takes_is_cut_and_says_so() {
+    let world = TrainingWorld::new().with_card().ready_for_takes();
+    for take in [600, 600, 600, 500] {
+        world.record(take);
+    }
+
+    world.record(300);
+
+    let written = world.trainer.takes.lock().unwrap().clone();
+    assert_eq!(written.last().unwrap().2, 100 * 48_000);
+    let TrainStep::Takes {
+        problem: Some(problem),
+        seconds,
+        ..
+    } = world.step()
+    else {
+        panic!("expected the takes with a problem");
+    };
+    assert_eq!(seconds, 2400);
+    assert_eq!(problem, Message::text(TextKey::TrainingFull));
 }
 
 #[test]
@@ -396,7 +423,10 @@ fn the_training_does_not_start_without_enough_speech() {
 
 #[test]
 fn a_finished_training_puts_the_model_in_the_voice_and_deletes_the_recordings() {
-    let world = TrainingWorld::new().with_card().ready_for_takes().with_enough_speech();
+    let world = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
     let id = world.job().unwrap().id;
 
     world.train();
@@ -423,7 +453,10 @@ fn a_finished_training_puts_the_model_in_the_voice_and_deletes_the_recordings() 
 
 #[test]
 fn epochs_move_the_progress_and_tell_what_is_left() {
-    let world = TrainingWorld::new().with_card().ready_for_takes().with_enough_speech();
+    let world = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
     *world.trainer.progress.lock().unwrap() = vec![
         TrainingProgress::Stage(TrainingStage::Pitch),
         TrainingProgress::Epoch {
@@ -460,7 +493,10 @@ fn epochs_move_the_progress_and_tell_what_is_left() {
 
 #[test]
 fn a_stopped_training_is_paused_and_resumes_from_where_it_was() {
-    let world = TrainingWorld::new().with_card().ready_for_takes().with_enough_speech();
+    let world = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
     *world.trainer.progress.lock().unwrap() = vec![TrainingProgress::Epoch {
         epoch: 35,
         seconds: 20.0,
@@ -493,9 +529,14 @@ fn a_stopped_training_is_paused_and_resumes_from_where_it_was() {
 
 #[test]
 fn a_training_that_fails_says_why_and_keeps_what_it_has() {
-    let world = TrainingWorld::new().with_card().ready_for_takes().with_enough_speech();
-    *world.trainer.ending.lock().unwrap() =
-        Some(Err(Failure::because(TextKey::TrainingFailed, "out of memory")));
+    let world = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
+    *world.trainer.ending.lock().unwrap() = Some(Err(Failure::because(
+        TextKey::TrainingFailed,
+        "out of memory",
+    )));
 
     world.train();
 
@@ -513,7 +554,10 @@ fn a_training_that_fails_says_why_and_keeps_what_it_has() {
 
 #[test]
 fn closing_the_app_and_opening_it_again_shows_the_training_paused() {
-    let first = TrainingWorld::new().with_card().ready_for_takes().with_enough_speech();
+    let first = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
     *first.trainer.progress.lock().unwrap() = vec![TrainingProgress::Epoch {
         epoch: 50,
         seconds: 20.0,
@@ -538,7 +582,10 @@ fn closing_the_app_and_opening_it_again_shows_the_training_paused() {
 
 #[test]
 fn a_training_of_a_voice_deleted_meanwhile_is_dropped_with_its_files() {
-    let job = TrainingJob::new(ANA, TrainingPlan::new(TrainingDevice::Card, Some(&card(8192))));
+    let job = TrainingJob::new(
+        ANA,
+        TrainingPlan::new(TrainingDevice::Card, Some(&card(8192))),
+    );
     let id = job.id.clone();
 
     let world = TrainingWorld::with(
@@ -556,7 +603,10 @@ fn a_training_of_a_voice_deleted_meanwhile_is_dropped_with_its_files() {
 
 #[test]
 fn a_voice_deleted_while_it_trains_gets_no_model() {
-    let world = TrainingWorld::new().with_card().ready_for_takes().with_enough_speech();
+    let world = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
     let voice = world.voices.voice.clone();
     *world.trainer.meanwhile.lock().unwrap() = Some(Box::new(move || voice.delete_clone(ANA)));
 
@@ -653,7 +703,10 @@ fn removing_the_tools_frees_their_room() {
 
 #[test]
 fn a_training_whose_tools_are_gone_asks_for_them_again_and_resumes() {
-    let world = TrainingWorld::new().with_card().ready_for_takes().with_enough_speech();
+    let world = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
     world.meanwhile(|training| training.stop());
     world.train();
     world.training.close();

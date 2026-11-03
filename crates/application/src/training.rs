@@ -27,7 +27,9 @@ struct Prepared {
 enum Activity {
     Idle,
     Checking,
-    Installing { percent: u8 },
+    Installing {
+        percent: u8,
+    },
     Recording,
     /// A take is being written or a file read.
     Saving,
@@ -100,7 +102,9 @@ impl TrainingSession {
                 problem: None,
             }),
         };
-        session.voice.show_training(session.summary(&session.state()));
+        session
+            .voice
+            .show_training(session.summary(&session.state()));
         session
     }
 
@@ -494,7 +498,10 @@ impl TrainingSession {
 
         let mut speech = speech;
         speech.truncate(kept as usize * SPEECH_RATE);
-        let written = self.trainer.keep_take(&candidate.id, &take.id, speech).await;
+        let written = self
+            .trainer
+            .keep_take(&candidate.id, &take.id, speech)
+            .await;
 
         let mut state = self.state();
         state.activity = Activity::Idle;
@@ -508,12 +515,10 @@ impl TrainingSession {
         match saved {
             Ok(()) => {
                 state.job = Some(candidate);
-                state.problem = (kept < seconds).then(|| {
-                    Message::with(
-                        TextKey::TrainingFull,
-                        [Message::plain(kept.to_string())],
-                    )
-                });
+                // The end of the take went past the most a training takes, and was left out. A
+                // take cut at the longest a take can be is no news: the dialog says so.
+                let is_full = kept < seconds.min(MAX_TAKE_SECONDS);
+                state.problem = is_full.then(|| Message::text(TextKey::TrainingFull));
             }
             Err(Failure(reason)) => {
                 self.trainer.remove_take(&candidate.id, &take.id);

@@ -19,13 +19,13 @@ for argument in "$@"; do
 done
 
 missing=()
-for tool in uv git ffmpeg; do
+for tool in uv ffmpeg; do
   command -v "$tool" > /dev/null || missing+=("$tool")
 done
 if ((${#missing[@]})); then
   echo "Missing: ${missing[*]}" >&2
-  echo "  uv:          curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
-  echo "  git, ffmpeg: sudo apt install git ffmpeg" >&2
+  echo "  uv:     curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+  echo "  ffmpeg: sudo apt install ffmpeg" >&2
   exit 1
 fi
 

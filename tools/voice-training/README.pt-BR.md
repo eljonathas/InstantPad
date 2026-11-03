@@ -10,13 +10,18 @@ Rodam no Linux e no Windows pelo WSL 2. Com uma placa de vídeo NVIDIA recente a
 treina em cerca de uma hora; sem ela o treino roda no processador, o que funciona, mas leva mais
 de um dia.
 
+O app treina vozes clonadas sozinho com este mesmo kit, no Windows e no Linux, sem nada para
+instalar à mão ([ADR 0007](../../docs/adr/0007-training-voices-in-the-app.md)): escolha uma voz
+clonada e clique em **Treinar um modelo...**. O que vem abaixo é para treinar fora do app, como a
+voz feminina que o app traz.
+
 ## Antes de começar
 
 No WSL, instale o driver da NVIDIA no **Windows**, não dentro do Linux, e confira que o
 `nvidia-smi` funciona no terminal do Linux. Depois, no Linux:
 
 ```bash
-sudo apt install git ffmpeg
+sudo apt install ffmpeg
 ```
 
 ```bash
@@ -77,6 +82,20 @@ sem música e com o mínimo de ruído possível, e então:
 | `content.onnx` | O HuBERT, que entende o que é dito. É o mesmo para todas as vozes. |
 
 O formato das entradas e saídas está no [README em inglês](README.md#what-the-app-gets).
+
+## O que o app baixa
+
+O app instala as mesmas ferramentas do `setup.sh`, no Windows também, a partir dos arquivos em
+`environments/`: cada wheel de cada computador (Windows ou Linux, com placa NVIDIA ou no
+processador) com seu endereço, tamanho e SHA-256. O `pin.py` os escreve a partir do
+`requirements.txt` e do `requirements.lock`; rode-o de novo depois de mudar algum dos dois, e
+faça commit do que mudar:
+
+```bash
+uv run --no-project --python 3.12 tools/voice-training/pin.py
+```
+
+O app embute o `voicekit.py`, então uma mudança nele chega aos usuários na próxima versão.
 
 ## Fontes e licenças
 

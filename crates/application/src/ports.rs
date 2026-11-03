@@ -226,7 +226,10 @@ pub enum TrainingStage {
 pub enum TrainingProgress {
     Stage(TrainingStage),
     /// `epoch` is done; the first one reported may be where a stopped training went on from.
-    Epoch { epoch: u32, seconds: f32 },
+    Epoch {
+        epoch: u32,
+        seconds: f32,
+    },
 }
 
 /// How a long piece of work ended without failing.

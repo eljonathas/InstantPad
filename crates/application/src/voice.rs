@@ -381,7 +381,11 @@ impl VoiceSession {
                 })
                 .collect(),
             designer,
-            training: self.training.lock().expect("training lock poisoned").clone(),
+            training: self
+                .training
+                .lock()
+                .expect("training lock poisoned")
+                .clone(),
         }
     }
 

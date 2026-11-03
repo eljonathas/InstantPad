@@ -15,6 +15,7 @@ use instantpad_application::recorder::SharedRecorder;
 use instantpad_application::rows::SoundRows;
 use instantpad_application::settings::Settings;
 use instantpad_application::setup::SetupSession;
+use instantpad_application::training::TrainingSession;
 use instantpad_application::updates::UpdateSession;
 use instantpad_application::voice::{VoicePorts, VoiceSession};
 use instantpad_application::voice_library::VoiceLibraryStore;
@@ -22,8 +23,9 @@ use instantpad_audio::AudioEngine;
 use instantpad_catalog::MyInstantsCatalog;
 use instantpad_storage::{
     AppDataFolder, FolderSoundStore, JsonBoardRepository, JsonFavoritesRepository,
-    JsonSettingsRepository, JsonVoiceLibraryRepository,
+    JsonSettingsRepository, JsonTrainingRepository, JsonVoiceLibraryRepository,
 };
+use instantpad_training::KitTrainer;
 use instantpad_voice_ai::OnnxVoices;
 use tauri::{AppHandle, Manager};
 
@@ -42,6 +44,7 @@ pub struct Core {
     pub voice: Arc<VoiceSession>,
     pub cloning: CloningSession,
     pub cuts: CutSession,
+    pub training: TrainingSession,
     pub settings: Arc<Settings>,
     /// The interface can start more than once, as it does after a reload.
     pub background_work: Once,
@@ -68,6 +71,8 @@ impl Core {
 
     /// What must happen before the app closes.
     pub fn shut_down(&self) {
+        // The training pauses, and goes on from its last save when the user resumes it.
+        self.training.stop();
         self.board.save();
         // The app is closing, so there is no one left to tell.
         let _ = self.settings.save();
@@ -125,7 +130,18 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
         events.clone(),
     ));
 
+    let training = TrainingSession::new(
+        Arc::new(KitTrainer::new(&folder.voice_training())),
+        Arc::new(JsonTrainingRepository::new(&folder)),
+        recorder.clone(),
+        ai.clone(),
+        voices.clone(),
+        voice.clone(),
+        events.clone(),
+    );
+
     Ok(Core {
+        training,
         mixer: MixerSession::new(engine.clone(), settings.clone()),
         cloning: CloningSession::new(
             recorder,

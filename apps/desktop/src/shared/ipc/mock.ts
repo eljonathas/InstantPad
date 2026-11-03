@@ -20,7 +20,10 @@ import type {
   SoundPage,
   SoundSource,
   StartView,
+  Take,
   TextKey,
+  TrainingPhase,
+  TrainStep,
   VoiceEffect,
   VoiceEngine,
   VoiceIcon,
@@ -160,6 +163,18 @@ const LISTEN_MS = 500;
 const MIN_SAMPLE_SECONDS = 20;
 const MAX_SAMPLE_SECONDS = 300;
 const ANALYZE_MS = 400;
+// Training, far faster than the real thing: an epoch is a tick and a chosen file is a whole take.
+const TRAINING_CARD = "NVIDIA GeForce RTX 3070 Ti";
+const TRAINING_DOWNLOAD_MEGABYTES = 4200;
+const TRAINING_TOOLS_MEGABYTES = 9200;
+const TRAINING_WORK_MEGABYTES = 3072;
+const MIN_TRAINING_SECONDS = 600;
+const MAX_TRAINING_SECONDS = 2400;
+const MAX_TAKE_SECONDS = 600;
+const MIN_TAKE_SECONDS = 5;
+const TRAINING_EPOCHS = 200;
+const EPOCH_SECONDS = 18;
+const EPOCH_MS = 40;
 
 function seedVoice() {
   return {
@@ -483,6 +498,28 @@ export function installMock() {
     send({ kind: "setup", data: { ...setup } });
   }
 
+  // The training of a model of a cloned voice: one at a time, kept while its dialog is closed.
+  const training = {
+    hasTools: false,
+    job: null as { cloneId: string; takes: Take[]; isStarted: boolean; epoch: number } | null,
+    /** The cloned voice whose dialog is open. */
+    openId: null as string | null,
+    activity: "idle" as "idle" | "installing" | "recording" | "training",
+    percent: 0,
+    problem: null as Message | null,
+    timer: null as ReturnType<typeof setInterval> | null,
+  };
+  const speechSeconds = () => training.job?.takes.reduce((sum, take) => sum + take.seconds, 0) ?? 0;
+
+  function trainingPhase(): TrainingPhase | null {
+    const { job, activity } = training;
+    if (!job) return null;
+    if (activity === "installing") return { kind: "installing", percent: training.percent };
+    if (!job.isStarted) return { kind: "takes", seconds: speechSeconds(), minSeconds: MIN_TRAINING_SECONDS };
+    const epochs = { epoch: job.epoch, epochs: TRAINING_EPOCHS };
+    return activity === "training" ? { kind: "running", ...epochs } : { kind: "paused", ...epochs };
+  }
+
   /** The key of a voice that can have a trained model, as the backend knows it. */
   const voiceKey = (effect: VoiceEffect, cloneId: string | null) =>
     effect === "feminineAi"
@@ -546,6 +583,11 @@ export function installMock() {
       clonedVoices: clones,
       designer: designer && { isPreviewing: designer.isPreviewing, defaultTimbre: 0.5, defaultBlend: 0.3 },
       isHearing: backend.voice.isHearing,
+      training: {
+        isSupported: true,
+        job: training.job && { cloneId: training.job.cloneId, phase: trainingPhase()! },
+        toolsMegabytes: training.hasTools ? TRAINING_TOOLS_MEGABYTES : 0,
+      },
       ai: {
         status: ai.isInstalled
           ? { kind: "ready" }
@@ -690,6 +732,76 @@ export function installMock() {
     showCloning({ step: "analyzing" });
     // A dialog closed meanwhile stays closed.
     setTimeout(() => generation === cloningGeneration && showCloning(next()), ANALYZE_MS);
+  }
+
+  function trainingStep(): TrainStep {
+    const { job, openId, activity, problem } = training;
+    if (openId === null) return { step: "closed" };
+    const voice = backend.voice.clones.find((clone) => clone.id === openId)?.name ?? "";
+    const device = { kind: "card" } as const;
+    if (activity === "installing") return { step: "installing", voice, percent: training.percent };
+    if (!job || !training.hasTools) {
+      return {
+        step: "prepare",
+        voice,
+        device,
+        card: TRAINING_CARD,
+        downloadMegabytes: training.hasTools ? 0 : TRAINING_DOWNLOAD_MEGABYTES,
+        neededMegabytes: TRAINING_WORK_MEGABYTES + (training.hasTools ? 0 : TRAINING_TOOLS_MEGABYTES),
+        missingMegabytes: null,
+        estimatedSeconds: TRAINING_EPOCHS * EPOCH_SECONDS,
+        problem,
+      };
+    }
+    const seconds = speechSeconds();
+    if (!job.isStarted) {
+      return {
+        step: "takes",
+        voice,
+        takes: job.takes,
+        seconds,
+        minSeconds: MIN_TRAINING_SECONDS,
+        maxSeconds: MAX_TRAINING_SECONDS,
+        maxTakeSeconds: MAX_TAKE_SECONDS,
+        isRecording: activity === "recording",
+        isBusy: false,
+        estimatedSeconds: Math.round((TRAINING_EPOCHS * EPOCH_SECONDS * seconds) / MAX_TRAINING_SECONDS),
+        problem,
+      };
+    }
+    const isRunning = activity === "training";
+    return {
+      step: "training",
+      voice,
+      device,
+      stage: "learning",
+      epoch: job.epoch,
+      epochs: TRAINING_EPOCHS,
+      remainingSeconds: isRunning && job.epoch > 0 ? (TRAINING_EPOCHS - job.epoch) * EPOCH_SECONDS : null,
+      isRunning,
+      problem,
+    };
+  }
+
+  function publishTraining(problem: Message | null = null) {
+    training.problem = problem;
+    send({ kind: "training", data: trainingStep() });
+    publishVoice();
+  }
+
+  function stopTrainingTimer() {
+    if (training.timer) clearInterval(training.timer);
+    training.timer = null;
+  }
+
+  /** Keeps a take of `seconds`, as much of it as the training has room for. */
+  function keepTake(seconds: number) {
+    const job = training.job!;
+    const room = MAX_TRAINING_SECONDS - speechSeconds();
+    if (seconds < MIN_TAKE_SECONDS) return publishTraining(text("TakeTooShort"));
+    if (room <= 0) return publishTraining(text("TrainingFull"));
+    job.takes = [...job.takes, { id: `take-${++counter}`, seconds: Math.min(seconds, room, MAX_TAKE_SECONDS) }];
+    publishTraining(seconds > room ? text("TrainingFull") : null);
   }
 
   function endPreview() {
@@ -1175,6 +1287,97 @@ export function installMock() {
       closeDesigner();
       show(text("CloneSaved"));
       switchTo("cloned", id, true);
+    },
+    open_training: ({ cloneId }) => {
+      if (!backend.voice.ai.isInstalled) return fail(text("AiNotInstalled"));
+      if (training.job && training.job.cloneId !== cloneId) return fail(text("TrainingAlreadyRunning"));
+      training.openId = cloneId as string;
+      publishTraining();
+    },
+    accept_training: () => {
+      if (training.openId === null || training.activity !== "idle") return;
+      training.job ??= { cloneId: training.openId, takes: [], isStarted: false, epoch: 0 };
+      if (training.hasTools) return publishTraining();
+      training.activity = "installing";
+      training.percent = 0;
+      training.timer = setInterval(() => {
+        training.percent = Math.min(100, training.percent + AI_STEP_PERCENT);
+        if (training.percent === 100) {
+          stopTrainingTimer();
+          training.hasTools = true;
+          training.activity = "idle";
+        }
+        publishTraining();
+      }, AI_STEP_MS);
+      publishTraining();
+    },
+    start_training_take: () => {
+      if (!training.job || training.activity !== "idle") return;
+      training.activity = "recording";
+      record("take");
+      publishTraining();
+    },
+    finish_training_take: () => {
+      if (training.activity !== "recording") return;
+      training.activity = "idle";
+      keepTake(recordedSeconds("take"));
+    },
+    import_training_take: () => {
+      if (training.job && training.activity === "idle") keepTake(MAX_TAKE_SECONDS);
+    },
+    remove_training_take: ({ id }) => {
+      const { job } = training;
+      if (!job || job.isStarted) return;
+      job.takes = job.takes.filter((take) => take.id !== id);
+      publishTraining();
+    },
+    train_voice: () => {
+      const { job } = training;
+      if (!job || training.activity !== "idle" || speechSeconds() < MIN_TRAINING_SECONDS) return;
+      job.isStarted = true;
+      training.activity = "training";
+      training.timer = setInterval(() => {
+        job.epoch++;
+        if (job.epoch < TRAINING_EPOCHS) return publishTraining();
+        stopTrainingTimer();
+        const name = backend.voice.clones.find((clone) => clone.id === job.cloneId)?.name ?? "";
+        backend.voice.trained.set(job.cloneId, { name, credit: "" });
+        backend.voice.engines.set(job.cloneId, "trained");
+        training.job = null;
+        training.openId = null;
+        training.activity = "idle";
+        show({ kind: "text", key: "TrainingDone", args: [plain(name)] });
+        publishTraining();
+        reconsider();
+      }, EPOCH_MS);
+      publishTraining();
+    },
+    stop_training: () => {
+      if (training.activity !== "installing" && training.activity !== "training") return;
+      if (training.activity === "training") show(text("TrainingPaused"));
+      stopTrainingTimer();
+      training.activity = "idle";
+      publishTraining();
+    },
+    discard_training: () => {
+      if (training.activity !== "idle") return;
+      training.job = null;
+      training.openId = null;
+      publishTraining();
+    },
+    close_training: () => {
+      if (training.activity === "recording") {
+        recordings.delete("take");
+        training.activity = "idle";
+      }
+      training.openId = null;
+      publishTraining();
+    },
+    remove_training_tools: () => {
+      if (!training.hasTools || training.activity === "installing" || training.activity === "training") return;
+      training.hasTools = false;
+      show(text("TrainingToolsRemoved"));
+      publishTraining();
     },
     close_cloning: () => {
       cloningGeneration++;

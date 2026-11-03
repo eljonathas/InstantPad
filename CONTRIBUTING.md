@@ -29,9 +29,9 @@ Dependencies only point inwards:
 
 | Folder | Holds | May depend on |
 | --- | --- | --- |
-| `crates/domain` | Pad board, hotkey, voice and voice cloning rules | Nothing of ours |
+| `crates/domain` | Pad board, hotkey, voice, voice cloning and voice training rules | Nothing of ours |
 | `crates/application` | Use cases, ports and all app state | `domain` |
-| `crates/audio`, `catalog`, `storage`, `platform`, `voice-ai` | Adapters for the ports | `application` |
+| `crates/audio`, `catalog`, `storage`, `platform`, `voice-ai`, `training` | Adapters for the ports | `application` |
 | `apps/desktop/src-tauri` | Commands, events, composition root | Everything above |
 | `apps/desktop/src` | React interface | `src/shared/ipc` only |
 

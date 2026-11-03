@@ -10,13 +10,18 @@ They run on Linux and on Windows through WSL 2. With a recent NVIDIA graphics ca
 voice trains in about an hour; without one it trains on the processor, which works but takes
 more than a day.
 
+The app trains cloned voices by itself with this same kit, on Windows and Linux, with nothing to
+install by hand ([ADR 0007](../../docs/adr/0007-training-voices-in-the-app.md)): pick a cloned
+voice and click **Train a model...**. What follows is for training outside the app, such as the
+feminine voice the app ships.
+
 ## Before you start
 
 On WSL, install the NVIDIA driver on **Windows**, not inside Linux, and check that `nvidia-smi`
 works in the Linux terminal. Then, in Linux:
 
 ```bash
-sudo apt install git ffmpeg
+sudo apt install ffmpeg
 ```
 
 ```bash
@@ -90,6 +95,19 @@ music and as little noise as you can, then:
 | `noise` | `[1, 192, played + 24]` | Normal random values times 0.66666. |
 
 `audio`, its output, is `[1, 1, played × 400]`: the last `played` frames of the window.
+
+## What the app downloads
+
+The app installs the same tools as `setup.sh`, on Windows too, from the files in
+`environments/`: every wheel of each computer (Windows or Linux, with an NVIDIA card or the
+processor) with its address, size and SHA-256. `pin.py` writes them from `requirements.txt` and
+`requirements.lock`; run it again after changing either, and commit what changes:
+
+```bash
+uv run --no-project --python 3.12 tools/voice-training/pin.py
+```
+
+The app builds `voicekit.py` in, so a change to it reaches users with the next version.
 
 ## Sources and licences
 

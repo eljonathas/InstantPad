@@ -1,8 +1,8 @@
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
 use instantpad_test_support::contract;
 use instantpad_test_support::fakes::{
-    FakeCable, FakeFileStore, FakeHotkeyHost, FakePlayer, InMemoryBoard, InMemoryFavorites,
-    FakeTrainer, InMemorySettings, InMemoryTraining, InMemoryVoiceLibrary, device,
+    FakeCable, FakeFileStore, FakeHotkeyHost, FakePlayer, FakeTrainer, InMemoryBoard,
+    InMemoryFavorites, InMemorySettings, InMemoryTraining, InMemoryVoiceLibrary, device,
 };
 
 #[tokio::test]

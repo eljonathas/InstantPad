@@ -8,8 +8,8 @@ use instantpad_application::hotkeys::HotkeyCommand;
 use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{
     AppUpdater, AudioDevice, AudioMix, AudioRouter, BoardRepository, CatalogPage, EventSink,
-    FavoritesRepository, HotkeyHost, NowPlaying, PlaybackTag, SettingsRepository, SoundCatalog,
-    Outcome, SoundFileStore, SoundPlayer, SpeechConverter, SystemAudio, TrainedVoiceModels,
+    FavoritesRepository, HotkeyHost, NowPlaying, Outcome, PlaybackTag, SettingsRepository,
+    SoundCatalog, SoundFileStore, SoundPlayer, SpeechConverter, SystemAudio, TrainedVoiceModels,
     TrainingProgress, TrainingRepository, TrainingRun, TrainingTools, VirtualCable, VoiceAnalyzer,
     VoiceChanger, VoiceLibraryRepository, VoiceModels, VoiceRecorder, VoiceTrainer, Waveform,
 };

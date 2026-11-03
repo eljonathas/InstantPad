@@ -69,7 +69,8 @@ fn the_oldest_driver_depends_on_the_system() {
 
 #[test]
 fn a_card_learns_more_pieces_at_once_the_more_memory_it_has() {
-    let batch = |memory| TrainingPlan::new(TrainingDevice::Card, Some(&card(memory, "610.88"))).batch;
+    let batch =
+        |memory| TrainingPlan::new(TrainingDevice::Card, Some(&card(memory, "610.88"))).batch;
 
     assert_eq!(batch(4096), 2);
     assert_eq!(batch(6144), 4);
@@ -114,7 +115,10 @@ fn missing_tools_count_their_download_and_install_on_top_of_the_training() {
         needed_megabytes(4_200, 9_000, false),
         4_200 + 9_000 + TRAINING_WORK_MEGABYTES
     );
-    assert_eq!(needed_megabytes(4_200, 9_000, true), TRAINING_WORK_MEGABYTES);
+    assert_eq!(
+        needed_megabytes(4_200, 9_000, true),
+        TRAINING_WORK_MEGABYTES
+    );
 }
 
 #[test]
@@ -150,7 +154,10 @@ fn a_take_is_cut_at_its_longest_and_at_what_still_fits() {
         job.add_take(MAX_TAKE_SECONDS);
     }
     let left = MAX_TRAINING_SECONDS - 3 * MAX_TAKE_SECONDS;
-    assert_eq!(job.room_for(MAX_TAKE_SECONDS), Ok(left.min(MAX_TAKE_SECONDS)));
+    assert_eq!(
+        job.room_for(MAX_TAKE_SECONDS),
+        Ok(left.min(MAX_TAKE_SECONDS))
+    );
 }
 
 #[test]

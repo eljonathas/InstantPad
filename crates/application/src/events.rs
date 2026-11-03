@@ -248,11 +248,22 @@ pub struct TrainingJobView {
 )]
 pub enum TrainingPhase {
     /// The speech is still being gathered.
-    Takes { seconds: u32, min_seconds: u32 },
-    Installing { percent: u8 },
-    Running { epoch: u32, epochs: u32 },
+    Takes {
+        seconds: u32,
+        min_seconds: u32,
+    },
+    Installing {
+        percent: u8,
+    },
+    Running {
+        epoch: u32,
+        epochs: u32,
+    },
     /// Stopped by the user or by closing the app, and goes on from `epoch`.
-    Paused { epoch: u32, epochs: u32 },
+    Paused {
+        epoch: u32,
+        epochs: u32,
+    },
 }
 
 /// The voice designer, which the backend keeps open so a failed save loses nothing.

@@ -5,7 +5,7 @@ mod support;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Weak};
 
-use instantpad_application::events::{AppEvent, TrainStep, TrainingPhase};
+use instantpad_application::events::{AppEvent, Calibration, TrainStep, TrainingPhase};
 use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{TrainingProgress, TrainingStage};
 use instantpad_application::training::TrainingSession;
@@ -13,7 +13,7 @@ use instantpad_domain::training::{
     GraphicsCard, MAX_TAKE_SECONDS, MIN_TRAINING_SECONDS, ProcessorReason, TrainingDevice,
     TrainingJob, TrainingPlan,
 };
-use instantpad_domain::voice::{VoiceEngine, VoiceTarget};
+use instantpad_domain::voice::{VoiceEffect, VoiceEngine, VoiceTarget};
 use instantpad_test_support::fakes::{FakeTrainer, InMemoryTraining};
 use support::{VoiceWorld, poll_once, speech};
 
@@ -38,6 +38,17 @@ impl TrainingWorld {
         if keeps_ana {
             voices.keep_clone(ANA, "Ana");
         }
+        Self::in_world(voices, repository)
+    }
+
+    /// Ana's voice there, but the AI still learning the user's own voice.
+    fn learning() -> Self {
+        let voices = VoiceWorld::installed();
+        voices.keep_clone(ANA, "Ana");
+        Self::in_world(voices, InMemoryTraining::default())
+    }
+
+    fn in_world(voices: VoiceWorld, repository: InMemoryTraining) -> Self {
         let trainer = Arc::new(FakeTrainer::default());
         let repository = Arc::new(repository);
         let training = Arc::new(TrainingSession::new(
@@ -270,6 +281,21 @@ fn stopping_the_download_goes_back_to_the_preparation() {
 
     assert!(matches!(world.step(), TrainStep::Prepare { .. }));
     assert_eq!(*world.trainer.tools.lock().unwrap(), None);
+}
+
+#[test]
+fn a_training_whose_download_was_stopped_can_be_discarded() {
+    let world = TrainingWorld::new().with_card();
+    world.open();
+    world.meanwhile(|training| training.stop());
+    world.accept();
+    let id = world.job().expect("the training was agreed to").id;
+    assert!(world.phase().is_some(), "the dialog offers to discard it");
+
+    world.training.discard();
+
+    assert_eq!(*world.trainer.discarded.lock().unwrap(), [id]);
+    assert_eq!(world.job(), None);
 }
 
 #[test]
@@ -602,24 +628,171 @@ fn a_training_of_a_voice_deleted_meanwhile_is_dropped_with_its_files() {
 }
 
 #[test]
-fn a_voice_deleted_while_it_trains_gets_no_model() {
+fn a_voice_deleted_while_it_trains_gets_no_model_and_its_training_goes() {
     let world = TrainingWorld::new()
         .with_card()
         .ready_for_takes()
         .with_enough_speech();
+    let id = world.job().unwrap().id;
     let voice = world.voices.voice.clone();
     *world.trainer.meanwhile.lock().unwrap() = Some(Box::new(move || voice.delete_clone(ANA)));
 
     world.train();
 
     assert!(world.voices.library.lock().trained.is_empty());
+    assert_eq!(*world.trainer.discarded.lock().unwrap(), [id]);
+    assert_eq!(world.job(), None);
+    assert_eq!(world.step(), TrainStep::Closed);
+}
+
+#[test]
+fn deleting_the_voice_stops_its_training_and_deletes_the_recordings() {
+    let world = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
+    let id = world.job().unwrap().id;
+    let voice = world.voices.voice.clone();
+    *world.trainer.meanwhile.lock().unwrap() = Some(Box::new({
+        let training = Arc::downgrade(&world.training);
+        move || {
+            voice.delete_clone(ANA);
+            if let Some(training) = training.upgrade() {
+                training.voice_deleted();
+            }
+        }
+    }));
+
+    world.train();
+
+    // Stopped, rather than left to train for hours a voice that is gone.
+    assert!(world.trainer.runs.lock().unwrap().len() == 1);
+    assert!(!world.saw(&AppEvent::show(Message::text(TextKey::TrainingPaused))));
+    assert_eq!(*world.trainer.discarded.lock().unwrap(), [id]);
+    assert_eq!(world.job(), None);
+}
+
+#[test]
+fn deleting_the_voice_of_a_training_waiting_for_speech_deletes_its_takes() {
+    let world = TrainingWorld::new().with_card().ready_for_takes();
+    world.record(60);
+    let id = world.job().unwrap().id;
+    world.training.close();
+
+    world.voices.voice.delete_clone(ANA);
+    world.training.voice_deleted();
+
+    assert_eq!(*world.trainer.discarded.lock().unwrap(), [id]);
+    assert_eq!(world.job(), None);
+    assert_eq!(world.phase(), None);
+    // Another voice can train now.
+    world.voices.keep_clone("bia", "Bia");
+    poll_once(world.training.open("bia")).unwrap();
+    assert!(matches!(world.step(), TrainStep::Prepare { .. }));
+}
+
+#[test]
+fn deleting_another_voice_leaves_the_training_alone() {
+    let world = TrainingWorld::new().with_card().ready_for_takes();
+    world.voices.keep_clone("bia", "Bia");
+    world.record(60);
+
+    world.voices.voice.delete_clone("bia");
+    world.training.voice_deleted();
+
+    assert!(world.job().is_some());
+    assert!(world.trainer.discarded.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_model_that_could_not_join_the_voice_joins_it_on_resume_without_training_again() {
+    let world = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
+    *world.voices.trained.fails.lock().unwrap() = Some(Failure::text(TextKey::SaveFailed));
+
+    world.train();
+
     assert!(matches!(
         world.step(),
         TrainStep::Training {
+            is_running: false,
             problem: Some(_),
             ..
         }
     ));
+    assert!(world.job().is_some());
+    assert!(world.trainer.discarded.lock().unwrap().is_empty());
+
+    *world.voices.trained.fails.lock().unwrap() = None;
+    world.train();
+
+    assert_eq!(world.trainer.runs.lock().unwrap().len(), 1);
+    assert!(world.voices.library.lock().trained.contains_key(ANA));
+    assert_eq!(world.job(), None);
+}
+
+#[test]
+fn a_training_that_ends_while_a_model_is_added_by_hand_keeps_its_model() {
+    let world = TrainingWorld::new()
+        .with_card()
+        .ready_for_takes()
+        .with_enough_speech();
+    // The training ends while the model the user picked by hand is being checked.
+    let training = Arc::downgrade(&world.training);
+    *world.voices.trained.meanwhile.lock().unwrap() = Some(Box::new(move || {
+        if let Some(training) = training.upgrade() {
+            poll_once(training.train()).expect("the fakes answer at once");
+        }
+    }));
+
+    poll_once(world.voices.voice.add_trained_model(
+        VoiceEffect::Cloned,
+        Some(ANA.to_owned()),
+        PathBuf::from("by-hand"),
+    ))
+    .unwrap();
+
+    assert!(matches!(
+        world.step(),
+        TrainStep::Training {
+            problem: Some(Message::Text {
+                key: TextKey::TrainedModelBusy,
+                ..
+            }),
+            ..
+        }
+    ));
+    assert!(world.trainer.discarded.lock().unwrap().is_empty());
+
+    world.train();
+
+    assert_eq!(world.trainer.runs.lock().unwrap().len(), 1);
+    assert_eq!(world.voices.library.lock().trained[ANA].name, "Ana");
+    assert_eq!(world.job(), None);
+}
+
+#[test]
+fn a_take_can_be_recorded_while_the_ai_learns_the_users_voice() {
+    let world = TrainingWorld::learning().with_card().ready_for_takes();
+    world.voices.voice.select(VoiceEffect::FeminineAi);
+    assert_eq!(
+        world.voices.voice.view().ai.calibration,
+        Calibration::Listening
+    );
+
+    world.training.start_take();
+
+    assert!(matches!(
+        world.step(),
+        TrainStep::Takes {
+            is_recording: true,
+            ..
+        }
+    ));
+    assert!(!world.saw(&error(TextKey::MicrophoneBusy)));
+    assert_eq!(world.voices.voice.view().ai.calibration, Calibration::Idle);
 }
 
 #[test]

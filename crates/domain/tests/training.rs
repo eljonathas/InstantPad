@@ -171,6 +171,15 @@ fn a_full_training_takes_no_more_speech() {
 }
 
 #[test]
+fn a_training_with_less_room_than_the_shortest_take_is_full() {
+    let mut job = job();
+    job.add_take(MAX_TRAINING_SECONDS - 3);
+
+    // A long take is not too short: there is just no room left for it.
+    assert_eq!(job.room_for(300), Err(TakeRefusal::Full));
+}
+
+#[test]
 fn a_take_of_a_few_seconds_is_refused() {
     assert_eq!(job().room_for(2), Err(TakeRefusal::TooShort));
 }

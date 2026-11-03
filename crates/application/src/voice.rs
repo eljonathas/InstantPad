@@ -684,18 +684,20 @@ impl VoiceSession {
     }
 
     /// Adds a model trained in the app to the cloned voice it was trained for. Fails when the
-    /// voice is gone.
+    /// voice is gone, or when another model is being added and this one was not.
     pub(crate) async fn attach_trained_model(
         &self,
         clone_id: &str,
         folder: PathBuf,
     ) -> Result<(), Failure> {
         let target = VoiceTarget::Own(clone_id.to_owned());
-        let attached = self.attach(target.clone(), folder).await?;
-        if !attached && !self.library.lock().takes_trained_model(&target) {
+        if self.attach(target.clone(), folder).await? {
+            return Ok(());
+        }
+        if !self.library.lock().takes_trained_model(&target) {
             return Err(Failure::text(TextKey::CloneDeleted));
         }
-        Ok(())
+        Err(Failure::text(TextKey::TrainedModelBusy))
     }
 
     /// Checks the model in `folder` and gives it to the voice of `target`, replacing the one it

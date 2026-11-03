@@ -81,6 +81,9 @@ function Device({ device, card, seconds }: { device: TrainingDevice; card: strin
 function Prepare({ step }: { step: Step<"prepare"> }) {
   const { t } = useText();
   const isDownloaded = step.downloadMegabytes === 0;
+  // A training already begun, whose download was stopped or whose tools were removed since, can
+  // still be given up here, with its recordings. Only one voice trains at a time, so it is this one.
+  const hasTraining = useBackend((state) => state.voice.training.job !== null);
 
   return (
     <>
@@ -98,6 +101,7 @@ function Prepare({ step }: { step: Step<"prepare"> }) {
       <p className="clone-text train-note">{t("TrainConsent")}</p>
       <Problem message={step.problem} />
       <Buttons>
+        {hasTraining && <DiscardKey />}
         <button
           type="button"
           className="key"

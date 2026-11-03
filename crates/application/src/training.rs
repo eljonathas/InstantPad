@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use instantpad_domain::training::{
@@ -47,6 +48,9 @@ struct State {
     job: Option<TrainingJob>,
     activity: Activity,
     problem: Option<Message>,
+    /// The model the job trained, when it could not be added to the voice yet. Resuming adds it
+    /// again instead of training again.
+    exported: Option<PathBuf>,
 }
 
 fn refusal_text(refusal: TakeRefusal) -> Message {
@@ -100,6 +104,7 @@ impl TrainingSession {
                 job,
                 activity: Activity::Idle,
                 problem: None,
+                exported: None,
             }),
         };
         session
@@ -131,6 +136,10 @@ impl TrainingSession {
         }
         {
             let mut state = self.state();
+            // The training of a voice deleted since would keep every other voice from training.
+            if state.activity == Activity::Idle {
+                self.drop_if_voice_gone(&mut state);
+            }
             if state
                 .job
                 .as_ref()
@@ -224,6 +233,9 @@ impl TrainingSession {
 
         let mut state = self.state();
         state.activity = Activity::Idle;
+        if self.drop_if_voice_gone(&mut state) {
+            return;
+        }
         match installed {
             Ok(Outcome::Done(())) => {}
             Ok(Outcome::Stopped) => {}
@@ -240,14 +252,16 @@ impl TrainingSession {
         if !self.takes_are_open(&state) || state.activity != Activity::Idle {
             return;
         }
+        // The AI stops listening to the user first, since the take needs the microphone: while
+        // it learns the user's voice, the recorder is its own.
+        self.voice.hold_microphone(true);
         if !self.recorder.start(Recording::Training) {
+            self.voice.hold_microphone(false);
             drop(state);
             self.events
                 .emit(AppEvent::error(Message::text(TextKey::MicrophoneBusy)));
             return;
         }
-        // The AI stops listening to the user, since the take needs the microphone.
-        self.voice.hold_microphone(true);
         state.activity = Activity::Recording;
         state.problem = None;
         self.publish(&state);
@@ -307,7 +321,7 @@ impl TrainingSession {
 
     /// Starts the training, or resumes it from its last save.
     pub async fn train(&self) {
-        let (run, clone_id) = {
+        let (run, clone_id, exported) = {
             let mut state = self.state();
             if state.activity != Activity::Idle {
                 return;
@@ -333,8 +347,13 @@ impl TrainingSession {
                 }
                 state.job = Some(started);
             }
+            let exported = state.exported.take();
             state.activity = Activity::Training {
-                stage: TrainingStage::Cutting,
+                stage: if exported.is_some() {
+                    TrainingStage::Exporting
+                } else {
+                    TrainingStage::Cutting
+                },
                 seconds_per_epoch: None,
             };
             state.problem = None;
@@ -344,35 +363,50 @@ impl TrainingSession {
                 plan: job.plan,
                 title,
             };
-            (run, job.clone_id)
+            (run, job.clone_id, exported)
         };
 
-        let progress = |progress: TrainingProgress| self.on_progress(progress);
-        let trained = self.trainer.train(&run, &progress).await;
-
-        let folder = match trained {
-            Ok(Outcome::Done(folder)) => folder,
-            Ok(Outcome::Stopped) => {
-                let mut state = self.state();
-                state.activity = Activity::Idle;
-                self.publish(&state);
-                drop(state);
-                self.events
-                    .emit(AppEvent::show(Message::text(TextKey::TrainingPaused)));
-                return;
-            }
-            Err(Failure(reason)) => {
-                let mut state = self.state();
-                state.activity = Activity::Idle;
-                state.problem = Some(Message::with(TextKey::TrainingFailed, [reason]));
-                self.publish(&state);
-                return;
+        let folder = match exported {
+            Some(folder) => folder,
+            None => {
+                let progress = |progress: TrainingProgress| self.on_progress(progress);
+                match self.trainer.train(&run, &progress).await {
+                    Ok(Outcome::Done(folder)) => folder,
+                    Ok(Outcome::Stopped) => {
+                        let mut state = self.state();
+                        state.activity = Activity::Idle;
+                        if self.drop_if_voice_gone(&mut state) {
+                            return;
+                        }
+                        self.publish(&state);
+                        drop(state);
+                        self.events
+                            .emit(AppEvent::show(Message::text(TextKey::TrainingPaused)));
+                        return;
+                    }
+                    Err(Failure(reason)) => {
+                        let mut state = self.state();
+                        state.activity = Activity::Idle;
+                        if self.drop_if_voice_gone(&mut state) {
+                            return;
+                        }
+                        state.problem = Some(Message::with(TextKey::TrainingFailed, [reason]));
+                        self.publish(&state);
+                        return;
+                    }
+                }
             }
         };
 
-        let attached = self.voice.attach_trained_model(&clone_id, folder).await;
+        let attached = self
+            .voice
+            .attach_trained_model(&clone_id, folder.clone())
+            .await;
         let mut state = self.state();
         state.activity = Activity::Idle;
+        if self.drop_if_voice_gone(&mut state) {
+            return;
+        }
         match attached {
             Ok(()) => {
                 self.end(&mut state);
@@ -383,6 +417,8 @@ impl TrainingSession {
                 )));
             }
             Err(Failure(reason)) => {
+                // Hours of training are not thrown away: resuming adds the model again.
+                state.exported = Some(folder);
                 state.problem = Some(reason);
                 self.publish(&state);
             }
@@ -408,6 +444,33 @@ impl TrainingSession {
         }
         if state.job.is_some() {
             self.end(&mut state);
+        }
+    }
+
+    /// A voice was deleted. Its training goes too, recordings and all: one that runs is stopped,
+    /// and drops itself once it has; a take being written drops it once it is.
+    pub fn voice_deleted(&self) {
+        let mut state = self.state();
+        let is_gone = state
+            .job
+            .as_ref()
+            .is_some_and(|job| self.library.lock().name(&job.clone_id).is_none());
+        if !is_gone {
+            return;
+        }
+        match state.activity {
+            Activity::Installing { .. } | Activity::Training { .. } => self.trainer.stop(),
+            Activity::Saving => {}
+            Activity::Recording => {
+                self.recorder.stop(Recording::Training);
+                self.voice.hold_microphone(false);
+                state.activity = Activity::Idle;
+                self.end(&mut state);
+            }
+            Activity::Idle | Activity::Checking => {
+                state.activity = Activity::Idle;
+                self.end(&mut state);
+            }
         }
     }
 
@@ -511,6 +574,10 @@ impl TrainingSession {
             self.publish(&state);
             return;
         }
+        // Its voice deleted meanwhile: the take goes with the rest of the training.
+        if self.drop_if_voice_gone(&mut state) {
+            return;
+        }
         let saved = written.and_then(|()| self.repository.save(Some(&candidate)));
         match saved {
             Ok(()) => {
@@ -549,7 +616,20 @@ impl TrainingSession {
         state.open = None;
         state.prepared = None;
         state.problem = None;
+        state.exported = None;
         self.publish(state);
+    }
+
+    /// Ends the training when the voice it is for was deleted. Returns whether it did.
+    fn drop_if_voice_gone(&self, state: &mut MutexGuard<'_, State>) -> bool {
+        let is_gone = state
+            .job
+            .as_ref()
+            .is_some_and(|job| self.library.lock().name(&job.clone_id).is_none());
+        if is_gone {
+            self.end(state);
+        }
+        is_gone
     }
 
     fn step_of(&self, state: &State) -> TrainStep {

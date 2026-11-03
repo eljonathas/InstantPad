@@ -85,6 +85,7 @@ pub enum TextKey {
     SystemOutputOnCableHint,
     TakeTooShort,
     TrainedModelAdded,
+    TrainedModelBusy,
     TrainedModelInvalid,
     TrainedModelRemoved,
     TrainingAlreadyRunning,

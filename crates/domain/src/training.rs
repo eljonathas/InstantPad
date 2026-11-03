@@ -251,7 +251,9 @@ impl TrainingJob {
     /// [`MAX_TAKE_SECONDS`].
     pub fn room_for(&self, seconds: u32) -> Result<u32, TakeRefusal> {
         let room = MAX_TRAINING_SECONDS.saturating_sub(self.seconds());
-        if room == 0 {
+        // Less room than the shortest take is no room: the take is not too short, the training
+        // is full.
+        if room < MIN_TAKE_SECONDS {
             return Err(TakeRefusal::Full);
         }
         let kept = seconds.min(room).min(MAX_TAKE_SECONDS);

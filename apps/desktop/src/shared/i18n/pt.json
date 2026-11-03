@@ -285,6 +285,7 @@
   "TrainToolsReady": "As ferramentas de treino estão instaladas. O treino precisa de {0} MB livres no disco.",
   "TrainedEngineNote": "Modelo \"{0}\". Soa muito mais como a voz e leva cerca de meio segundo para responder, num processador rápido. Se a voz falhar, use o Instantâneo.",
   "TrainedModelAdded": "Modelo treinado \"{0}\" adicionado.",
+  "TrainedModelBusy": "Outro modelo estava sendo adicionado, então este ainda não foi. Continue para adicioná-lo.",
   "TrainedModelHint": "Treine um modelo desta voz no seu computador com o kit em tools/voice-training do repositório do InstantPad, e depois adicione a pasta que ele exporta.",
   "TrainedModelInvalid": "Esta pasta não tem uma voz exportada pelo kit de treino: {0}",
   "TrainedModelRemoved": "Modelo treinado removido.",

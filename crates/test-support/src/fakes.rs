@@ -625,11 +625,17 @@ pub struct FakeTrainedModels {
     pub removed: Mutex<Vec<String>>,
     /// Makes adding fail, like a folder the kit did not export.
     pub fails: Mutex<Option<Failure>>,
+    /// Runs once, while the next model is being checked, for what happens meanwhile.
+    pub meanwhile: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
 #[async_trait]
 impl TrainedVoiceModels for FakeTrainedModels {
     async fn add(&self, folder: PathBuf, id: String) -> Result<TrainedModel, Failure> {
+        let meanwhile = self.meanwhile.lock().unwrap().take();
+        if let Some(meanwhile) = meanwhile {
+            meanwhile();
+        }
         if let Some(failure) = self.fails.lock().unwrap().clone() {
             return Err(failure);
         }

@@ -22,6 +22,7 @@ import type {
   StartView,
   TextKey,
   VoiceEffect,
+  VoiceEngine,
   VoiceIcon,
   VoiceParam,
   VoiceRecipe,
@@ -148,6 +149,9 @@ const BUILT_IN: BuiltIn[] = [
 type Waiting = { kind: "voice"; effect: VoiceEffect; cloneId: string | null } | { kind: "cloning" } | null;
 
 const CLONE_PITCH: [VoiceParam, TextKey][] = [["clonePitch", "ParamPitch"]];
+const TRAINED_PITCH: [VoiceParam, TextKey][] = [["trainedPitch", "ParamPitch"]];
+/** How long checking a trained model takes. */
+const ADD_MODEL_MS = 300;
 const AI_DOWNLOAD_MEGABYTES = 180;
 const AI_STEP_MS = 60;
 const AI_STEP_PERCENT = 20;
@@ -166,6 +170,10 @@ function seedVoice() {
     values: new Map<VoiceParam, number>(),
     clones: [] as { id: string; name: string }[],
     designs: [] as { id: string; name: string; recipe: VoiceRecipe }[],
+    /** The trained model of each voice that has one, by its key: "feminine" or the clone's id. */
+    trained: new Map<string, { name: string; credit: string }>(),
+    /** The engine picked for each voice with a trained model. Trained when never picked. */
+    engines: new Map<string, VoiceEngine>(),
     // The AI as the backend reports it: nothing downloaded, and it does not know the user yet.
     ai: {
       isInstalled: false,
@@ -377,6 +385,7 @@ export function installMock() {
   let counter = 0;
   let startedAt = 0;
   let isFullscreen = false;
+  let pickedFolder = "/mock/instantpad-voice-training/voices/feminine/app";
   /** The country the system's locale names, which the trending sounds follow by default. */
   let systemRegion = "us";
   const loading = new Set<number>();
@@ -474,13 +483,33 @@ export function installMock() {
     send({ kind: "setup", data: { ...setup } });
   }
 
+  /** The key of a voice that can have a trained model, as the backend knows it. */
+  const voiceKey = (effect: VoiceEffect, cloneId: string | null) =>
+    effect === "feminineAi"
+      ? "feminine"
+      : effect === "cloned" && backend.voice.clones.some((clone) => clone.id === cloneId)
+        ? cloneId
+        : null;
+  const engineOf = (key: string | null): VoiceEngine =>
+    key && backend.voice.trained.has(key) ? (backend.voice.engines.get(key) ?? "trained") : "instant";
+
   function voiceView(): VoiceView {
-    const { values, clones, designs, ai, waiting, designer } = backend.voice;
+    const { values, clones, designs, ai, waiting, designer, trained } = backend.voice;
     const params = (list: [VoiceParam, TextKey][]) =>
       list.map(([param, label]) => {
         const value = values.get(param) ?? 0.5;
         return { param, label, value, defaultValue: 0.5, text: `${Math.round(value * 100)}%` };
       });
+    /** What the effect list says about the trained model of a voice, and the knobs it shows. */
+    const withModel = (key: string | null, list: [VoiceParam, TextKey][]) => {
+      const model = key ? trained.get(key) : undefined;
+      const engine = engineOf(key);
+      return {
+        takesTrainedModel: key !== null,
+        trained: model ? { ...model, engine } : null,
+        params: params(model && engine === "trained" ? TRAINED_PITCH : list),
+      };
+    };
     const built: EffectView[] = BUILT_IN.map((item) => ({
       effect: item.effect,
       cloneId: null,
@@ -488,7 +517,7 @@ export function installMock() {
       icon: item.icon,
       color: item.color,
       needsAi: !!item.needsAi,
-      params: params(item.params),
+      ...withModel(voiceKey(item.effect, null), item.params),
     }));
     const ownVoice = (voice: { id: string; name: string }, icon: VoiceIcon): EffectView => ({
       effect: "cloned",
@@ -497,7 +526,7 @@ export function installMock() {
       icon,
       color: PAD_COLORS[2],
       needsAi: true,
-      params: params(CLONE_PITCH),
+      ...withModel(voiceKey("cloned", voice.id), CLONE_PITCH),
     });
     const cloned = [
       ...clones.map((clone) => ownVoice(clone, "person")),
@@ -577,7 +606,15 @@ export function installMock() {
   /** Like the backend, an AI voice waits for the models and the user's own voice, then comes on. */
   function switchTo(effect: VoiceEffect, cloneId: string | null, needsAi: boolean) {
     const { ai } = backend.voice;
-    const unready = !needsAi ? null : !ai.isInstalled ? "AiNotInstalled" : !ai.isCalibrated ? "AiNotCalibrated" : null;
+    // A trained model needs the AI installed, but not the user's own voice.
+    const isTrained = engineOf(voiceKey(effect, cloneId)) === "trained";
+    const unready = !needsAi
+      ? null
+      : !ai.isInstalled
+        ? "AiNotInstalled"
+        : !ai.isCalibrated && !isTrained
+          ? "AiNotCalibrated"
+          : null;
     if (unready) {
       backend.voice.waiting = { kind: "voice", effect, cloneId };
       // Not knowing the user is no error: the AI starts learning their voice right now.
@@ -592,12 +629,34 @@ export function installMock() {
     }
   }
 
+  /**
+   * The voice in use with its engine changed: the instant engine needs the user's voice, and
+   * waits for it with the natural voice meanwhile.
+   */
+  function reconsider() {
+    const { active, activeCloneId, ai } = backend.voice;
+    const isAi = active === "feminineAi" || active === "cloned";
+    if (isAi && !ai.isCalibrated && engineOf(voiceKey(active, activeCloneId)) === "instant") {
+      backend.voice = {
+        ...backend.voice,
+        active: "natural",
+        activeCloneId: null,
+        waiting: { kind: "voice", effect: active, cloneId: activeCloneId },
+      };
+      show(text("AiListening"));
+      publishVoice();
+      return startListening();
+    }
+    publishVoice();
+  }
+
   /** Takes what waited for the AI, once it can run. */
   function resume() {
     const { waiting } = backend.voice;
     backend.voice.waiting = null;
     if (waiting?.kind !== "voice") return;
-    if (backend.voice.ai.isCalibrated) switchTo(waiting.effect, waiting.cloneId, true);
+    const isTrained = engineOf(voiceKey(waiting.effect, waiting.cloneId)) === "trained";
+    if (backend.voice.ai.isCalibrated || isTrained) switchTo(waiting.effect, waiting.cloneId, true);
     else {
       backend.voice.waiting = waiting;
       startListening();
@@ -1002,6 +1061,10 @@ export function installMock() {
       const { clones, designs, activeCloneId } = backend.voice;
       const isMadeFrom = ({ recipe }: { recipe: VoiceRecipe }) => recipe.baseId === id || recipe.blendId === id;
       const gone = new Set([id, ...designs.filter(isMadeFrom).map((design) => design.id)]);
+      for (const key of gone) {
+        backend.voice.trained.delete(key as string);
+        backend.voice.engines.delete(key as string);
+      }
       backend.voice.clones = clones.filter((clone) => !gone.has(clone.id));
       backend.voice.designs = designs.filter((design) => !gone.has(design.id));
       const { waiting } = backend.voice;
@@ -1014,6 +1077,41 @@ export function installMock() {
       }
       show(text("CloneDeleted"));
       publishVoice();
+    },
+    add_trained_model: ({ effect, cloneId, folder }) =>
+      new Promise((done) => {
+        const key = voiceKey(effect as VoiceEffect, cloneId as string | null);
+        if (!key) return done(null);
+        if (!backend.voice.ai.isInstalled) {
+          fail(text("AiNotInstalled"));
+          return done(null);
+        }
+        setTimeout(() => {
+          // The kit exports to voices/<name>/app, and a folder named "broken" stands for one it did not.
+          const parts = (folder as string).split("/").filter(Boolean);
+          if (parts.includes("broken")) {
+            fail({ kind: "text", key: "TrainedModelInvalid", args: [plain("voice.json: not found")] });
+            return done(null);
+          }
+          const name = parts.at(-1) === "app" ? parts.at(-2)! : parts.at(-1)!;
+          backend.voice.trained.set(key, { name, credit: "Hi-Fi TTS, reader 92" });
+          backend.voice.engines.set(key, "trained");
+          show({ kind: "text", key: "TrainedModelAdded", args: [plain(name)] });
+          reconsider();
+          done(null);
+        }, ADD_MODEL_MS);
+      }),
+    remove_trained_model: ({ effect, cloneId }) => {
+      const key = voiceKey(effect as VoiceEffect, cloneId as string | null);
+      if (!key || !backend.voice.trained.delete(key)) return;
+      show(text("TrainedModelRemoved"));
+      reconsider();
+    },
+    set_voice_engine: ({ effect, cloneId, engine }) => {
+      const key = voiceKey(effect as VoiceEffect, cloneId as string | null);
+      if (!key) return;
+      backend.voice.engines.set(key, engine as VoiceEngine);
+      reconsider();
     },
     open_cloning: () => {
       if (!backend.voice.ai.isInstalled) {
@@ -1141,9 +1239,13 @@ export function installMock() {
     // The dialog plugin: a confirmation always passes, and the pickers answer with a path.
     "plugin:dialog|message": () => "Yes",
     "plugin:dialog|open": ({ options }) =>
-      (options as { multiple?: boolean }).multiple
-        ? ["/mock/Music/Applause.mp3", "/mock/Music/Drum roll.wav"]
-        : "/mock/Music/Applause.mp3",
+      (options as { directory?: boolean }).directory
+        ? pickedFolder
+        : (options as { multiple?: boolean }).multiple
+          ? ["/mock/Music/Applause.mp3", "/mock/Music/Drum roll.wav"]
+          : "/mock/Music/Applause.mp3",
+    /** The folder the next folder picker answers with. */
+    mock_pick_folder: ({ folder }) => void (pickedFolder = folder as string),
     "plugin:dialog|save": () => "/mock/Downloads/sound.mp3",
     "plugin:path|resolve_directory": () => "/mock/Music",
     "plugin:path|join": ({ paths }) => (paths as string[]).join("/"),

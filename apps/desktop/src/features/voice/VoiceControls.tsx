@@ -6,6 +6,7 @@ import { whileHeld } from "../../shared/ui/hotkeyPause";
 import { Knob } from "../../shared/ui/Knob";
 import { ToggleKey } from "../../shared/ui/ToggleKey";
 import { AiSetup } from "./AiSetup";
+import { TrainedModel } from "./TrainedModel";
 import "./Voice.css";
 
 /** The settings of the effect in use, as knobs on the built-in screen. */
@@ -53,9 +54,13 @@ export function VoiceControls() {
           ))}
         </div>
       )}
-      {!isSettingUp && effect?.needsAi && <p className="screen-text voice-note">{t("AiDelayNote")}</p>}
+      {!isSettingUp && effect?.takesTrainedModel && <TrainedModel effect={effect} />}
+      {!isSettingUp && effect?.needsAi && effect.trained?.engine !== "trained" && (
+        <p className="screen-text voice-note">{t("AiDelayNote")}</p>
+      )}
       {!isSettingUp && cloneId && <p className="screen-text voice-note">{t("CloneUsageTip")}</p>}
-      {!isSettingUp && effect?.needsAi && (
+      {/* A trained model needs no knowledge of the user's voice. */}
+      {!isSettingUp && effect?.needsAi && effect.trained?.engine !== "trained" && (
         <button type="button" className="key voice-relearn" onClick={() => void commands.relearnVoice()}>
           {t("AiRelearn")}
         </button>

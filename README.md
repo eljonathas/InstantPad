@@ -152,6 +152,17 @@ Once you have a cloned voice, the key after **Clone a voice** designs new voices
 
 Start with a small blend, between 20% and 40%, and change the timbre a little at a time while you listen to the preview.
 
+### Trained voices
+
+For a voice that sounds far more like the original, train a model of it on your computer with the kit in [`tools/voice-training`](tools/voice-training/README.md), which uses RVC. It takes about an hour on an NVIDIA graphics card, on Windows through WSL, and more than a day on the processor. Then pick **Feminine AI** or a cloned voice and click **Add a trained model...**, and choose the folder the kit exported.
+
+The voice now has two engines, and **Engine** switches between them:
+
+- **Trained** speaks through the model. It needs no learning of your voice, and moves your pitch to the voice's by itself; **Pitch** moves it further, up to an octave either way. It answers in about half a second and needs a fast processor. If your computer falls behind, the app tells you to switch to Instant.
+- **Instant** is the AI voice as before.
+
+**Replace model...** adds a newer training, and **Remove model** takes it off. The first model you add brings HuBERT, about 380 MB, which every trained voice shares.
+
 ### Playback options
 
 **Settings** has two playback options:

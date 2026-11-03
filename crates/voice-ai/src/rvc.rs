@@ -83,6 +83,19 @@ impl Words<'_> {
     }
 }
 
+/// Runs both models once on a silent window, which loads them and makes their first run,
+/// always slower, happen before any speech waits on them.
+pub(crate) fn warm_up(models: &mut impl Models) -> Result<(), Failure> {
+    let phone = frames_of(&models.content(&vec![0.0; WINDOW * FRAME])?)?;
+    models.speak(&Words {
+        phone: &phone,
+        pitch: &[1; WINDOW],
+        pitchf: &[0.0; SPOKEN],
+        noise: &[0.0; FEATURES_OF_FLOW * (SPOKEN + FLOW_CONTEXT)],
+    })?;
+    Ok(())
+}
+
 /// A trained voice for speech that never ends.
 pub(crate) struct TrainedStream {
     down: StreamResampler,
@@ -541,6 +554,18 @@ mod tests {
             load_failed("the trained voice returned too little speech")
         );
         assert_ne!(failure, Failure::text(TextKey::AiTooSlow));
+    }
+
+    #[test]
+    fn warming_up_runs_both_models_once_on_a_whole_window() {
+        let mut fake = Fake::default();
+
+        warm_up(&mut fake).unwrap();
+
+        assert_eq!(fake.heard, [WINDOW * FRAME]);
+        assert_eq!(fake.spoken.len(), 1);
+        assert_eq!(fake.spoken[0].0, WINDOW);
+        assert_eq!(fake.spoken[0].2.len(), SPOKEN);
     }
 
     #[test]

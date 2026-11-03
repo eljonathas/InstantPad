@@ -53,6 +53,12 @@ Para ouvir, converta uma gravação sua:
 Ele grava `eu.feminine.wav` ao lado, com o seu tom levado ao da voz. `--shift` define os
 semitons em vez disso.
 
+## Adicionar ao app
+
+No InstantPad, escolha **Feminina IA** ou uma voz clonada, clique em **Adicionar modelo treinado...** e
+escolha a pasta `app`. No Windows, as pastas do WSL ficam em **Linux** na janela de arquivos, ou em
+`\\wsl.localhost\<distribuição>\home\<usuário>\instantpad-voice-training\voices\feminine\app`.
+
 ## Treinar uma voz com as suas gravações
 
 Ponha de 10 a 40 minutos de uma pessoa falando numa pasta, em qualquer formato que o ffmpeg leia,

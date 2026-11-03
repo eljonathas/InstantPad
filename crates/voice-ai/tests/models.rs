@@ -135,10 +135,22 @@ fn a_trained_voice_speaks_as_fast_as_the_user_talks() {
 
     let started = std::time::Instant::now();
     let mut converted = Vec::new();
-    for piece in speech.chunks(480) {
+    let mut slowest_after_the_first = std::time::Duration::ZERO;
+    for (index, piece) in speech.chunks(480).enumerate() {
+        let call = std::time::Instant::now();
         converted.extend(voices.convert(piece).unwrap());
+        if index > 0 {
+            slowest_after_the_first = slowest_after_the_first.max(call.elapsed());
+        }
     }
     let seconds = started.elapsed().as_secs_f32();
+    // The models load in the first call, which the engine does not count as falling behind;
+    // no later call may take much longer than a block of 300 ms.
+    eprintln!("slowest call after the first: {slowest_after_the_first:?}");
+    assert!(
+        slowest_after_the_first < std::time::Duration::from_millis(700),
+        "{slowest_after_the_first:?}"
+    );
 
     let talked = speech.len() as f32 / 48_000.0;
     eprintln!(

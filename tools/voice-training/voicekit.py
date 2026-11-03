@@ -29,7 +29,9 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-HOME = Path(os.environ.get("INSTANTPAD_VOICE_HOME", Path.home() / "instantpad-voice-training"))
+HOME = Path(
+    os.environ.get("INSTANTPAD_VOICE_HOME", Path.home() / "instantpad-voice-training")
+)
 RVC = HOME / "rvc"
 DOWNLOADS = HOME / "downloads"
 VOICES = HOME / "voices"
@@ -80,7 +82,11 @@ ASSETS = [
     ),
 ]
 # Silence RVC mixes into the training, so the voice learns to stay quiet in pauses.
-MUTE = ("mute.zip", 312_273, "ee948e85213e4ed2f2ba2f8dfcee810bfd0b63131d91450e920bbe1cbd0321d0")
+MUTE = (
+    "mute.zip",
+    312_273,
+    "ee948e85213e4ed2f2ba2f8dfcee810bfd0b63131d91450e920bbe1cbd0321d0",
+)
 
 # Hi-Fi TTS (CC BY 4.0): audiobooks of LibriVox (public domain) at 44.1 kHz. This part holds
 # only reader 92, a woman, with 2 h 37 min of clean speech.
@@ -138,7 +144,9 @@ def download(url: str, target: Path, size: int, digest: str) -> None:
         part.unlink()
         have = 0
     if have < size:
-        request = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
+        request = urllib.request.Request(
+            url, headers={"Range": f"bytes={have}-"} if have else {}
+        )
         with urllib.request.urlopen(request, timeout=60) as response:
             if have and response.status != 206:  # the server sends the whole file again
                 have = 0
@@ -157,7 +165,9 @@ def download(url: str, target: Path, size: int, digest: str) -> None:
         print()
     if part.stat().st_size != size or sha256(part) != digest:
         part.unlink()
-        fail(f"{url} is not the file this script knows; run it again to download it anew")
+        fail(
+            f"{url} is not the file this script knows; run it again to download it anew"
+        )
     part.replace(target)
 
 
@@ -175,7 +185,7 @@ def run(arguments: list, log: Path | None = None) -> None:
     process = subprocess.run(command, cwd=RVC, env=environment, check=False)
     if process.returncode != 0:
         where = f" (see {log})" if log else ""
-        fail(f"{Path(command[3]).name} stopped with code {process.returncode}{where}")
+        fail(f"{Path(command[2]).name} stopped with code {process.returncode}{where}")
 
 
 def using_rvc() -> None:
@@ -201,15 +211,25 @@ def setup(_: argparse.Namespace) -> None:
     if not (RVC / ".git").exists():
         RVC.mkdir(parents=True, exist_ok=True)
         subprocess.run(["git", "init", "-q"], cwd=RVC, check=True)
-        subprocess.run(["git", "remote", "add", "origin", RVC_REPOSITORY], cwd=RVC, check=True)
+        subprocess.run(
+            ["git", "remote", "add", "origin", RVC_REPOSITORY], cwd=RVC, check=True
+        )
     head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=RVC, capture_output=True, text=True, check=False
+        ["git", "rev-parse", "HEAD"],
+        cwd=RVC,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if head.stdout.strip() != RVC_COMMIT:
         subprocess.run(
-            ["git", "fetch", "-q", "--depth", "1", "origin", RVC_COMMIT], cwd=RVC, check=True
+            ["git", "fetch", "-q", "--depth", "1", "origin", RVC_COMMIT],
+            cwd=RVC,
+            check=True,
         )
-        subprocess.run(["git", "checkout", "-q", "--force", RVC_COMMIT], cwd=RVC, check=True)
+        subprocess.run(
+            ["git", "checkout", "-q", "--force", RVC_COMMIT], cwd=RVC, check=True
+        )
 
     say("Base models of RVC (about 590 MB)")
     for source, target, size, digest in ASSETS:
@@ -245,14 +265,18 @@ def dataset(arguments: argparse.Namespace) -> None:
             if folder.is_symlink() or not any(folder.iterdir()):
                 folder.unlink() if folder.is_symlink() else folder.rmdir()
             else:
-                fail(f"{folder} already has recordings; remove it to use another folder")
+                fail(
+                    f"{folder} already has recordings; remove it to use another folder"
+                )
         folder.parent.mkdir(parents=True, exist_ok=True)
         folder.symlink_to(source, target_is_directory=True)
         write_credit(arguments.name, arguments.credit or f"Recordings of {source.name}")
         say(f"The voice learns from the recordings in {source}")
         return
 
-    if folder.exists() and any(folder.glob("*.wav")):
+    # Written last, so recordings cut short by a stop are taken again.
+    done = VOICES / arguments.name / "dataset.done"
+    if done.exists() and folder.is_dir():
         say(f"The recordings are ready in {folder}")
         return
     say("Hi-Fi TTS, reader 92 (400 MB)")
@@ -266,17 +290,22 @@ def dataset(arguments: argparse.Namespace) -> None:
     taken = 0.0
     folder.mkdir(parents=True, exist_ok=True)
     rows = parquet.ParquetFile(shard)
-    for batch in rows.iter_batches(columns=["speaker", "file", "duration", "audio"], batch_size=64):
+    for batch in rows.iter_batches(
+        columns=["speaker", "file", "duration", "audio"], batch_size=64
+    ):
         for row in batch.to_pylist():
             if row["speaker"] != HIFI_TTS["speaker"] or taken >= wanted:
                 continue
-            audio, rate = soundfile.read(io.BytesIO(row["audio"]["bytes"]), dtype="float32")
+            audio, rate = soundfile.read(
+                io.BytesIO(row["audio"]["bytes"]), dtype="float32"
+            )
             stem = Path(row["file"]).stem
             soundfile.write(folder / f"{stem}.wav", audio, rate, subtype="PCM_16")
             taken += row["duration"]
         if taken >= wanted:
             break
     write_credit(arguments.name, HIFI_TTS_CREDIT)
+    done.write_text(f"{taken:.0f} seconds\n", encoding="utf-8")
     say(f"{taken / 60:.0f} minutes of speech in {folder}")
 
 
@@ -310,12 +339,23 @@ def train(arguments: argparse.Namespace) -> None:
             flush=True,
         )
 
-    if not any((folder / "0_gt_wavs").glob("*.wav")):
+    # Written once the pieces are all there, so a stop halfway cuts them again.
+    cut = folder / "preprocess.done"
+    if not cut.exists():
         say("Cutting the recordings into pieces")
         run(
-            ["train/preprocess.py", source, SAMPLE_RATE, workers, folder, False, SLICE_SECONDS],
+            [
+                "train/preprocess.py",
+                source,
+                SAMPLE_RATE,
+                workers,
+                folder,
+                False,
+                SLICE_SECONDS,
+            ],
             folder / "preprocess.log",
         )
+        cut.write_text("done\n", encoding="utf-8")
 
     say("Finding the pitch of each piece")
     if on_gpu:
@@ -346,7 +386,9 @@ def train(arguments: argparse.Namespace) -> None:
     write_file_list(folder)
     config = folder / "config.json"
     if not config.exists():
-        shutil.copy(RVC / "configs" / "v1" / "40k.json", config)  # RVC's own choice for v2-40k
+        shutil.copy(
+            RVC / "configs" / "v1" / "40k.json", config
+        )  # RVC's own choice for v2-40k
 
     say(f"Learning the voice: {arguments.epochs} epochs")
     # Where RVC saves the voice at the end, which its web interface makes when it starts.
@@ -388,7 +430,9 @@ def train(arguments: argparse.Namespace) -> None:
     trained = {
         "epochs": arguments.epochs,
         "batch": arguments.batch,
-        "seconds": round(sum(sf_duration(p) for p in (folder / "0_gt_wavs").glob("*.wav"))),
+        "seconds": round(
+            sum(sf_duration(p) for p in (folder / "0_gt_wavs").glob("*.wav"))
+        ),
     }
     (VOICES / name / "trained.json").write_text(json.dumps(trained), encoding="utf-8")
     say(f"The voice is learned: {weights}")
@@ -448,8 +492,12 @@ def patch_for_onnx() -> None:
     def relative_to_absolute(self, x):
         batch, heads, length, _ = x.size()
         x = F.pad(x, [0, 1, 0, 0, 0, 0, 0, 0])
-        flat = F.pad(x.reshape([batch, heads, length * 2 * length]), [0, length - 1, 0, 0, 0, 0])
-        return flat.reshape([batch, heads, length + 1, 2 * length - 1])[:, :, :length, length - 1 :]
+        flat = F.pad(
+            x.reshape([batch, heads, length * 2 * length]), [0, length - 1, 0, 0, 0, 0]
+        )
+        return flat.reshape([batch, heads, length + 1, 2 * length - 1])[
+            :, :, :length, length - 1 :
+        ]
 
     def absolute_to_relative(self, x):
         batch, heads, length, _ = x.size()
@@ -494,13 +542,21 @@ def load_synthesizer(name: str):
     if not weights.exists():
         fail(f"{weights} is missing; run the train step first")
     saved = torch.load(weights, map_location="cpu", weights_only=True)
-    if saved.get("version") != "v2" or str(saved.get("f0")) != "1" or saved.get("sr") != "40k":
+    if (
+        saved.get("version") != "v2"
+        or str(saved.get("f0")) != "1"
+        or saved.get("sr") != "40k"
+    ):
         fail(f"{weights} is not an RVC v2 voice of 40 kHz with pitch")
     config = list(saved["config"])
-    config[-3] = saved["weight"]["emb_g.weight"].shape[0]  # speakers, as RVC itself does
+    config[-3] = saved["weight"]["emb_g.weight"].shape[
+        0
+    ]  # speakers, as RVC itself does
     net = SynthesizerTrnMs768NSFsid(*config, is_half=False)
     del net.enc_q  # only used to train
-    net.load_state_dict({k: v.float() for k, v in saved["weight"].items()}, strict=False)
+    net.load_state_dict(
+        {k: v.float() for k, v in saved["weight"].items()}, strict=False
+    )
     net.eval()
     net.remove_weight_norm()
     return net
@@ -524,8 +580,14 @@ def synthesizer_module(net):
             g = n.emb_g(sid).unsqueeze(-1)
             m_p, logs_p, x_mask = n.enc_p(phone, pitch, phone_lengths)
             flow, played = noise.shape[2], pitchf.shape[1]
-            m_p, logs_p, x_mask = m_p[:, :, -flow:], logs_p[:, :, -flow:], x_mask[:, :, -flow:]
-            z = n.flow((m_p + torch.exp(logs_p) * noise) * x_mask, x_mask, g=g, reverse=True)
+            m_p, logs_p, x_mask = (
+                m_p[:, :, -flow:],
+                logs_p[:, :, -flow:],
+                x_mask[:, :, -flow:],
+            )
+            z = n.flow(
+                (m_p + torch.exp(logs_p) * noise) * x_mask, x_mask, g=g, reverse=True
+            )
             return n.dec((z * x_mask)[:, :, -played:], pitchf, g=g)
 
     return Synthesizer().eval()
@@ -625,7 +687,10 @@ def export(arguments: argparse.Namespace) -> None:
     synthesizer = out / "synthesizer.onnx"
     with torch.no_grad():
         export_onnx(
-            synthesizer_module(net), synthesizer_inputs(200, 60), synthesizer, **SYNTHESIZER_IO
+            synthesizer_module(net),
+            synthesizer_inputs(200, 60),
+            synthesizer,
+            **SYNTHESIZER_IO,
         )
 
     say("Checking it against PyTorch, at lengths it was not exported with")
@@ -638,12 +703,15 @@ def export(arguments: argparse.Namespace) -> None:
             inputs = synthesizer_inputs(frames, played, seed=frames)
             expected = module(*inputs).numpy()
             got = exported.run(
-                None, dict(zip(SYNTHESIZER_IO["input_names"], (x.numpy() for x in inputs)))
+                None,
+                dict(zip(SYNTHESIZER_IO["input_names"], (x.numpy() for x in inputs))),
             )[0]
             if got.shape != expected.shape or got.shape[2] != played * HOP:
                 fail(f"the ONNX voice gives {got.shape} samples for {played} frames")
             difference = float(np.abs(got - expected).max())
-            print(f"    {frames} frames, {played} played: largest difference {difference:.1e}")
+            print(
+                f"    {frames} frames, {played} played: largest difference {difference:.1e}"
+            )
             if difference > 1e-3:
                 fail("the ONNX voice does not sound like the PyTorch one")
     checked.unlink()
@@ -651,7 +719,10 @@ def export(arguments: argparse.Namespace) -> None:
         sound = session(synthesizer).run(
             None,
             dict(
-                zip(SYNTHESIZER_IO["input_names"], (x.numpy() for x in synthesizer_inputs(150, 50)))
+                zip(
+                    SYNTHESIZER_IO["input_names"],
+                    (x.numpy() for x in synthesizer_inputs(150, 50)),
+                )
             ),
         )[0]
     if not np.isfinite(sound).all():
@@ -661,11 +732,13 @@ def export(arguments: argparse.Namespace) -> None:
     if not content.exists():
         say("Exporting what the voice listens with (HuBERT, once for every voice)")
         module = content_module()
+        # Written aside and moved in once checked, so a stop never leaves half of it.
+        part = out / "content.part.onnx"
         with torch.no_grad():
             export_onnx(
                 module,
                 (torch.randn(1, CONTENT_RATE) * 0.1,),
-                content,
+                part,
                 input_names=["audio"],
                 output_names=["features"],
                 dynamic_axes={"audio": {1: "samples"}, "features": {1: "frames"}},
@@ -673,13 +746,15 @@ def export(arguments: argparse.Namespace) -> None:
             audio = torch.randn(1, 23_456) * 0.1
             difference = float(
                 np.abs(
-                    session(content).run(None, {"audio": audio.numpy()})[0] - module(audio).numpy()
+                    session(part).run(None, {"audio": audio.numpy()})[0]
+                    - module(audio).numpy()
                 ).max()
             )
         print(f"    largest difference from PyTorch: {difference:.1e}")
         if difference > 1e-3:
-            content.unlink()
+            part.unlink()
             fail("the ONNX HuBERT does not hear like the PyTorch one")
+        part.replace(content)
 
     trained = VOICES / name / "trained.json"
     voice = {
@@ -709,7 +784,9 @@ def export(arguments: argparse.Namespace) -> None:
         "trained": json.loads(trained.read_text()) if trained.exists() else {},
         "rvc": RVC_COMMIT,
     }
-    (out / "voice.json").write_text(json.dumps(voice, indent=2) + "\n", encoding="utf-8")
+    (out / "voice.json").write_text(
+        json.dumps(voice, indent=2) + "\n", encoding="utf-8"
+    )
     say(f"The voice for the app is in {out}")
     for file in sorted(out.iterdir()):
         print(f"    {file.name}: {file.stat().st_size / 1e6:.1f} MB")
@@ -773,7 +850,9 @@ def try_voice(arguments: argparse.Namespace) -> None:
             "pitch": coarse_pitch(torch.from_numpy(hz)).numpy(),
             "pitchf": hz,
             "sid": np.array([voice["synthesizer"]["speaker"]], dtype=np.int64),
-            "noise": (rng.standard_normal((1, 192, frames)) * 0.66666).astype(np.float32),
+            "noise": (rng.standard_normal((1, 192, frames)) * 0.66666).astype(
+                np.float32
+            ),
         },
     )[0][0, 0]
     target = recording.with_name(f"{recording.stem}.{arguments.name}.wav")
@@ -834,7 +913,9 @@ def main() -> None:
     trying = named("try", "converts a recording to the voice, to hear it")
     trying.add_argument("recording", help="a recording of someone talking")
     trying.add_argument(
-        "--shift", type=float, help="semitones to move the pitch; by default, to the voice's own"
+        "--shift",
+        type=float,
+        help="semitones to move the pitch; by default, to the voice's own",
     )
     everything = named("all", "dataset, train and export")
     dataset_options(everything)

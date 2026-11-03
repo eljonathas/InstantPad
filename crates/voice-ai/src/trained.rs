@@ -96,6 +96,7 @@ pub(crate) fn add(models: &Path, source: &Path, id: &str) -> Result<TrainedModel
     })();
     if let Err(error) = copied {
         let _ = fs::remove_dir_all(&folder);
+        let _ = fs::remove_file(content.with_extension("part"));
         return Err(Failure::because(TextKey::SaveFailed, error));
     }
 
@@ -119,7 +120,12 @@ pub(crate) fn remove(models: &Path, id: &str) {
 /// The path of a file the kit listed, once its size and SHA-256 are the ones listed.
 fn checked(source: &Path, listed: &File) -> Result<std::path::PathBuf, Failure> {
     let name = Path::new(&listed.file);
-    if name.components().count() != 1 {
+    let mut parts = name.components();
+    let is_plain_name = matches!(
+        (parts.next(), parts.next()),
+        (Some(std::path::Component::Normal(_)), None)
+    );
+    if !is_plain_name {
         return Err(invalid(format!(
             "{} is not a file of the folder",
             listed.file
@@ -318,13 +324,15 @@ mod tests {
     #[test]
     fn a_listed_file_outside_the_folder_is_refused() {
         let folders = Folders::new("outside");
-        export(&folders.export(), |voice| {
-            voice["synthesizer"]["file"] = "../synthesizer.onnx".into();
-        });
+        for outside in ["../synthesizer.onnx", "..", "/synthesizer.onnx"] {
+            export(&folders.export(), |voice| {
+                voice["synthesizer"]["file"] = outside.into();
+            });
 
-        let failure = add(&folders.models(), &folders.export(), "abc").unwrap_err();
+            let failure = add(&folders.models(), &folders.export(), "abc").unwrap_err();
 
-        assert_eq!(key(&failure), TextKey::TrainedModelInvalid);
+            assert_eq!(key(&failure), TextKey::TrainedModelInvalid, "{outside}");
+        }
     }
 
     #[test]

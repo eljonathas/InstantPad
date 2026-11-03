@@ -252,8 +252,10 @@ impl SpeechConverter for OnnxVoices {
     /// in the middle of a stretch. The thread that converts starts over at its next call, and
     /// that is where the model loads.
     fn start(&self, conversion: &Conversion) {
-        *self.requested.lock().unwrap() = Some(conversion.clone());
+        // Cleared first, so a conversion that starts in between never takes the pitch of the
+        // one before.
         *self.retuned.lock().unwrap() = None;
+        *self.requested.lock().unwrap() = Some(conversion.clone());
     }
 
     fn retune(&self, semitones: f32) {
@@ -264,7 +266,17 @@ impl SpeechConverter for OnnxVoices {
         let mut conversion = self.conversion.lock().unwrap();
         if let Some(speakers) = self.take_request() {
             *conversion = None;
-            *conversion = Some(Running::start(&self.folder, &speakers)?);
+            let mut running = Running::start(&self.folder, &speakers)?;
+            // Both models load and run once now, in the first call of the conversion, which
+            // may take long. Loading HuBERT at the first block instead, once the conversion
+            // counts as warm, would pile up a second of voice and be taken for falling behind.
+            if let Running::Trained { synthesizer, .. } = &mut running {
+                rvc::warm_up(&mut TrainedModels {
+                    content: &self.content,
+                    synthesizer,
+                })?;
+            }
+            *conversion = Some(running);
         }
         let retuned = self.retuned.lock().unwrap().take();
         // With nobody to turn the voice into yet, nothing comes out.

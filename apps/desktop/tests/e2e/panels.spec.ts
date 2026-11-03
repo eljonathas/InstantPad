@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { emptyPad, openApp, pad, row } from "./support";
+import { emptyPad, lcd, openApp, pad, row } from "./support";
 
 test.beforeEach(async ({ page }) => openApp(page));
 
@@ -116,6 +116,75 @@ test.describe("with more trending sounds than the list shows", () => {
   });
 });
 
+test("a sound row keeps listening and the star, and the rest behind one options button", async ({ page }) => {
+  const sound = row(page, "Vine boom");
+  await expect(sound.getByRole("button")).toHaveText(["▶", "☆", ""]);
+  await expect(sound.getByRole("button", { name: "Listen on your headphones only" })).toBeVisible();
+
+  const options = sound.getByRole("button", { name: "Options for Vine boom" });
+  await expect(options).toHaveAttribute("aria-haspopup", "menu");
+  await options.click();
+
+  const menu = page.getByRole("menu", { name: "Options for Vine boom" });
+  await expect(menu.getByRole("menuitem")).toHaveText(["Play in the game now", "Save to a pad", "Cut into pads..."]);
+  await expect(options).toHaveAttribute("aria-expanded", "true");
+
+  await page.getByRole("menuitem", { name: "Play in the game now" }).click();
+  await expect(menu).toHaveCount(0);
+  await expect(lcd(page)).toContainText("Vine boom");
+  await expect(options).toHaveAttribute("aria-expanded", "false");
+});
+
+test("the options menu opens under its button, inside the window", async ({ page }) => {
+  const options = row(page, "Vine boom").getByRole("button", { name: "Options for Vine boom" });
+  await options.click();
+
+  const button = (await options.boundingBox())!;
+  const menu = (await page.getByRole("menu").boundingBox())!;
+  expect(menu.y).toBeCloseTo(button.y + button.height, 0);
+  expect(menu.x + menu.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+});
+
+test("the options menu works from the keyboard and gives the focus back", async ({ page }) => {
+  const options = row(page, "Vine boom").getByRole("button", { name: "Options for Vine boom" });
+  await options.focus();
+  await page.keyboard.press("Enter");
+
+  const item = (name: string) => page.getByRole("menuitem", { name });
+  await expect(item("Play in the game now")).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(item("Save to a pad")).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(item("Cut into pads...")).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(item("Play in the game now")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(item("Cut into pads...")).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(item("Play in the game now")).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(options).toBeFocused();
+  await expect(options).toHaveAttribute("aria-expanded", "false");
+
+  await page.keyboard.press("Space");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(page.locator(".pad", { hasText: "Vine boom" })).toHaveCount(2);
+  await expect(options).toBeFocused();
+});
+
+test("Tab leaves the options menu", async ({ page }) => {
+  const options = row(page, "Vine boom").getByRole("button", { name: "Options for Vine boom" });
+  await options.click();
+  await expect(page.getByRole("menuitem").first()).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+});
+
 test("the star follows the favorites", async ({ page }) => {
   const star = row(page, "Vine boom").getByRole("button", { name: "☆" });
   await star.click();
@@ -123,6 +192,29 @@ test("the star follows the favorites", async ({ page }) => {
 
   await page.getByRole("tab", { name: /Favorites/ }).click();
   await expect(page.getByRole("status").filter({ hasText: "2 favorites" })).toBeVisible();
+});
+
+test.describe("with more favorites than the list draws at once", () => {
+  test.beforeEach(async ({ page }) => {
+    await mock(page, "mock_many_favorites");
+    await page.getByRole("tab", { name: /Favorites/ }).click();
+    await expect(page.getByRole("status").filter({ hasText: "100 favorites" })).toBeVisible();
+  });
+
+  test("the list draws a page and the next ones as it scrolls", async ({ page }) => {
+    await expect.poll(() => rows(page).count()).toBeGreaterThanOrEqual(30);
+    let shown = await rows(page).count();
+    expect(shown).toBeLessThan(100);
+
+    while (shown < 100) {
+      await scrollToTheEnd(page);
+      await expect.poll(() => rows(page).count()).toBeGreaterThan(shown);
+      shown = await rows(page).count();
+    }
+
+    await expect(page.locator(".sound-list-end")).toHaveCount(0);
+    await expect(rows(page).last()).toHaveText(/Sound 100/);
+  });
 });
 
 test("sounds from the computer go to the chosen pad and the next free one", async ({ page }) => {

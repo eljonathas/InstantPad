@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { drag, emptyPad, interfaceTabs, lcd, openApp, pad, row } from "./support";
+import { drag, emptyPad, interfaceTabs, lcd, openApp, pad, row, soundAction } from "./support";
 
 test.beforeEach(async ({ page }) => openApp(page));
 
@@ -77,7 +77,7 @@ test("a press on an empty pad targets it and leaves the settings", async ({ page
   await expect(emptyPad(page, "04")).toHaveAttribute("data-target", "");
   await expect(page.getByRole("tab", { name: "MyInstants" })).toHaveAttribute("aria-selected", "true");
 
-  await row(page, "Airhorn").getByRole("button", { name: "+ Pad" }).click();
+  await soundAction(page, "Airhorn", "Save to a pad");
   await expect(pad(page, "04 Airhorn")).toBeVisible();
 });
 

@@ -77,9 +77,9 @@ In Discord, set **Input Profile** to **Studio**. Voice Isolation removes everyth
 | --- | --- |
 | Play a sound | Click its pad or press its shortcut |
 | Find sounds | Search MyInstants, or open **Trending**, which shows what is popular in your country. **Settings** can pick another country |
-| Fill a pad | Click an empty pad, then **+ Pad** on a result, or drag a result onto the pad. The sound is downloaded and kept locally |
+| Fill a pad | Click an empty pad, then **Save to a pad** in the options (**⋮**) of a result, or drag a result onto the pad. The sound is downloaded and kept locally |
 | Try an online sound on your headphones | The play button on the result (**Listen on your headphones only**) |
-| Play an online sound in the game without saving it | **Mic** on the result (**Play in the game now**) |
+| Play an online sound in the game without saving it | **Play in the game now** in the options of the result |
 | Mark a favorite | The star on a result, or right-click a pad and choose **Add to favorites** |
 | Use your own files | Click the folder key next to the search and pick one or more files: they go to the pad you clicked and the next free ones. You can also drag files from your file manager onto a pad, or right-click a pad and choose **Load audio file...** |
 | Save a copy of a sound elsewhere | Right-click its pad and choose **Download to computer...** |
@@ -101,7 +101,7 @@ Create as many interfaces as you want with **+**. Each has its own name, color a
 
 ### Cutting a sound into pads
 
-The scissors key cuts a sound into pieces, each on a pad of its own, the way the hot cues of a DJ player split a track. It is on every MyInstants result, next to the folder for a file of the computer, and in the right-click menu of a pad. The file is never changed: each pad plays its piece of it.
+**Cut into pads** cuts a sound into pieces, each on a pad of its own, the way the hot cues of a DJ player split a track. It is in the options of every MyInstants result and favorite, in the right-click menu of a pad, and on the scissors key next to the search, for a file of the computer. The file is never changed: each pad plays its piece of it.
 
 - **Detect cuts** marks a cue at the start of each sound after a pause, which splits a compilation of effects at once.
 - Click the waveform to move the playhead, and press **C** or double-click to mark a cue there. Drag a cue to move it, or nudge the selected one with the arrows; **Delete** removes it.

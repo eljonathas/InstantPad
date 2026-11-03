@@ -1,5 +1,4 @@
 {
-  "AddToPad": "+ Pad",
   "AddTrainedModel": "Adicionar modelo treinado...",
   "AddingTrainedModel": "Conferindo o modelo...",
   "AiCalibrationSaved": "Sua voz foi aprendida. As vozes de IA estão prontas.",
@@ -57,7 +56,6 @@
   "CutFit": "Som inteiro",
   "CutFromComputer": "Cortar um arquivo do computador...",
   "CutHelp": "Espaço toca a partir da agulha. C marca um cue ali, Delete apaga o selecionado, e 1 a 9 tocam cada trecho. Arraste um cue para movê-lo, ou use as setas. A roda do mouse dá zoom, e Shift com a roda anda pelo som.",
-  "CutIntoPads": "Cortar em pads",
   "CutIntoPadsTitle": "Cortar em pads: {0}",
   "CutNoPieces": "Marque um cue onde cada trecho começa: clique duas vezes na forma de onda, ou aperte C na agulha.",
   "CutPieceInclude": "Criar um pad do trecho {0}",
@@ -235,6 +233,7 @@
   "SoundFileMissing": "O arquivo do som não existe mais.",
   "SoundHasNoAudio": "O arquivo não contém áudio.",
   "SoundOpenFailed": "Não foi possível abrir o som: {0}",
+  "SoundOptions": "Opções de {0}",
   "SoundSaveFailed": "Não foi possível salvar o arquivo: {0}",
   "StopAll": "Parar",
   "StopRecording": "Parar",

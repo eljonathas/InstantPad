@@ -1,5 +1,4 @@
 {
-  "AddToPad": "+ Pad",
   "AddTrainedModel": "Add a trained model...",
   "AddingTrainedModel": "Checking the model...",
   "AiCalibrationSaved": "Your voice was learned. AI voices are ready.",
@@ -57,7 +56,6 @@
   "CutFit": "Whole sound",
   "CutFromComputer": "Cut a file from the computer...",
   "CutHelp": "Space plays from the playhead. C marks a cue there, Delete removes the selected one, and 1 to 9 play each piece. Drag a cue to move it, or use the arrows. The wheel zooms, and Shift with the wheel moves along.",
-  "CutIntoPads": "Cut into pads",
   "CutIntoPadsTitle": "Cut into pads: {0}",
   "CutNoPieces": "Mark a cue where each piece starts: double-click the waveform, or press C at the playhead.",
   "CutPieceInclude": "Make a pad of piece {0}",
@@ -235,6 +233,7 @@
   "SoundFileMissing": "The sound file no longer exists.",
   "SoundHasNoAudio": "The file has no audio.",
   "SoundOpenFailed": "Could not open the sound: {0}",
+  "SoundOptions": "Options for {0}",
   "SoundSaveFailed": "Could not save the file: {0}",
   "StopAll": "Stop",
   "StopRecording": "Stop",

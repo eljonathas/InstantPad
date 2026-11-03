@@ -973,6 +973,12 @@ export function installMock() {
     mock_long_catalog: () => {
       trendingCatalog = LONG_CATALOG;
     },
+    // Only in the browser: favorites far more than a page of the list, for the tests of its scrolling.
+    mock_many_favorites: () => {
+      backend.favorites = LONG_CATALOG;
+      send({ kind: "favorites", data: backend.favorites });
+      publish();
+    },
     // Only in the browser: the next page of trending sounds fails once, as with no connection.
     mock_fail_next_page: () => {
       failNextPage = true;

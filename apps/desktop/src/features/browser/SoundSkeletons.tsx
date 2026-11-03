@@ -5,8 +5,7 @@ export function SoundSkeletons({ count }: { count: number }) {
       <i className="skeleton sound-dot" />
       <i className="skeleton sound-skeleton-name" />
       <i className="skeleton sound-skeleton-key sound-icon" />
-      <i className="skeleton sound-skeleton-key sound-mic" />
-      <i className="skeleton sound-skeleton-key sound-pad" />
+      <i className="skeleton sound-skeleton-key sound-icon" />
       <i className="skeleton sound-skeleton-key sound-icon" />
     </li>
   ));

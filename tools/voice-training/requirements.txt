@@ -1,0 +1,20 @@
+# What the training scripts of RVC and voicekit.py import, without RVC's web interface.
+# setup.sh installs the exact versions in requirements.lock, which were checked; these are
+# the bounds they come from, RVC's own (requirments_cu128_py312.txt at the pinned commit).
+# PyTorch is installed by setup.sh, from the index for the graphics card or the processor.
+av>=15.1.0,<16
+ffmpeg-python>=0.2.0,<1
+librosa>=0.10.2,<0.11
+matplotlib>=3.8.2,<4
+numpy>=1.26.4,<2
+praat-parselmouth>=0.4.5,<1
+scipy>=1.13.1,<2
+soundfile>=0.13.0,<1
+tensorboard>=2.19.0
+tqdm>=4.67.0,<5
+transformers>=4.49.0,<4.50
+
+# Exporting the voice, checking it, and reading the Hi-Fi TTS data.
+onnx>=1.17,<1.20
+onnxruntime==1.23.2
+pyarrow>=17,<20  # the last ones built for NumPy 1, which RVC needs

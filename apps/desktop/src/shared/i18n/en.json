@@ -22,6 +22,7 @@
   "AiRelearn": "Learn my voice again",
   "AiTooSlow": "This computer is too slow for AI voices right now.",
   "AiTrainedTooSlow": "This computer is too slow for the trained model. Switch the voice to the Instant engine.",
+  "AiWaitingForMicrophone": "The AI starts learning your voice as soon as the microphone is free.",
   "AllFiles": "All files",
   "AudioDeviceNotResponding": "An audio device is not responding. If you just installed a virtual cable, restart your computer.",
   "AudioFileType": "Audio",

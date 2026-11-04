@@ -378,6 +378,8 @@ export type StartView = {
 	favorites: SoundSource[],
 	limits: Limits,
 	voice: VoiceView,
+	/**  A reloaded interface shows the dialog again, which holds the microphone until it closes. */
+	cloning: CloneStep,
 };
 
 /**

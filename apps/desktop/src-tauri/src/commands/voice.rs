@@ -47,6 +47,8 @@ pub fn relearn_voice(core: State<'_, Core>) {
 #[specta::specta]
 pub fn delete_cloned_voice(core: State<'_, Core>, id: String) {
     core.voice.delete_clone(&id);
+    // A training of the voice goes with it, recordings and all.
+    core.training.voice_deleted();
 }
 
 #[tauri::command]

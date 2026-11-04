@@ -116,14 +116,16 @@ impl SoundClip {
     }
 }
 
-/// A file of speech for the AI to learn from, as mono at the engine rate. Longer ones are
-/// refused while decoding, so a whole podcast never fills the memory.
+/// A file of speech for the AI to learn from, as mono at the engine rate. Decoding stops at the
+/// longest speech the app takes, so a whole podcast never fills the memory; the application
+/// refuses or cuts what is longer than it wants.
 pub(crate) fn load_speech(path: &str) -> Result<Vec<f32>, Failure> {
     let stereo = load_stereo(path, Some(MAX_SPEECH_SECONDS))?;
     Ok(downmix(&stereo).collect())
 }
 
-/// The audio of a file as stereo at the engine rate. `max_seconds` refuses a longer file.
+/// The audio of a file as stereo at the engine rate. `max_seconds` keeps only the start of a
+/// longer file.
 fn load_stereo(path: &str, max_seconds: Option<u32>) -> Result<Vec<f32>, Failure> {
     let (rate, stereo) = decode(path, max_seconds)?;
     if stereo.is_empty() {
@@ -158,7 +160,7 @@ fn open_failed(detail: impl ToString) -> Failure {
 }
 
 /// Returns the sample rate of the file and its audio as interleaved stereo. A file that lasts
-/// longer than `max_seconds` is refused as soon as that is clear.
+/// longer than `max_seconds` is read only that far.
 fn decode(path: &str, max_seconds: Option<u32>) -> Result<(u32, Vec<f32>), Failure> {
     let file = File::open(path).map_err(open_failed)?;
     let mut hint = Hint::new();
@@ -198,9 +200,12 @@ fn decode(path: &str, max_seconds: Option<u32>) -> Result<(u32, Vec<f32>), Failu
                 decoded.resize(buffer.samples_interleaved(), 0.0);
                 buffer.copy_to_slice_interleaved(&mut decoded);
                 append_as_stereo(&decoded, buffer.spec().channels().count(), &mut stereo);
-                let frames = stereo.len() / CHANNELS;
-                if max_seconds.is_some_and(|seconds| frames > seconds as usize * rate as usize) {
-                    return Err(Failure::text(TextKey::SampleTooLong));
+                if let Some(seconds) = max_seconds {
+                    let most = seconds as usize * rate as usize * CHANNELS;
+                    if stereo.len() >= most {
+                        stereo.truncate(most);
+                        break;
+                    }
                 }
             }
             // One bad packet costs a click, not the whole sound.
@@ -454,12 +459,13 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn speech_longer_than_a_sample_can_be_is_refused() {
-        let file = wav(8000, &[1000], 8000 * (MAX_SPEECH_SECONDS as usize + 1));
+    fn a_long_file_is_read_only_as_far_as_the_longest_speech() {
+        let file = wav(8000, &[1000], 8000 * 3);
 
-        let failure = load_speech(file.path()).err().unwrap();
+        let (rate, stereo) = decode(file.path(), Some(1)).unwrap();
 
-        assert_eq!(failure, Failure::text(TextKey::SampleTooLong));
+        assert_eq!(rate, 8000);
+        assert_eq!(stereo.len(), 8000 * CHANNELS);
     }
 
     #[test]

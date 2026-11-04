@@ -1,0 +1,39 @@
+[package]
+name = "instantpad-training"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait.workspace = true
+fs4 = "1.1"
+instantpad-application.workspace = true
+instantpad-domain.workspace = true
+reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "sync", "time"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+flate2 = "1.1"
+tar = "0.4"
+
+[dev-dependencies]
+instantpad-test-support.workspace = true
+tempfile = "3.27.0"
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

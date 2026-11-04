@@ -1,5 +1,7 @@
 # 0006: A voice can speak through a model trained on it
 
+> Where training runs is revised by [0007](0007-training-voices-in-the-app.md): users train in the app, and the kit stays for the developer.
+
 The AI voices of [ADR 0003](0003-local-ai-voices.md) change the timbre of the user's voice to that of a voiceprint, heard in a few seconds of speech (OpenVoice). That runs on any computer, as the user talks, but the result only sounds roughly like the voice. Users asked for voices as close to the original as the paid voice changers make them, which takes a model trained on the voice itself.
 
 - **RVC, trained by the user, on their own computer.** RVC v2 is the open model those voice changers are built on: MIT, with MIT base models that a voice is trained from in under an hour on an NVIDIA graphics card. Training needs PyTorch, which is gigabytes, so it runs outside the app, with the kit in `tools/voice-training`: it pins RVC by commit and every download by SHA-256, trains the voice, and exports it to ONNX in the layout the app reads. Training on the processor works and takes more than a day, which the kit says before it starts.

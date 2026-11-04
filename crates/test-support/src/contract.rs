@@ -3,7 +3,8 @@
 use instantpad_application::hotkeys::HotkeyCommand;
 use instantpad_application::ports::{
     AudioDevice, AudioRouter, BoardRepository, FavoritesRepository, HotkeyHost, PlaybackTag,
-    SettingsRepository, SoundFileStore, SoundPlayer, VirtualCable, VoiceLibraryRepository,
+    SettingsRepository, SoundFileStore, SoundPlayer, TrainingRepository, TrainingRun, VirtualCable,
+    VoiceLibraryRepository, VoiceTrainer,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
@@ -13,6 +14,9 @@ use instantpad_domain::cloning::{
 use instantpad_domain::cuts::{Cut, MIN_CUT_MS};
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
 use instantpad_domain::sounds::SoundSource;
+use instantpad_domain::training::{
+    GraphicsCard, ProcessorReason, TrainingDevice, TrainingJob, TrainingPlan,
+};
 
 /// `path` must be a sound that `player` can decode.
 pub async fn sound_player(player: &dyn SoundPlayer, path: &str) {
@@ -202,4 +206,64 @@ pub fn sound_file_store(store: &dyn SoundFileStore, outside: &str, destination: 
     assert_ne!(preview, target, "a sound being tried out lives apart");
     store.clear_previews();
     assert!(!store.exists(&preview));
+}
+
+pub fn training_repository(repository: &dyn TrainingRepository) {
+    let card = GraphicsCard {
+        name: "NVIDIA GeForce RTX 3070 Ti".to_owned(),
+        memory_megabytes: 8192,
+        driver: "610.88".to_owned(),
+    };
+    let mut job = TrainingJob::new("ana", TrainingPlan::new(TrainingDevice::Card, Some(&card)));
+    job.add_take(300);
+    job.is_started = true;
+    job.epoch = 35;
+
+    repository.save(Some(&job)).expect("save the training");
+    assert_eq!(repository.load(), Some(job));
+
+    repository.save(None).expect("forget the training");
+    assert_eq!(repository.load(), None);
+}
+
+/// `trainer` must have no tools installed. Nothing here downloads or trains, so it needs no
+/// network, card or Python.
+pub async fn voice_trainer(trainer: &dyn VoiceTrainer) {
+    let processor = TrainingDevice::Processor {
+        reason: ProcessorReason::NoCard,
+    };
+    let on_card = trainer.tools(TrainingDevice::Card);
+    let on_processor = trainer.tools(processor);
+    for tools in [on_card, on_processor] {
+        assert!(!tools.is_installed);
+        assert!(tools.download_megabytes > 0);
+        assert!(tools.installed_megabytes > 0);
+    }
+    assert!(
+        on_card.download_megabytes > on_processor.download_megabytes,
+        "PyTorch for the card is far bigger"
+    );
+    assert_eq!(trainer.installed_megabytes(), 0);
+
+    // Stopping with nothing running, and deleting what is not there, do nothing.
+    trainer.stop();
+    trainer.remove_tools();
+    trainer.discard("voice-never-trained");
+
+    let job = TrainingJob::new("ana", TrainingPlan::new(processor, None));
+    trainer
+        .keep_take(&job.id, "take-1", vec![0.1; 48_000])
+        .await
+        .expect("write a take");
+    trainer.remove_take(&job.id, "take-1");
+    trainer.remove_take(&job.id, "take-never-written");
+
+    let run = TrainingRun {
+        job: job.id.clone(),
+        plan: job.plan,
+        title: "Ana".to_owned(),
+    };
+    let trained = trainer.train(&run, &|_| {}).await;
+    assert!(trained.is_err(), "no training without its tools");
+    trainer.discard(&job.id);
 }

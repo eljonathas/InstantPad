@@ -7,5 +7,6 @@ pub mod cloning;
 pub mod cuts;
 pub mod mixer;
 pub mod setup;
+pub mod training;
 pub mod updates;
 pub mod voice;

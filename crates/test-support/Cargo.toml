@@ -13,6 +13,7 @@ workspace = true
 async-trait.workspace = true
 instantpad-application.workspace = true
 instantpad-domain.workspace = true
+tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 serde_json.workspace = true

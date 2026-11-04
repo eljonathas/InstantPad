@@ -286,6 +286,53 @@ async fn choosing_a_device_stops_bringing_back_the_old_one() {
 }
 
 #[tokio::test]
+async fn a_microphone_that_is_slow_to_open_shows_the_choice_at_once_and_opens_only_the_last_one() {
+    let devices = Devices::open().await;
+    devices
+        .router
+        .microphones
+        .lock()
+        .unwrap()
+        .push(device("headset", "Headset Mic"));
+    let driver = devices.router.slow_microphone.lock().await;
+    let shown = |devices: &Devices| {
+        devices
+            .world
+            .events
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find_map(|event| match event {
+                AppEvent::Setup(view) => Some(view.microphone_id.clone()),
+                _ => None,
+            })
+            .flatten()
+    };
+
+    tokio::join!(
+        devices.session.choose_microphone(Some("laptop".to_owned())),
+        devices
+            .session
+            .choose_microphone(Some("headset".to_owned())),
+        devices.session.choose_microphone(Some("usb".to_owned())),
+        async {
+            tokio::task::yield_now().await;
+            assert_eq!(shown(&devices).as_deref(), Some("laptop"));
+            drop(driver);
+        },
+    );
+
+    assert_eq!(devices.opened(), ["mic:laptop", "mic:usb"]);
+    assert_eq!(shown(&devices).as_deref(), Some("usb"));
+    assert_eq!(
+        devices.world.settings.lock().microphone_id.as_deref(),
+        Some("usb")
+    );
+}
+
+#[tokio::test]
 async fn a_stream_that_failed_for_another_reason_says_so_and_is_left_to_the_user() {
     let devices = Devices::open().await;
 

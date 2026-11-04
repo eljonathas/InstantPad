@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use instantpad_domain::hotkeys::{Hotkey, NumericLayout, NumericScheme};
@@ -27,6 +28,9 @@ pub struct SetupSession {
     /// The device open in place of the chosen one while that one is missing, by role. The
     /// settings keep the chosen one, which comes back as soon as it is there again.
     stand_ins: Mutex<[Option<AudioDevice>; 3]>,
+    /// How many times the user chose a device for each role, so a choice that a newer one
+    /// replaced while it waited is not opened for nothing.
+    choices: [AtomicU64; 3],
 }
 
 impl SetupSession {
@@ -49,6 +53,7 @@ impl SetupSession {
             microphones: Mutex::default(),
             recovery: tokio::sync::Mutex::default(),
             stand_ins: Mutex::default(),
+            choices: Default::default(),
         }
     }
 
@@ -161,13 +166,20 @@ impl SetupSession {
         }
     }
 
+    /// Shows and saves the choice before the device opens, which a slow driver can take seconds
+    /// to do. Choices made meanwhile wait, and only the last one is opened.
     async fn choose(&self, role: DeviceRole, id: Option<String>) {
+        let choices = &self.choices[role as usize];
+        let choice = choices.fetch_add(1, Ordering::Relaxed) + 1;
         let mut recovery = self.recovery.lock().await;
+        if choices.load(Ordering::Relaxed) != choice {
+            return;
+        }
         recovery.chosen(role);
         self.stand_ins.lock().expect("device lock poisoned")[role as usize] = None;
         *chosen_id_mut(&mut self.settings.lock(), role) = id.clone();
-        self.report(self.open(role, id.as_deref()).await);
         self.after_routing_change();
+        self.report(self.open(role, id.as_deref()).await);
     }
 
     /// Opens the role on the chosen device, or on the one that would stand in for it when it is

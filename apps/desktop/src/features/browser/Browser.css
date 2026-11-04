@@ -35,11 +35,6 @@
   width: var(--key-plus-width);
 }
 
-.sound-list-end {
-  height: 1px;
-  list-style: none;
-}
-
 .browser-more {
   margin-top: var(--space-4);
 }

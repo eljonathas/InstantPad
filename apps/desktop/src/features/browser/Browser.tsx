@@ -6,6 +6,7 @@ import { useBackend } from "../../shared/store/backend";
 import { useText } from "../../shared/store/text";
 import { holdHotkeys } from "../../shared/ui/hotkeyPause";
 import { SoundRow } from "../../shared/ui/SoundRow";
+import { useLoadAhead } from "../../shared/ui/useLoadAhead";
 import { cutEditor } from "../cuts/cutEditorStore";
 import { SoundSkeletons } from "./SoundSkeletons";
 import "./Browser.css";
@@ -23,8 +24,6 @@ interface Results {
 
 const SKELETONS_OF_A_LIST = 12;
 const SKELETONS_OF_MORE = 3;
-/** The next page starts loading this far before the end of the list comes into view. */
-const LOAD_AHEAD = "0px 0px 240px 0px";
 
 const NOTHING: Results = { search: null, sounds: [], page: 1, hasMore: false, status: { kind: "loading" } };
 
@@ -37,7 +36,6 @@ export function Browser() {
   const [results, setResults] = useState(NOTHING);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
-  const end = useRef<HTMLLIElement>(null);
   const holding = useRef<(() => void) | null>(null);
   const latest = useRef(0);
 
@@ -74,23 +72,11 @@ export function Browser() {
     [load],
   );
 
-  // The next page loads when the end of the list comes near, so scrolling never runs out
-  // while there is more. A list too short to scroll keeps loading until it fills the panel.
+  // The next page loads as the end of the list comes near; one that failed waits for Try again.
   const canLoadMore = results.hasMore && results.status.kind === "shown";
-  useEffect(() => {
-    const target = end.current;
-    if (!canLoadMore || !target) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        observer.disconnect();
-        show(results.search, results.page + 1);
-      },
-      { root: list.current, rootMargin: LOAD_AHEAD },
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [canLoadMore, results.search, results.page, show]);
+  const { search: searched, page } = results;
+  const nextPage = useCallback(() => show(searched, page + 1), [show, searched, page]);
+  const end = useLoadAhead(list, canLoadMore ? nextPage : null);
 
   useEffect(() => () => holding.current?.(), []);
 

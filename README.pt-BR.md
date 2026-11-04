@@ -77,9 +77,9 @@ No Discord, use o **Input Profile** **Studio**. O Voice Isolation remove tudo qu
 | --- | --- |
 | Tocar um som | Clique no pad ou aperte o atalho dele |
 | Encontrar sons | Busque no MyInstants ou abra **Em alta**, que mostra o que está popular no seu país. Em **Ajustes** dá para escolher outro país |
-| Preencher um pad | Clique num pad vazio e depois em **+ Pad** num resultado, ou arraste o resultado até o pad. O som é baixado e fica salvo no seu computador |
+| Preencher um pad | Clique num pad vazio e depois em **Salvar em um pad** nas opções (**⋮**) de um resultado, ou arraste o resultado até o pad. O som é baixado e fica salvo no seu computador |
 | Testar um som online nos fones | O botão de play do resultado (**Ouvir só nos fones**) |
-| Tocar um som online no jogo sem salvar | **Mic** no resultado (**Tocar no jogo agora**) |
+| Tocar um som online no jogo sem salvar | **Tocar no jogo agora** nas opções do resultado |
 | Favoritar | A estrela no resultado, ou botão direito num pad e **Favoritar** |
 | Usar arquivos seus | Clique na tecla de pasta ao lado da busca e escolha um ou mais arquivos: eles vão para o pad que você clicou e para os próximos livres. Você também pode arrastar arquivos do gerenciador de arquivos até um pad, ou clicar com o botão direito num pad e escolher **Carregar arquivo de áudio...** |
 | Guardar uma cópia do som em outro lugar | Botão direito no pad e **Baixar no computador...** |
@@ -101,7 +101,7 @@ Crie quantas interfaces quiser com **+**. Cada uma tem nome, cor e grade própri
 
 ### Cortar um som em pads
 
-A tecla da tesoura corta um som em trechos, cada um num pad, como os hot cues de uma CDJ dividem uma faixa. Ela está em cada resultado do MyInstants, ao lado da pasta para um arquivo do computador, e no menu do botão direito de um pad. O arquivo nunca é alterado: cada pad toca o seu trecho dele.
+**Cortar em pads** corta um som em trechos, cada um num pad, como os hot cues de uma CDJ dividem uma faixa. Está nas opções de cada resultado do MyInstants e de cada favorito, no menu do botão direito de um pad e na tecla da tesoura ao lado da busca, para um arquivo do computador. O arquivo nunca é alterado: cada pad toca o seu trecho dele.
 
 - **Detectar cortes** marca um cue no começo de cada som depois de uma pausa, o que divide uma compilação de efeitos de uma vez.
 - Clique na forma de onda para mover a agulha, e aperte **C** ou clique duas vezes para marcar um cue ali. Arraste um cue para movê-lo, ou ajuste o selecionado com as setas; **Delete** apaga.

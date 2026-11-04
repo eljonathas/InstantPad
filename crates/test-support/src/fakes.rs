@@ -162,6 +162,8 @@ pub struct FakeRouter {
     pub broken: Mutex<HashSet<String>>,
     /// The streams that stopped by themselves and were not told yet.
     pub stopped: Mutex<Vec<(DeviceRole, StreamStop)>>,
+    /// Held by a test, the microphone takes as long to open as a slow driver.
+    pub slow_microphone: tokio::sync::Mutex<()>,
 }
 
 impl FakeRouter {
@@ -203,6 +205,7 @@ impl AudioRouter for FakeRouter {
     }
 
     async fn set_microphone(&self, device_id: Option<&str>) -> Result<(), Failure> {
+        let _driver = self.slow_microphone.lock().await;
         self.open("mic", device_id)
     }
 

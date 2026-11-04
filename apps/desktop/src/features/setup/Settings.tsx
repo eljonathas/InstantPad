@@ -22,15 +22,30 @@ interface DeviceSelectProps {
   title: string;
   devices: AudioDevice[];
   selected: string | null;
-  onChoose: (id: string | null) => void;
+  onChoose: (id: string | null) => Promise<unknown>;
 }
 
-function DeviceSelect({ title, devices, selected, onChoose }: DeviceSelectProps) {
+/** Keeps showing what the user picked while the device opens, which a slow driver can take seconds to do. */
+export function DeviceSelect({ title, devices, selected, onChoose }: DeviceSelectProps) {
+  const [picked, setPicked] = useState<{ id: string | null } | null>(null);
+  const shown = picked ? picked.id : selected;
+
+  async function choose(id: string | null) {
+    const choice = { id };
+    setPicked(choice);
+    try {
+      await onChoose(id);
+    } finally {
+      // A newer pick is still opening and stays on screen.
+      setPicked((current) => (current === choice ? null : current));
+    }
+  }
+
   return (
     <label className="setting">
       <span className="setting-title screen-text">{title}</span>
-      <select className="field" value={selected ?? ""} onChange={(event) => onChoose(event.target.value || null)}>
-        {!devices.some((device) => device.id === selected) && <option value="" />}
+      <select className="field" value={shown ?? ""} onChange={(event) => void choose(event.target.value || null)}>
+        {!devices.some((device) => device.id === shown) && <option value="" />}
         {devices.map((device) => (
           <option key={device.id} value={device.id}>
             {device.name}

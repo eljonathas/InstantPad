@@ -1,13 +1,18 @@
 use instantpad_domain::hotkeys::{Hotkey, HotkeyModifiers};
 use instantpad_test_support::contract;
 use instantpad_test_support::fakes::{
-    FakeCable, FakeFileStore, FakeHotkeyHost, FakePlayer, InMemoryBoard, InMemoryFavorites,
-    InMemorySettings, InMemoryVoiceLibrary, device,
+    FakeCable, FakeFileStore, FakeHotkeyHost, FakePlayer, FakeRouter, InMemoryBoard,
+    InMemoryFavorites, InMemorySettings, InMemoryVoiceLibrary, device,
 };
 
 #[tokio::test]
 async fn the_fake_player() {
     contract::sound_player(&FakePlayer::default(), "a.mp3").await;
+}
+
+#[tokio::test]
+async fn the_fake_router() {
+    contract::audio_router(&FakeRouter::default()).await;
 }
 
 #[test]

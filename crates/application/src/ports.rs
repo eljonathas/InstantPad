@@ -112,6 +112,28 @@ pub trait SoundPlayer: Send + Sync {
     fn now_playing(&self) -> Option<NowPlaying>;
 }
 
+/// The three places the audio flows through, each on a device of its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum DeviceRole {
+    Microphone,
+    GameOutput,
+    MonitorOutput,
+}
+
+impl DeviceRole {
+    pub const ALL: [Self; 3] = [Self::Microphone, Self::GameOutput, Self::MonitorOutput];
+}
+
+/// Why the stream of a role stopped without being asked to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StreamStop {
+    /// The device went away or the system reconfigured it, as when a headset reconnects or its
+    /// format changes. Opening it again may work.
+    Lost,
+    /// Anything else, which opening it again would not fix.
+    Failed,
+}
+
 /// Chooses which physical devices the audio flows through.
 #[async_trait]
 pub trait AudioRouter: Send + Sync {
@@ -126,6 +148,10 @@ pub trait AudioRouter: Send + Sync {
     async fn set_game_output(&self, device_id: Option<&str>) -> Result<(), Failure>;
 
     async fn set_monitor_output(&self, device_id: Option<&str>) -> Result<(), Failure>;
+
+    /// The roles whose stream stopped by itself since the last call, each told once. A role
+    /// closed or opened again on purpose tells nothing.
+    fn take_stopped(&self) -> Vec<(DeviceRole, StreamStop)>;
 }
 
 /// Live mix controls and levels. Device failures reach the user through [`EventSink`].

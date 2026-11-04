@@ -21,6 +21,9 @@ use crate::hotkeys::GlobalHotkeys;
 const METER_INTERVAL: Duration = Duration::from_millis(33);
 /// How often the AI checks whether it has heard enough of the user to learn their voice.
 const LEARN_INTERVAL: Duration = Duration::from_millis(500);
+/// How often a stopped device is looked at. The waits between attempts to open it again count
+/// in these.
+const DEVICE_WATCH_INTERVAL: Duration = Duration::from_millis(500);
 
 fn specta_builder() -> Builder<Wry> {
     Builder::<Wry>::new()
@@ -128,6 +131,18 @@ fn start_learning(app: AppHandle) {
     });
 }
 
+/// The audio callbacks only mark a stream that stopped, so something has to look from time to
+/// time and open the device again.
+fn start_device_watch(app: AppHandle) {
+    thread::spawn(move || {
+        loop {
+            let core = app.state::<Core>();
+            tauri::async_runtime::block_on(core.setup.watch_devices());
+            thread::sleep(DEVICE_WATCH_INTERVAL);
+        }
+    });
+}
+
 /// Opening the app again brings the running window to the front.
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -162,6 +177,7 @@ pub fn run() {
             app.manage(composition::build(app.handle(), hotkeys)?);
             start_meters(app.handle().clone());
             start_learning(app.handle().clone());
+            start_device_watch(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())

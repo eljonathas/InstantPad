@@ -18,6 +18,7 @@ use crate::ai::tests::conversion;
 use crate::capture::CaptureProcessor;
 use crate::clip::SoundClip;
 use crate::controls::{AtomicF32, Controls};
+use crate::devices::{self, StreamHealth};
 use crate::format::{CHANNELS, SAMPLE_RATE, samples_for};
 use crate::mic;
 use crate::mixer::{self, Mixer, MixerHandle};
@@ -357,6 +358,24 @@ fn capturing_integers_at_the_engine_rate_allocates_and_frees_nothing() {
     let requests = requests_during(|| {
         for _ in 0..50 {
             processor.push(&callback);
+        }
+    });
+
+    assert_eq!(requests, 0);
+}
+
+#[test]
+fn a_stream_that_stops_allocates_and_frees_nothing_in_its_error_callback() {
+    let mut on_error = devices::watch(Arc::new(StreamHealth::default()));
+    let errors = [
+        cpal::Error::new(cpal::ErrorKind::Xrun),
+        cpal::Error::new(cpal::ErrorKind::BackendError),
+        cpal::Error::new(cpal::ErrorKind::DeviceNotAvailable),
+    ];
+
+    let requests = requests_during(|| {
+        for error in errors {
+            on_error(error);
         }
     });
 

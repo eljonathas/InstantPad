@@ -11,6 +11,7 @@ pub mod message;
 pub mod mixer;
 pub mod ports;
 pub mod recorder;
+mod recovery;
 pub mod routing;
 pub mod rows;
 pub mod settings;

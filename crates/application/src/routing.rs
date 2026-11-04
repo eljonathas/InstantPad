@@ -1,4 +1,4 @@
-use crate::ports::{AudioDevice, VirtualCable};
+use crate::ports::{AudioDevice, DeviceRole, VirtualCable};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SavedRouting<'a> {
@@ -18,6 +18,16 @@ pub struct RoutingChoice {
     pub microphone: Option<AudioDevice>,
     pub game_output: Option<AudioDevice>,
     pub monitor_output: Option<AudioDevice>,
+}
+
+impl RoutingChoice {
+    pub fn of(&self, role: DeviceRole) -> Option<&AudioDevice> {
+        match role {
+            DeviceRole::Microphone => self.microphone.as_ref(),
+            DeviceRole::GameOutput => self.game_output.as_ref(),
+            DeviceRole::MonitorOutput => self.monitor_output.as_ref(),
+        }
+    }
 }
 
 /// Each role excludes the mistakes that wreck the sound: a mic reading the cable feeds the mix

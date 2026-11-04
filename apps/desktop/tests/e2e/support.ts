@@ -18,6 +18,12 @@ export const lcd = (page: Page) => page.locator(".lcd-main");
 // Search results and favorites both stay mounted; only the visible one counts.
 export const row = (page: Page, name: string) => page.locator(".sound-row:visible", { hasText: name });
 
+/** Runs an action of a sound row, which waits in the menu behind the row's options button. */
+export async function soundAction(page: Page, name: string, action: string) {
+  await row(page, name).getByRole("button", { name: `Options for ${name}` }).click();
+  await page.getByRole("menuitem", { name: action }).click();
+}
+
 export const interfaceTabs = (page: Page) => page.locator(".interface-tabs").getByRole("tab");
 
 const center = async (target: Locator) => {

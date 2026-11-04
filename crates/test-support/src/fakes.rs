@@ -7,11 +7,12 @@ use instantpad_application::events::AppEvent;
 use instantpad_application::hotkeys::HotkeyCommand;
 use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{
-    AppUpdater, AudioDevice, AudioMix, AudioRouter, BoardRepository, CatalogPage, EventSink,
-    FavoritesRepository, HotkeyHost, NowPlaying, Outcome, PlaybackTag, SettingsRepository,
-    SoundCatalog, SoundFileStore, SoundPlayer, SpeechConverter, SystemAudio, TrainedVoiceModels,
-    TrainingProgress, TrainingRepository, TrainingRun, TrainingTools, VirtualCable, VoiceAnalyzer,
-    VoiceChanger, VoiceLibraryRepository, VoiceModels, VoiceRecorder, VoiceTrainer, Waveform,
+    AppUpdater, AudioDevice, AudioMix, AudioRouter, BoardRepository, CatalogPage, DeviceRole,
+    EventSink, FavoritesRepository, HotkeyHost, NowPlaying, Outcome, PlaybackTag,
+    SettingsRepository, SoundCatalog, SoundFileStore, SoundPlayer, SpeechConverter, StreamStop,
+    SystemAudio, TrainedVoiceModels, TrainingProgress, TrainingRepository, TrainingRun,
+    TrainingTools, VirtualCable, VoiceAnalyzer, VoiceChanger, VoiceLibraryRepository, VoiceModels,
+    VoiceRecorder, VoiceTrainer, Waveform,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
@@ -155,15 +156,39 @@ impl SoundPlayer for FakePlayer {
 pub struct FakeRouter {
     pub microphones: Mutex<Vec<AudioDevice>>,
     pub outputs: Mutex<Vec<AudioDevice>>,
-    /// Every device opened, as `"role:id"`.
+    /// Every device opened, as `"role:id"`, including the ones that failed to open.
     pub opened: Mutex<Vec<String>>,
+    /// Devices that fail to open, though they may be listed.
+    pub broken: Mutex<HashSet<String>>,
+    /// The streams that stopped by themselves and were not told yet.
+    pub stopped: Mutex<Vec<(DeviceRole, StreamStop)>>,
 }
 
 impl FakeRouter {
     fn open(&self, role: &str, device_id: Option<&str>) -> Result<(), Failure> {
         let id = device_id.unwrap_or("none");
         self.opened.lock().unwrap().push(format!("{role}:{id}"));
+        if self.broken.lock().unwrap().contains(id) {
+            return Err(Failure::because(TextKey::DeviceUnavailable, "broken"));
+        }
         Ok(())
+    }
+
+    /// The stream of `role` stops, as the audio callback would see it.
+    pub fn stop(&self, role: DeviceRole, stop: StreamStop) {
+        self.stopped.lock().unwrap().push((role, stop));
+    }
+
+    /// The device leaves the lists, as an unplugged one does.
+    pub fn unplug(&self, id: &str) {
+        self.microphones
+            .lock()
+            .unwrap()
+            .retain(|device| device.id != id);
+        self.outputs
+            .lock()
+            .unwrap()
+            .retain(|device| device.id != id);
     }
 }
 
@@ -187,6 +212,10 @@ impl AudioRouter for FakeRouter {
 
     async fn set_monitor_output(&self, device_id: Option<&str>) -> Result<(), Failure> {
         self.open("monitor", device_id)
+    }
+
+    fn take_stopped(&self) -> Vec<(DeviceRole, StreamStop)> {
+        std::mem::take(&mut *self.stopped.lock().unwrap())
     }
 }
 

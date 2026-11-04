@@ -136,6 +136,10 @@
   --icon: var(--icon-cut);
 }
 
+.icon-more {
+  --icon: var(--icon-more);
+}
+
 .icon-search {
   --icon: var(--icon-search);
 }

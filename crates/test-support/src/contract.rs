@@ -2,8 +2,8 @@
 
 use instantpad_application::hotkeys::HotkeyCommand;
 use instantpad_application::ports::{
-    AudioDevice, BoardRepository, FavoritesRepository, HotkeyHost, PlaybackTag, SettingsRepository,
-    SoundFileStore, SoundPlayer, TrainingRepository, TrainingRun, VirtualCable,
+    AudioDevice, AudioRouter, BoardRepository, FavoritesRepository, HotkeyHost, PlaybackTag,
+    SettingsRepository, SoundFileStore, SoundPlayer, TrainingRepository, TrainingRun, VirtualCable,
     VoiceLibraryRepository, VoiceTrainer,
 };
 use instantpad_application::settings::AppSettings;
@@ -61,6 +61,23 @@ pub async fn sound_player(player: &dyn SoundPlayer, path: &str) {
     assert!(drawn.peaks.iter().all(|peak| (0.0..=1.0).contains(peak)));
     let levels = player.levels(path, 10).await.expect("measure a good file");
     assert!(levels.iter().all(|level| (0.0..=1.0).contains(level)));
+}
+
+/// Needs no device: it only closes the roles, which every router can do.
+pub async fn audio_router(router: &dyn AudioRouter) {
+    assert!(router.take_stopped().is_empty(), "nothing stopped yet");
+
+    router.set_microphone(None).await.expect("close the mic");
+    router.set_game_output(None).await.expect("close the game");
+    router
+        .set_monitor_output(None)
+        .await
+        .expect("close the monitor");
+
+    assert!(
+        router.take_stopped().is_empty(),
+        "a role closed on purpose did not stop by itself"
+    );
 }
 
 /// `free` must be a key no other program holds.

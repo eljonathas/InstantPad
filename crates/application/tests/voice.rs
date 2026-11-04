@@ -1194,6 +1194,49 @@ fn an_ai_effect_without_the_own_voice_known_starts_listening_instead_of_failing(
     assert_eq!(*world.changer.conversion.lock().unwrap(), None);
 }
 
+/// What the screen was told about the listening whenever a voice waited, in order.
+fn listening_told_while_waiting(world: &VoiceWorld) -> Vec<Calibration> {
+    world
+        .events
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|event| match event {
+            AppEvent::Voice(view) if view.ai.waiting.is_some() => Some(view.ai.calibration),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_screen_is_never_told_a_voice_waits_for_the_own_voice_before_the_listening_starts() {
+    let world = VoiceWorld::installed();
+
+    world.voice.select(VoiceEffect::FeminineAi);
+
+    let told = listening_told_while_waiting(&world);
+    assert!(!told.is_empty());
+    assert!(
+        told.iter().all(|&told| told == Calibration::Listening),
+        "{told:?}"
+    );
+}
+
+#[test]
+fn relearning_tells_the_screen_of_the_wait_only_once_the_listening_starts() {
+    let world = VoiceWorld::resuming(saved_with(VoiceEffect::FeminineAi), calibrated(), true);
+
+    world.voice.relearn();
+
+    let told = listening_told_while_waiting(&world);
+    assert!(!told.is_empty());
+    assert!(
+        told.iter().all(|&told| told == Calibration::Listening),
+        "{told:?}"
+    );
+}
+
 #[tokio::test]
 async fn nothing_is_listened_to_when_nothing_waits_for_the_own_voice() {
     let world = VoiceWorld::installed();

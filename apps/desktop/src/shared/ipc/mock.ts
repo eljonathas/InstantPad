@@ -887,6 +887,8 @@ export function installMock() {
   const handlers: Record<string, (args: Args) => unknown> = {
     start: ({ systemLocale }) => {
       backend = seed();
+      cloningGeneration++;
+      isCloningOpen = false;
       systemRegion = /[-_]([a-z]{2})(?:[-_.]|$)/i.exec(systemLocale as string)?.[1].toLowerCase() ?? "us";
       backend.setup.trendingRegion = systemRegion;
       playing = new Set();
@@ -906,6 +908,8 @@ export function installMock() {
         favorites: backend.favorites,
         limits: LIMITS,
         voice: voiceView(),
+        // The mock starts over with the interface, so no dialog is left open.
+        cloning: { step: "closed" },
       } satisfies StartView;
     },
     press_pad: ({ slot }) => {
@@ -1084,6 +1088,12 @@ export function installMock() {
     // Only in the browser: the trending sounds become a list long enough to scroll.
     mock_long_catalog: () => {
       trendingCatalog = LONG_CATALOG;
+    },
+    // Only in the browser: favorites far more than a page of the list, for the tests of its scrolling.
+    mock_many_favorites: () => {
+      backend.favorites = LONG_CATALOG;
+      send({ kind: "favorites", data: backend.favorites });
+      publish();
     },
     // Only in the browser: the next page of trending sounds fails once, as with no connection.
     mock_fail_next_page: () => {

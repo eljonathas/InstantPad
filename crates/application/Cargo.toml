@@ -15,7 +15,7 @@ instantpad-domain.workspace = true
 serde.workspace = true
 specta.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros", "sync"] }
 
 [dev-dependencies]
 instantpad-test-support.workspace = true

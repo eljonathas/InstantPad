@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp, recordCommands } from "./support";
+import { openApp, recordCommands, soundAction } from "./support";
 
 test.beforeEach(async ({ page }) => {
   await openApp(page);
@@ -88,7 +88,7 @@ test("the window opens by itself, so it leaves the global keys on", async ({ pag
 });
 
 test("Esc closes only the window on top", async ({ page }) => {
-  await page.locator(".sound-row:visible", { hasText: "Airhorn" }).getByRole("button", { name: "Cut into pads" }).click();
+  await soundAction(page, "Airhorn", "Cut into pads...");
   const cutEditor = page.getByRole("dialog", { name: "Cut into pads: Airhorn" });
   await expect(cutEditor).toBeVisible();
   await updateArrives(page, "9.9.9");

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { lcd, openApp, pad, recordCommands, row } from "./support";
+import { lcd, openApp, pad, recordCommands, soundAction } from "./support";
 
 test.beforeEach(async ({ page }) => openApp(page));
 
@@ -8,7 +8,7 @@ const pieces = (page: Page) => page.locator(".cut-piece");
 const cutPads = (page: Page) => page.locator(".pad .pad-cut");
 
 async function openAirhorn(page: Page) {
-  await row(page, "Airhorn").getByRole("button", { name: "Cut into pads" }).click();
+  await soundAction(page, "Airhorn", "Cut into pads...");
   await expect(editor(page)).toBeVisible();
 }
 

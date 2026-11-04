@@ -41,18 +41,16 @@
   width: var(--key-icon-width);
 }
 
-.sound-mic {
-  width: var(--key-mic-width);
-}
-
-.sound-pad {
-  width: var(--key-pad-width);
-}
-
 .sound-list {
   flex: 1;
   min-height: 0;
   margin: 0;
   padding: 0;
   overflow-y: auto;
+}
+
+/* Where the list asks for more as it comes near */
+.sound-list-end {
+  height: 1px;
+  list-style: none;
 }

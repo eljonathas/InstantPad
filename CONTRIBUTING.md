@@ -19,7 +19,7 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm --filter @instantpad/desktop dev` runs just the interface in a browser, against a mock of the backend. The `INSTANTPAD_DATA` environment variable points the app at another folder, which keeps your own sounds out of your tests.
+`pnpm --filter @instantpad/desktop dev` runs just the interface in a browser, against a mock of the backend. In a debug build, the `INSTANTPAD_DATA` environment variable points the app at another folder, which keeps your own sounds out of your tests.
 
 Testing the audio path end to end needs a virtual cable: VB-CABLE on Windows, BlackHole on macOS.
 

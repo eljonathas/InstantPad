@@ -46,10 +46,10 @@ impl MicReader {
         let backlog = self.samples.slots();
         if backlog > MAX_BACKLOG {
             // The backlog and the prebuffer are both whole frames, or left and right would swap.
-            self.samples
-                .read_chunk(backlog - PREBUFFER)
-                .expect("the backlog is available")
-                .commit_all();
+            // Only this side takes samples, so the backlog is still there to drop.
+            if let Ok(chunk) = self.samples.read_chunk(backlog - PREBUFFER) {
+                chunk.commit_all();
+            }
         }
 
         if !self.primed {

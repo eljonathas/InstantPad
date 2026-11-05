@@ -37,3 +37,21 @@ pub(crate) fn downmix(stereo: &[f32]) -> impl Iterator<Item = f32> + '_ {
         .iter()
         .map(|[left, right]| (left + right) / 2.0)
 }
+
+/// Frames downmixed at a time by [`push_downmixed`].
+const DOWNMIX_FRAMES: usize = 256;
+
+/// Writes the stereo voice to `ring` as mono, in a few writes instead of one per sample. What
+/// does not fit is dropped, newest first.
+pub(crate) fn push_downmixed(ring: &mut rtrb::Producer<f32>, stereo: &[f32]) {
+    let mut mono = [0.0; DOWNMIX_FRAMES];
+    for part in stereo.chunks(DOWNMIX_FRAMES * CHANNELS) {
+        let count = part.len() / CHANNELS;
+        for (out, sample) in mono.iter_mut().zip(downmix(part)) {
+            *out = sample;
+        }
+        if ring.push_partial_slice(&mono[..count]).0.len() < count {
+            return;
+        }
+    }
+}

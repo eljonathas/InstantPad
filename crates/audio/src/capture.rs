@@ -1,24 +1,21 @@
 //! Turns what the microphone delivers into engine audio for the game mixer.
 
+use std::error::Error;
 use std::sync::Arc;
 
 use cpal::{FromSample, Sample};
 use rtrb::Producer;
-use rubato::audioadapter_buffers::direct::InterleavedSlice;
-use rubato::{Fft, FixedSync, Resampler, ResamplerConstructionError};
 
 use crate::ai::AiStage;
 use crate::controls::AtomicF32;
 use crate::format::{CHANNELS, SAMPLE_RATE};
 use crate::recording::RecordTap;
+use crate::resample::{BLOCK_FRAMES, BlockResampler};
 use crate::voice::{VoiceControls, VoiceProcessor};
-
-/// Frames written to the ring at a time when no resampling is needed.
-const BLOCK_FRAMES: usize = 480;
 
 pub(crate) struct CaptureProcessor {
     channels: usize,
-    resampler: Option<Fft<f32>>,
+    resampler: Option<BlockResampler>,
     /// Stereo frames at the device rate, waiting for a whole block.
     block: Vec<f32>,
     filled: usize,
@@ -41,29 +38,26 @@ impl CaptureProcessor {
         voice: Arc<VoiceControls>,
         tap: RecordTap,
         ai: AiStage,
-    ) -> Result<Self, ResamplerConstructionError> {
+    ) -> Result<Self, Box<dyn Error>> {
+        // A device without channels has nothing to take a frame from.
+        if channels == 0 {
+            return Err("the device has no channels".into());
+        }
         let resampler = (rate != SAMPLE_RATE)
-            .then(|| {
-                Fft::new(
-                    rate as usize,
-                    SAMPLE_RATE as usize,
-                    BLOCK_FRAMES,
-                    CHANNELS,
-                    FixedSync::Input,
-                )
-            })
+            .then(|| BlockResampler::new(rate, SAMPLE_RATE))
             .transpose()?;
-        let (block_frames, resampled_frames) =
-            resampler.as_ref().map_or((BLOCK_FRAMES, 0), |resampler| {
-                (resampler.input_frames_next(), resampler.output_frames_max())
+        let (block, resampled) = resampler
+            .as_ref()
+            .map_or((BLOCK_FRAMES * CHANNELS, 0), |r| {
+                (r.input_len(), r.output_len())
             });
 
         Ok(Self {
             channels,
             resampler,
-            block: vec![0.0; block_frames * CHANNELS],
+            block: vec![0.0; block],
             filled: 0,
-            resampled: vec![0.0; resampled_frames * CHANNELS],
+            resampled: vec![0.0; resampled],
             tap,
             voice: VoiceProcessor::new(voice),
             ai,
@@ -99,17 +93,8 @@ impl CaptureProcessor {
     fn flush(&mut self) {
         let ready = match &mut self.resampler {
             Some(resampler) => {
-                let frames = self.block.len() / CHANNELS;
-                let input = InterleavedSlice::new(&self.block[..], CHANNELS, frames)
-                    .expect("the block holds whole frames");
-                let capacity = self.resampled.len() / CHANNELS;
-                let mut output =
-                    InterleavedSlice::new_mut(&mut self.resampled[..], CHANNELS, capacity)
-                        .expect("the output holds whole frames");
-                let (_, produced) = resampler
-                    .process_into_buffer(&input, &mut output, None)
-                    .expect("the buffers are sized for the resampler");
-                &self.resampled[..produced * CHANNELS]
+                let produced = resampler.process(&self.block, &mut self.resampled);
+                &self.resampled[..produced]
             }
             None => &self.block[..],
         };
@@ -185,6 +170,29 @@ mod tests {
             recorder,
             ai,
         }
+    }
+
+    #[test]
+    fn a_device_without_channels_is_refused() {
+        let (writer, _) = RingBuffer::new(CHANNELS);
+        let (headphones, _) = RingBuffer::new(CHANNELS);
+        let recorder = Recorder::new();
+        let ai = AiBridge::new(
+            Arc::new(FakeConverter::default()),
+            Arc::new(RecordingEvents::default()),
+        );
+
+        let refused = CaptureProcessor::new(
+            0,
+            SAMPLE_RATE,
+            [writer, headphones],
+            Arc::new(AtomicF32::new(0.0)),
+            Arc::new(VoiceControls::new()),
+            recorder.tap().0,
+            ai.rings().0,
+        );
+
+        assert!(refused.is_err());
     }
 
     fn processor(channels: usize, rate: u32) -> (CaptureProcessor, Consumer<f32>, Arc<AtomicF32>) {

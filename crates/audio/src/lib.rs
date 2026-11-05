@@ -13,6 +13,7 @@ mod mic;
 mod mixer;
 mod playback;
 mod recording;
+mod resample;
 mod role;
 mod voice;
 mod worker;

@@ -47,7 +47,7 @@ impl VoiceControls {
             color,
         }) = chain
         else {
-            self.is_on.store(false, Ordering::Relaxed);
+            self.is_on.store(false, Ordering::Release);
             return;
         };
 
@@ -61,7 +61,8 @@ impl VoiceControls {
         self.seconds.store(seconds);
         self.formant.store(formant);
         self.color.set(color);
-        self.is_on.store(true, Ordering::Relaxed);
+        // Last, and released, so that a callback that sees the voice on sees its values too.
+        self.is_on.store(true, Ordering::Release);
     }
 }
 
@@ -96,7 +97,7 @@ impl VoiceProcessor {
 
     /// Hands `emit` the voice in engine format. Runs in the capture callback.
     pub(crate) fn process(&mut self, stereo: &[f32], mut emit: impl FnMut(&[f32])) {
-        let is_on = self.controls.is_on.load(Ordering::Relaxed);
+        let is_on = self.controls.is_on.load(Ordering::Acquire);
         if !is_on {
             self.was_on = false;
             emit(stereo);
@@ -130,7 +131,7 @@ impl VoiceProcessor {
             .set_transpose_factor_semitones(low + (high - low) * rise, None);
         self.stretch
             .set_formant_factor_semitones(self.controls.formant.load(), true);
-        self.stretch.process(self.mono, &mut self.changed);
+        self.stretch.process(&self.mono[..], &mut self.changed);
         self.color
             .process(&mut self.changed, self.controls.color.load());
 

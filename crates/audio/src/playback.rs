@@ -1,19 +1,16 @@
 //! Feeds a mixer to an output stream, adapting to the device when it cannot take the engine
 //! format itself.
 
-use rubato::audioadapter_buffers::direct::InterleavedSlice;
-use rubato::{Fft, FixedSync, Resampler, ResamplerConstructionError};
+use std::error::Error;
 
 use crate::format::{CHANNELS, SAMPLE_RATE};
 use crate::mixer::Mixer;
-
-/// Frames mixed at a time when no resampling is needed.
-const BLOCK_FRAMES: usize = 480;
+use crate::resample::{BLOCK_FRAMES, BlockResampler};
 
 /// What a device that is not stereo at the engine rate needs.
 pub(crate) struct Conversion {
     channels: usize,
-    resampler: Option<Fft<f32>>,
+    resampler: Option<BlockResampler>,
     /// One block of engine audio, the input of the resampler.
     mixed: Vec<f32>,
     /// Stereo at the device rate.
@@ -23,34 +20,32 @@ pub(crate) struct Conversion {
 }
 
 impl Conversion {
-    pub(crate) fn new(channels: usize, rate: u32) -> Result<Self, ResamplerConstructionError> {
+    pub(crate) fn new(channels: usize, rate: u32) -> Result<Self, Box<dyn Error>> {
+        // A device without channels has nothing to put a frame in.
+        if channels == 0 {
+            return Err("the device has no channels".into());
+        }
         let resampler = (rate != SAMPLE_RATE)
-            .then(|| {
-                Fft::new(
-                    SAMPLE_RATE as usize,
-                    rate as usize,
-                    BLOCK_FRAMES,
-                    CHANNELS,
-                    FixedSync::Input,
-                )
-            })
+            .then(|| BlockResampler::new(SAMPLE_RATE, rate))
             .transpose()?;
-        let (mixed_frames, converted_frames) =
-            resampler.as_ref().map_or((0, BLOCK_FRAMES), |resampler| {
-                (resampler.input_frames_next(), resampler.output_frames_max())
+        let (mixed, converted) = resampler
+            .as_ref()
+            .map_or((0, BLOCK_FRAMES * CHANNELS), |r| {
+                (r.input_len(), r.output_len())
             });
 
         Ok(Self {
             channels,
             resampler,
-            mixed: vec![0.0; mixed_frames * CHANNELS],
-            converted: vec![0.0; converted_frames * CHANNELS],
+            mixed: vec![0.0; mixed],
+            converted: vec![0.0; converted],
             ready: 0,
             next: 0,
         })
     }
 
-    /// Left and right go to the first two channels and any others stay silent.
+    /// Left and right go to the first two channels and any others stay silent. One channel gets
+    /// both sides mixed.
     fn fill(&mut self, mixer: &mut Mixer, block: &mut [f32]) {
         for frame in block.chunks_exact_mut(self.channels) {
             // A resampler can hold on to a whole block and produce nothing for it.
@@ -60,8 +55,12 @@ impl Conversion {
 
             frame.fill(0.0);
             let stereo = &self.converted[self.next..self.next + CHANNELS];
-            let shared = frame.len().min(CHANNELS);
-            frame[..shared].copy_from_slice(&stereo[..shared]);
+            if let [only] = frame {
+                // Right would be lost on a device with one speaker.
+                *only = (stereo[0] + stereo[1]) / 2.0;
+            } else {
+                frame[..CHANNELS].copy_from_slice(stereo);
+            }
             self.next += CHANNELS;
         }
     }
@@ -70,17 +69,7 @@ impl Conversion {
         self.ready = match &mut self.resampler {
             Some(resampler) => {
                 mixer.render(&mut self.mixed);
-                let frames = self.mixed.len() / CHANNELS;
-                let input = InterleavedSlice::new(&self.mixed[..], CHANNELS, frames)
-                    .expect("the block holds whole frames");
-                let capacity = self.converted.len() / CHANNELS;
-                let mut output =
-                    InterleavedSlice::new_mut(&mut self.converted[..], CHANNELS, capacity)
-                        .expect("the output holds whole frames");
-                let (_, produced) = resampler
-                    .process_into_buffer(&input, &mut output, None)
-                    .expect("the buffers are sized for the resampler");
-                produced * CHANNELS
+                resampler.process(&self.mixed, &mut self.converted)
             }
             None => {
                 mixer.render(&mut self.converted);
@@ -144,13 +133,35 @@ mod tests {
     }
 
     #[test]
-    fn a_mono_device_gets_the_left_side() {
+    fn a_mono_device_gets_both_sides_mixed() {
         let mut playback = playback(1, SAMPLE_RATE, 0.5, 4800);
 
         let mut block = [1.0; 100];
         playback.fill(&mut block);
 
         assert!(block.iter().all(|&sample| sample == 0.5));
+    }
+
+    #[test]
+    fn a_sound_on_the_right_side_alone_is_heard_on_a_mono_device() {
+        let (mixer, mut handle) = mixer::pair(Arc::new(Controls::new()), None);
+        let right_only = [0.0, 0.8].repeat(4800);
+        handle.add_whole(
+            Arc::new(SoundClip::new(right_only)),
+            1.0,
+            PlaybackTag::of("a"),
+        );
+        let mut playback = Playback::new(mixer, Some(Conversion::new(1, SAMPLE_RATE).unwrap()));
+
+        let mut block = [0.0; 100];
+        playback.fill(&mut block);
+
+        assert!(block.iter().all(|&sample| sample > 0.3));
+    }
+
+    #[test]
+    fn a_device_without_channels_is_refused() {
+        assert!(Conversion::new(0, SAMPLE_RATE).is_err());
     }
 
     #[test]

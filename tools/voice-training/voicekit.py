@@ -26,8 +26,10 @@ import os
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 import zipfile
@@ -138,6 +140,18 @@ def event(**fields) -> None:
     """Tells the app where the work is, when it runs the kit."""
     if EVENTS:
         print(EVENT_PREFIX + json.dumps(fields), flush=True)
+
+
+def end_with_input() -> None:
+    """Ends this step, and every process it started, when its input closes. The app keeps the
+    other end of the input open for as long as it lives, so the training does not outlive an app
+    that crashed or was killed. The step is the leader of a group of its own there."""
+
+    def wait() -> None:
+        sys.stdin.buffer.read()  # returns only at the end of the input
+        os.killpg(os.getpgrp(), signal.SIGKILL)
+
+    threading.Thread(target=wait, daemon=True).start()
 
 
 def say(message: str) -> None:
@@ -968,6 +982,11 @@ def main() -> None:
     parser.add_argument(
         "--events", action="store_true", help="write the progress as JSON for the app"
     )
+    parser.add_argument(
+        "--end-with-input",
+        action="store_true",
+        help="for the app, on Linux: end this step and what it started when the input closes",
+    )
     steps = parser.add_subparsers(dest="step", required=True)
     steps.add_parser("setup", help="downloads RVC and its base models")
 
@@ -1031,6 +1050,8 @@ def main() -> None:
     arguments = parser.parse_args()
     global EVENTS
     EVENTS = arguments.events
+    if arguments.end_with_input:
+        end_with_input()
     if arguments.step == "setup":
         setup(arguments)
     elif arguments.step == "dataset":

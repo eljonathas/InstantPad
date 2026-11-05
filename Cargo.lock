@@ -2233,8 +2233,10 @@ dependencies = [
  "fs4",
  "instantpad-application",
  "instantpad-domain",
+ "instantpad-download",
  "instantpad-test-support",
  "reqwest",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",
@@ -2242,7 +2244,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "windows",
- "zip",
 ]
 
 [[package]]

@@ -6,11 +6,12 @@ use std::path::Path;
 use instantpad_application::message::{Failure, TextKey};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Security::Cryptography::{
-    CERT_CONTEXT, CERT_FIND_SUBJECT_CERT, CERT_INFO, CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED,
-    CERT_QUERY_FORMAT_FLAG_BINARY, CERT_QUERY_OBJECT_FILE, CERT_X500_NAME_STR, CMSG_SIGNER_INFO,
-    CMSG_SIGNER_INFO_PARAM, CertCloseStore, CertFindCertificateInStore, CertFreeCertificateContext,
-    CertNameToStrW, CryptMsgClose, CryptMsgGetParam, CryptQueryObject, HCERTSTORE,
-    PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+    CERT_CONTEXT, CERT_FIND_SUBJECT_CERT, CERT_INFO, CERT_NAME_ATTR_TYPE,
+    CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED, CERT_QUERY_FORMAT_FLAG_BINARY,
+    CERT_QUERY_OBJECT_FILE, CMSG_SIGNER_INFO, CMSG_SIGNER_INFO_PARAM, CertCloseStore,
+    CertFindCertificateInStore, CertFreeCertificateContext, CertGetNameStringW, CryptMsgClose,
+    CryptMsgGetParam, CryptQueryObject, HCERTSTORE, PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+    szOID_COMMON_NAME,
 };
 use windows::Win32::Security::WinTrust::{
     WINTRUST_ACTION_GENERIC_VERIFY_V2, WINTRUST_DATA, WINTRUST_DATA_0, WINTRUST_FILE_INFO,
@@ -18,7 +19,7 @@ use windows::Win32::Security::WinTrust::{
 };
 use windows::core::{HSTRING, PCWSTR};
 
-use super::vb_audio::is_vendor_subject;
+use super::vb_audio::is_vendor_name;
 
 /// Refuses on any doubt: an unsigned file, a signature Windows does not trust, a signer that
 /// cannot be read, or a signer other than the vendor.
@@ -28,7 +29,7 @@ pub fn verify(path: &Path) -> Result<(), Failure> {
     }
     let signer =
         read_signer(path).ok_or_else(|| Failure::text(TextKey::DriverSignatureUnreadable))?;
-    if is_vendor_subject(&signer) {
+    if is_vendor_name(&signer) {
         Ok(())
     } else {
         Err(Failure::because(TextKey::DriverSignerUnexpected, signer))
@@ -63,7 +64,7 @@ fn has_trusted_signature(path: &Path) -> bool {
     status == 0
 }
 
-/// The subject of the certificate that signed the file, like `CN=..., O=...`.
+/// The common name of the certificate that signed the file.
 fn read_signer(path: &Path) -> Option<String> {
     let wide = HSTRING::from(path);
     let mut store = HCERTSTORE::default();
@@ -93,6 +94,10 @@ fn read_signer(path: &Path) -> Option<String> {
     unsafe {
         let mut size = 0;
         CryptMsgGetParam(message, CMSG_SIGNER_INFO_PARAM, 0, None, &mut size).ok()?;
+        // The buffer is read as a signer info below, so it must be big enough for one.
+        if (size as usize) < size_of::<CMSG_SIGNER_INFO>() {
+            return None;
+        }
         // u64 elements, so the buffer is aligned for the pointers inside the signer info.
         let mut buffer = vec![0u64; (size as usize).div_ceil(size_of::<u64>())];
         CryptMsgGetParam(
@@ -121,29 +126,33 @@ fn read_signer(path: &Path) -> Option<String> {
         if certificate.is_null() {
             return None;
         }
-        let subject = subject_of(&*certificate);
+        let name = common_name_of(certificate);
         let _ = CertFreeCertificateContext(Some(certificate));
-        subject
+        name
     }
 }
 
+/// The common name of the certificate's subject on its own, so that no other part of the
+/// subject, however it is quoted, can pass for it.
+///
 /// # Safety
 /// `certificate` must be a valid context.
-unsafe fn subject_of(certificate: &CERT_CONTEXT) -> Option<String> {
-    // SAFETY: a certificate context always points at its info.
-    let subject = unsafe { &(*certificate.pCertInfo).Subject };
+unsafe fn common_name_of(certificate: *const CERT_CONTEXT) -> Option<String> {
+    let oid = szOID_COMMON_NAME.0.cast::<c_void>();
     // SAFETY: with no buffer, it returns the length needed, including the final null.
-    let length = unsafe { CertNameToStrW(X509_ASN_ENCODING, subject, CERT_X500_NAME_STR, None) };
+    let length =
+        unsafe { CertGetNameStringW(certificate, CERT_NAME_ATTR_TYPE, 0, Some(oid), None) };
     if length <= 1 {
         return None;
     }
     let mut text = vec![0u16; length as usize];
     // SAFETY: `text` has the length just asked for.
     unsafe {
-        CertNameToStrW(
-            X509_ASN_ENCODING,
-            subject,
-            CERT_X500_NAME_STR,
+        CertGetNameStringW(
+            certificate,
+            CERT_NAME_ATTR_TYPE,
+            0,
+            Some(oid),
             Some(&mut text),
         )
     };

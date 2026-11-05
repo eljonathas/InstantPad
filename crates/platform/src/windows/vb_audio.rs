@@ -1,13 +1,22 @@
 //! What is known about VB-CABLE and its vendor, kept free of Windows calls so any OS can test it.
 
 use instantpad_application::ports::AudioDevice;
+use sha2::{Digest, Sha256};
 
-const FALLBACK_DRIVER_PACK: &str =
+/// The one driver pack this version trusts. A newer pack is not followed from the product page:
+/// it only becomes the one installed by a release of the app that pins it.
+pub const DRIVER_PACK_URL: &str =
     "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip";
-const DRIVER_PACK_PREFIX: &str = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack";
-const DRIVER_PACK_SUFFIX: &str = ".zip";
+/// The SHA-256 of that pack, as the macOS package pins BlackHole's. Taken from the vendor's
+/// download over TLS on 2026-11-05; compare it with an independent copy before each release.
+const DRIVER_PACK_SHA256: &str = "b950e39f01af1d04ea623c8f6d8eb9b6ea5c477c637295fabf20631c85116bfb";
+/// The setup that is run, and the only programs that may be unpacked next to it.
+pub const SETUP_FILE: &str = "VBCABLE_Setup_x64.exe";
+const OTHER_PROGRAM: &str = "VBCABLE_ControlPanel.exe";
+/// Driver files, their catalogs and the notes: what the setup reads from its folder.
+const DRIVER_EXTENSIONS: [&str; 5] = ["inf", "cat", "sys", "ico", "txt"];
 
-const VENDOR_SUBJECT: &str = "CN=BUREL VINCENT";
+const VENDOR_NAME: &str = "BUREL VINCENT";
 
 const DEFAULT_GAME_MICROPHONE: &str = "CABLE Output";
 const VOICEMEETER_NAME: &str = "VoiceMeeter";
@@ -52,29 +61,33 @@ pub fn game_microphone_name(game_output: Option<&AudioDevice>) -> &'static str {
     }
 }
 
-/// The newest driver pack linked on the product page, or the fixed pack when it links none.
-pub fn driver_pack_url(page: &str) -> String {
-    page.match_indices(DRIVER_PACK_PREFIX)
-        .filter_map(|(start, _)| {
-            let rest = &page[start + DRIVER_PACK_PREFIX.len()..];
-            let digits = rest.find(|c: char| !c.is_ascii_digit())?;
-            let version: u32 = rest[..digits].parse().ok()?;
-            let link_end = start + DRIVER_PACK_PREFIX.len() + digits;
-            page[link_end..]
-                .starts_with(DRIVER_PACK_SUFFIX)
-                .then(|| (version, &page[start..link_end + DRIVER_PACK_SUFFIX.len()]))
-        })
-        .max_by_key(|(version, _)| *version)
-        .map_or_else(
-            || FALLBACK_DRIVER_PACK.to_owned(),
-            |(_, url)| url.to_owned(),
-        )
+/// Whether `pack` is exactly the pinned driver pack.
+pub fn is_pinned_pack(pack: &[u8]) -> bool {
+    let digest = Sha256::digest(pack);
+    let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    hex == DRIVER_PACK_SHA256
 }
 
-pub fn is_vendor_subject(subject: &str) -> bool {
-    subject
-        .to_ascii_lowercase()
-        .contains(&VENDOR_SUBJECT.to_ascii_lowercase())
+/// Whether a file of the pack is one that gets unpacked: a flat name, either one of the two
+/// known programs or a driver file. A library next to an elevated program could be loaded by it.
+pub fn is_expected_entry(name: &str) -> bool {
+    if name.contains(['/', '\\']) {
+        return false;
+    }
+    if name.eq_ignore_ascii_case(SETUP_FILE) || name.eq_ignore_ascii_case(OTHER_PROGRAM) {
+        return true;
+    }
+    name.rsplit_once('.').is_some_and(|(_, extension)| {
+        DRIVER_EXTENSIONS
+            .iter()
+            .any(|known| extension.eq_ignore_ascii_case(known))
+    })
+}
+
+/// Whether `name`, the common name of the certificate that signed the setup, is the vendor's.
+/// The whole name must match: a longer one, or one only containing it, is someone else.
+pub fn is_vendor_name(name: &str) -> bool {
+    name.eq_ignore_ascii_case(VENDOR_NAME)
 }
 
 fn has_name(device: &AudioDevice, name: &str) -> bool {
@@ -126,37 +139,57 @@ mod tests {
     }
 
     #[test]
-    fn the_newest_driver_pack_on_the_page_wins() {
-        let page = r#"
-            <a href="https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack43.zip">old</a>
-            <a href="https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack100.zip">new</a>
-            <a href="https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip">mid</a>
-        "#;
+    fn only_the_pinned_pack_is_accepted() {
+        assert!(!is_pinned_pack(b"a pack someone tampered with"));
+        assert!(!is_pinned_pack(b""));
+    }
 
-        assert_eq!(
-            driver_pack_url(page),
-            "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack100.zip"
+    #[test]
+    fn the_pack_comes_from_the_vendor_over_https() {
+        assert!(DRIVER_PACK_URL.starts_with("https://download.vb-audio.com/"));
+    }
+
+    #[test]
+    fn the_pin_is_a_sha256_in_lower_case_hex() {
+        assert_eq!(DRIVER_PACK_SHA256.len(), 64);
+        assert!(
+            DRIVER_PACK_SHA256
+                .chars()
+                .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
         );
     }
 
     #[test]
-    fn a_page_with_no_driver_link_uses_the_fixed_pack() {
-        let fallback = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip";
-
-        assert_eq!(driver_pack_url("<html></html>"), fallback);
-        assert_eq!(driver_pack_url(""), fallback);
-        assert_eq!(
-            driver_pack_url(
-                "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_PackX.zip"
-            ),
-            fallback
-        );
+    fn only_the_setup_and_the_driver_files_are_unpacked() {
+        for name in [
+            "VBCABLE_Setup_x64.exe",
+            "vbaudio_cable64_win10.sys",
+            "vbaudio_cable64_win10.cat",
+            "vbMmeCable64_win10.inf",
+            "readme.txt",
+        ] {
+            assert!(is_expected_entry(name), "{name}");
+        }
+        for name in [
+            "version.dll",
+            "dwmapi.DLL",
+            "other.exe",
+            "../vbaudio.sys",
+            "sub\\vbaudio.sys",
+            "folder/vbaudio.sys",
+            "noextension",
+        ] {
+            assert!(!is_expected_entry(name), "{name}");
+        }
     }
 
     #[test]
-    fn only_the_vendor_subject_is_trusted_whatever_its_case() {
-        assert!(is_vendor_subject("CN=BUREL VINCENT, O=BUREL VINCENT, C=FR"));
-        assert!(is_vendor_subject("cn=burel vincent"));
-        assert!(!is_vendor_subject("CN=SOMEONE ELSE, O=BUREL VINCENT"));
+    fn only_the_exact_vendor_name_is_trusted_whatever_its_case() {
+        assert!(is_vendor_name("BUREL VINCENT"));
+        assert!(is_vendor_name("burel vincent"));
+        assert!(!is_vendor_name("BUREL VINCENTE"));
+        assert!(!is_vendor_name("Burel Vincent Holdings Ltd"));
+        assert!(!is_vendor_name("OU=\"CN=BUREL VINCENT\", CN=Mallory"));
+        assert!(!is_vendor_name(""));
     }
 }

@@ -43,6 +43,7 @@ impl PulseCable {
     }
 }
 
+#[cfg(target_os = "linux")]
 /// Whether `pactl list short <kind>` has a device with exactly this name.
 fn has_device(kind: &str, name: &str) -> bool {
     pactl(&["list", "short", kind]).is_some_and(|listing| listing_has_name(&listing, name))
@@ -132,10 +133,7 @@ mod tests {
 
     #[test]
     fn the_game_reads_the_remapped_source() {
-        assert_eq!(
-            PulseCable.game_microphone_name(None),
-            "InstantPad_Mic"
-        );
+        assert_eq!(PulseCable.game_microphone_name(None), "InstantPad_Mic");
     }
 
     #[test]

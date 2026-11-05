@@ -14,7 +14,7 @@ use symphonia::core::formats::TrackType;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::io::MediaSourceStream;
 
-use crate::format::{CHANNELS, MAX_SPEECH_SECONDS, SAMPLE_RATE, downmix};
+use crate::format::{CHANNELS, MAX_SPEECH_SECONDS, SAMPLE_RATE};
 
 /// Frames the resampler works on at a time.
 const RESAMPLE_CHUNK: usize = 1024;
@@ -34,7 +34,13 @@ pub(crate) struct SoundClip {
 }
 
 impl SoundClip {
-    pub(crate) fn new(samples: Vec<f32>) -> Self {
+    pub(crate) fn new(mut samples: Vec<f32>) -> Self {
+        // A float file can hold NaN or infinity, which a limiter passes on to the driver.
+        for sample in &mut samples {
+            if !sample.is_finite() {
+                *sample = 0.0;
+            }
+        }
         let peaks = peaks_of(&samples);
         let loudest = samples
             .iter()
@@ -121,7 +127,7 @@ impl SoundClip {
     }
 
     pub(crate) fn load(path: &str) -> Result<Self, Failure> {
-        load_stereo(path, Some(MAX_SOUND_SECONDS)).map(Self::new)
+        load(path, Some(MAX_SOUND_SECONDS), Layout::Stereo).map(Self::new)
     }
 }
 
@@ -129,22 +135,38 @@ impl SoundClip {
 /// longest speech the app takes, so a whole podcast never fills the memory; the application
 /// refuses or cuts what is longer than it wants.
 pub(crate) fn load_speech(path: &str) -> Result<Vec<f32>, Failure> {
-    let stereo = load_stereo(path, Some(MAX_SPEECH_SECONDS))?;
-    Ok(downmix(&stereo).collect())
+    load(path, Some(MAX_SPEECH_SECONDS), Layout::Mono)
 }
 
-/// The audio of a file as stereo at the engine rate. `max_seconds` keeps only the start of a
+/// Whether a file is kept as stereo or as one channel. Speech is mixed down while it is read,
+/// so that the long stereo copy, and its resampled twin, never exist.
+#[derive(Clone, Copy)]
+enum Layout {
+    Stereo,
+    Mono,
+}
+
+impl Layout {
+    fn channels(self) -> usize {
+        match self {
+            Self::Stereo => CHANNELS,
+            Self::Mono => 1,
+        }
+    }
+}
+
+/// The audio of a file in `layout` at the engine rate. `max_seconds` keeps only the start of a
 /// longer file.
-fn load_stereo(path: &str, max_seconds: Option<u32>) -> Result<Vec<f32>, Failure> {
-    let (rate, stereo) = decode(path, max_seconds)?;
-    if stereo.is_empty() {
+fn load(path: &str, max_seconds: Option<u32>, layout: Layout) -> Result<Vec<f32>, Failure> {
+    let (rate, samples) = decode(path, max_seconds, layout)?;
+    if samples.is_empty() {
         return Err(Failure::text(TextKey::SoundHasNoAudio));
     }
 
     if rate == SAMPLE_RATE {
-        return Ok(stereo);
+        return Ok(samples);
     }
-    resample(rate, &stereo).map_err(open_failed)
+    resample(rate, &samples, layout.channels()).map_err(open_failed)
 }
 
 /// Scaled to the loudest moment, so a quiet sound still fills the display.
@@ -168,9 +190,13 @@ fn open_failed(detail: impl ToString) -> Failure {
     Failure::because(TextKey::SoundOpenFailed, detail)
 }
 
-/// Returns the sample rate of the file and its audio as interleaved stereo. A file that lasts
+/// Returns the sample rate of the file and its audio, interleaved in `layout`. A file that lasts
 /// longer than `max_seconds` is read only that far.
-fn decode(path: &str, max_seconds: Option<u32>) -> Result<(u32, Vec<f32>), Failure> {
+fn decode(
+    path: &str,
+    max_seconds: Option<u32>,
+    layout: Layout,
+) -> Result<(u32, Vec<f32>), Failure> {
     let file = File::open(path).map_err(open_failed)?;
     let mut hint = Hint::new();
     if let Some(extension) = Path::new(path).extension().and_then(|name| name.to_str()) {
@@ -197,8 +223,16 @@ fn decode(path: &str, max_seconds: Option<u32>) -> Result<(u32, Vec<f32>), Failu
 
     let mut rate = SAMPLE_RATE;
     let mut decoded = Vec::new();
-    let mut stereo = Vec::new();
-    while let Some(packet) = format.next_packet().map_err(open_failed)? {
+    let mut samples = Vec::new();
+    loop {
+        let packet = match format.next_packet() {
+            Ok(Some(packet)) => packet,
+            Ok(None) => break,
+            // What was decoded before a damaged end, or a stream that starts over, is still a
+            // sound; only a file with nothing before the error is refused.
+            Err(_) if !samples.is_empty() => break,
+            Err(error) => return Err(open_failed(error)),
+        };
         if packet.track_id != track_id {
             continue;
         }
@@ -208,44 +242,62 @@ fn decode(path: &str, max_seconds: Option<u32>) -> Result<(u32, Vec<f32>), Failu
                 rate = buffer.spec().rate();
                 decoded.resize(buffer.samples_interleaved(), 0.0);
                 buffer.copy_to_slice_interleaved(&mut decoded);
-                append_as_stereo(&decoded, buffer.spec().channels().count(), &mut stereo);
+                append(
+                    &decoded,
+                    buffer.spec().channels().count(),
+                    layout,
+                    &mut samples,
+                );
                 if let Some(seconds) = max_seconds {
-                    let most = seconds as usize * rate as usize * CHANNELS;
-                    if stereo.len() >= most {
-                        stereo.truncate(most);
+                    let most = seconds as usize * rate as usize * layout.channels();
+                    if samples.len() >= most {
+                        samples.truncate(most);
                         break;
                     }
                 }
             }
             // One bad packet costs a click, not the whole sound.
             Err(Error::DecodeError(_)) => {}
+            Err(_) if !samples.is_empty() => break,
             Err(error) => return Err(open_failed(error)),
         }
     }
-    Ok((rate, stereo))
+    Ok((rate, samples))
 }
 
-/// Mono becomes stereo and anything beyond two channels keeps the first two.
-fn append_as_stereo(decoded: &[f32], channels: usize, stereo: &mut Vec<f32>) {
-    if channels == 1 {
-        stereo.extend(decoded.iter().flat_map(|&sample| [sample, sample]));
-    } else {
-        for frame in decoded.chunks_exact(channels) {
-            stereo.extend_from_slice(&frame[..CHANNELS]);
+/// Mono becomes stereo and anything beyond two channels keeps the first two. For one channel,
+/// the two are averaged.
+fn append(decoded: &[f32], channels: usize, layout: Layout, out: &mut Vec<f32>) {
+    match (layout, channels) {
+        (Layout::Stereo, 1) => out.extend(decoded.iter().flat_map(|&sample| [sample, sample])),
+        (Layout::Mono, 1) => out.extend_from_slice(decoded),
+        (Layout::Stereo, _) => {
+            for frame in decoded.chunks_exact(channels) {
+                out.extend_from_slice(&frame[..CHANNELS]);
+            }
+        }
+        (Layout::Mono, _) => {
+            for frame in decoded.chunks_exact(channels) {
+                out.push((frame[0] + frame[1]) / 2.0);
+            }
         }
     }
 }
 
-fn resample(rate: u32, stereo: &[f32]) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
-    let frames = stereo.len() / CHANNELS;
+fn resample(
+    rate: u32,
+    samples: &[f32],
+    channels: usize,
+) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+    let frames = samples.len() / channels;
     let mut resampler = Fft::<f32>::new(
         rate as usize,
         SAMPLE_RATE as usize,
         RESAMPLE_CHUNK,
-        CHANNELS,
+        channels,
         FixedSync::Input,
     )?;
-    let input = InterleavedSlice::new(stereo, CHANNELS, frames)?;
+    let input = InterleavedSlice::new(samples, channels, frames)?;
     Ok(resampler.process_all(&input, frames, None)?.take_data())
 }
 
@@ -422,9 +474,40 @@ pub(crate) mod tests {
     fn a_sound_longer_than_the_limit_keeps_only_its_start() {
         let file = wav(48_000, &[8192, 8192], 48_000 * 3);
 
-        let (rate, samples) = decode(file.path(), Some(2)).unwrap();
+        let (rate, samples) = decode(file.path(), Some(2), Layout::Stereo).unwrap();
 
         assert_eq!(samples.len(), rate as usize * 2 * CHANNELS);
+    }
+
+    #[test]
+    fn samples_that_are_not_numbers_are_silence() {
+        let clip = SoundClip::new(vec![f32::NAN, 0.5, f32::INFINITY, f32::NEG_INFINITY]);
+
+        assert_eq!(clip.samples(), [0.0, 0.5, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn speech_is_mixed_down_while_it_is_read_and_resampled_as_one_channel() {
+        let file = wav(24_000, &[8192, 16384], 2400);
+
+        let speech = load_speech(file.path()).unwrap();
+
+        // Twice the rate, so twice the frames, and one sample per frame.
+        assert!((speech.len() as i64 - 4800).abs() < 200);
+        let middle = speech[speech.len() / 2];
+        assert!((middle - level(12288)).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_file_cut_short_keeps_what_was_decoded() {
+        let file = wav(48_000, &[8192, 8192], 4800);
+        let bytes = fs::read(file.path()).unwrap();
+        // The header still promises all the audio.
+        fs::write(file.path(), &bytes[..bytes.len() / 2]).unwrap();
+
+        let clip = SoundClip::load(file.path()).unwrap();
+
+        assert!(!clip.samples().is_empty());
     }
 
     #[test]
@@ -480,7 +563,7 @@ pub(crate) mod tests {
     fn a_long_file_is_read_only_as_far_as_the_longest_speech() {
         let file = wav(8000, &[1000], 8000 * 3);
 
-        let (rate, stereo) = decode(file.path(), Some(1)).unwrap();
+        let (rate, stereo) = decode(file.path(), Some(1), Layout::Stereo).unwrap();
 
         assert_eq!(rate, 8000);
         assert_eq!(stereo.len(), 8000 * CHANNELS);

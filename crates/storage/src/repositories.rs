@@ -2,14 +2,12 @@ use std::path::PathBuf;
 
 use instantpad_application::message::Failure;
 use instantpad_application::ports::{
-    BoardRepository, FavoritesRepository, SettingsRepository, TrainingRepository,
-    VoiceLibraryRepository,
+    BoardRepository, FavoritesRepository, SettingsRepository, VoiceLibraryRepository,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
 use instantpad_domain::cloning::VoiceLibrary;
 use instantpad_domain::sounds::SoundSource;
-use instantpad_domain::training::TrainingJob;
 
 use crate::data_folder::AppDataFolder;
 use crate::json_file;
@@ -84,24 +82,5 @@ impl VoiceLibraryRepository for JsonVoiceLibraryRepository {
 
     fn save(&self, library: &VoiceLibrary) -> Result<(), Failure> {
         json_file::save(&self.0, library)
-    }
-}
-
-/// The training in progress, if there is one. Its takes are files of the training's own.
-pub struct JsonTrainingRepository(PathBuf);
-
-impl JsonTrainingRepository {
-    pub fn new(folder: &AppDataFolder) -> Self {
-        Self(folder.file("training.json"))
-    }
-}
-
-impl TrainingRepository for JsonTrainingRepository {
-    fn load(&self) -> Option<TrainingJob> {
-        json_file::load(&self.0)
-    }
-
-    fn save(&self, job: Option<&TrainingJob>) -> Result<(), Failure> {
-        json_file::save(&self.0, &job)
     }
 }

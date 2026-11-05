@@ -1,6 +1,6 @@
 # 0006: A voice can speak through a model trained on it
 
-> Where training runs is revised by [0007](0007-training-voices-in-the-app.md): users train in the app, and the kit stays for the developer.
+> Where training runs is revised by [0008](0008-voices-trained-by-the-maintainers.md): the maintainers train the voices, in the cloud, and users only add the models.
 
 The AI voices of [ADR 0003](0003-local-ai-voices.md) change the timbre of the user's voice to that of a voiceprint, heard in a few seconds of speech (OpenVoice). That runs on any computer, as the user talks, but the result only sounds roughly like the voice. Users asked for voices as close to the original as the paid voice changers make them, which takes a model trained on the voice itself.
 

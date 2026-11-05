@@ -154,14 +154,14 @@ Comece com pouca mistura, entre 20% e 40%, e mexa no timbre aos poucos, ouvindo 
 
 ### Vozes treinadas
 
-Para uma voz muito mais parecida com a original, treine um modelo dela no seu computador com o kit em [`tools/voice-training`](tools/voice-training/README.pt-BR.md), que usa o RVC. Leva cerca de uma hora numa placa de vídeo NVIDIA, no Windows pelo WSL, e mais de um dia no processador. Depois escolha **Feminina IA** ou uma voz clonada, clique em **Adicionar modelo treinado...** e escolha a pasta que o kit exportou.
+Para uma voz muito mais parecida com a original, uma voz pode falar por um modelo treinado nela com o RVC. A equipe do InstantPad treina esses modelos e os publica, então nada é treinado no seu computador. Escolha **Feminina IA** ou uma voz clonada, clique em **Adicionar modelo treinado...** e escolha a pasta do modelo.
 
 A voz passa a ter dois motores, e **Motor** alterna entre eles:
 
 - **Treinado** fala pelo modelo. Não precisa aprender a sua voz e leva o seu tom ao da voz sozinho; **Tom** leva mais longe, até uma oitava para cada lado. Responde em cerca de meio segundo e precisa de um processador rápido. Se o computador não acompanhar, o app avisa para mudar para o Instantâneo.
 - **Instantâneo** é a voz de IA de antes.
 
-**Trocar modelo...** coloca um treino mais novo, e **Remover modelo** tira o modelo. O primeiro modelo que você adiciona traz o HuBERT, cerca de 380 MB, que todas as vozes treinadas usam.
+**Trocar modelo...** coloca um modelo mais novo, e **Remover modelo** tira o modelo. O primeiro modelo que você adiciona traz o HuBERT, cerca de 380 MB, que todas as vozes treinadas usam.
 
 ### Opções de reprodução
 

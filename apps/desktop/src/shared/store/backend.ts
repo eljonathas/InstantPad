@@ -10,7 +10,6 @@ import type {
   SetupView,
   SoundSource,
   StartView,
-  TrainStep,
   UpdateView,
   VoiceView,
 } from "../ipc";
@@ -38,8 +37,6 @@ export interface BackendState {
   voice: VoiceView;
   /** The step of the voice cloning dialog, which is closed unless the backend opens it. */
   cloning: CloneStep;
-  /** The step of the training dialog, which is closed unless the backend opens it. */
-  training: TrainStep;
   /** Counts the presses on empty pads, each of which brings the sound sources into view. */
   sourceRequests: number;
 }
@@ -98,10 +95,8 @@ let state: BackendState = {
       waiting: null,
       heardPercent: 0,
     },
-    training: { isSupported: false, job: null, toolsMegabytes: 0 },
   },
   cloning: { step: "closed" },
-  training: { step: "closed" },
   sourceRequests: 0,
 };
 
@@ -151,8 +146,6 @@ export function applyEvent(event: AppEvent) {
       return replace({ voice: event.data });
     case "cloning":
       return replace({ cloning: event.data });
-    case "training":
-      return replace({ training: event.data });
     case "display": {
       const shown = event.data;
       if (shown.kind === "show") {

@@ -27,7 +27,6 @@ instantpad-catalog.workspace = true
 instantpad-domain.workspace = true
 instantpad-platform.workspace = true
 instantpad-storage.workspace = true
-instantpad-training.workspace = true
 instantpad-voice-ai.workspace = true
 serde.workspace = true
 serde_json.workspace = true

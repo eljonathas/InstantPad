@@ -15,7 +15,7 @@ use instantpad_domain::voice::{
 
 use crate::events::{
     AiStatus, AiView, AppEvent, Calibration, ClonedVoiceView, DesignerView, EffectView, ParamView,
-    TrainedView, TrainingSummary, VoiceIcon, VoiceView,
+    TrainedView, VoiceIcon, VoiceView,
 };
 use crate::message::{Failure, Message, TextKey};
 use crate::ports::{EventSink, TrainedVoiceModels, VoiceAnalyzer, VoiceChanger, VoiceModels};
@@ -268,8 +268,6 @@ pub struct VoiceSession {
     is_microphone_held: AtomicBool,
     waiting: Mutex<Option<Waiting>>,
     designer: Mutex<Option<Designer>>,
-    /// What the training of voices tells the voice screen.
-    training: Mutex<TrainingSummary>,
 }
 
 impl VoiceSession {
@@ -298,7 +296,6 @@ impl VoiceSession {
             is_microphone_held: AtomicBool::new(false),
             waiting: Mutex::new(None),
             designer: Mutex::new(None),
-            training: Mutex::new(TrainingSummary::default()),
         };
         // The models or the cloned voice may be gone since the effect was saved.
         let voice = session.settings.lock().voice.clone();
@@ -381,11 +378,6 @@ impl VoiceSession {
                 })
                 .collect(),
             designer,
-            training: self
-                .training
-                .lock()
-                .expect("training lock poisoned")
-                .clone(),
         }
     }
 
@@ -679,41 +671,23 @@ impl VoiceSession {
         else {
             return;
         };
-        if let Err(Failure(reason)) = self.attach(target, folder).await {
-            self.events.emit(AppEvent::error(reason));
-        }
-    }
-
-    /// Adds a model trained in the app to the cloned voice it was trained for. Fails when the
-    /// voice is gone, or when another model is being added and this one was not.
-    pub(crate) async fn attach_trained_model(
-        &self,
-        clone_id: &str,
-        folder: PathBuf,
-    ) -> Result<(), Failure> {
-        let target = VoiceTarget::Own(clone_id.to_owned());
-        if self.attach(target.clone(), folder).await? {
-            return Ok(());
-        }
-        if !self.library.lock().takes_trained_model(&target) {
-            return Err(Failure::text(TextKey::CloneDeleted));
-        }
-        Err(Failure::text(TextKey::TrainedModelBusy))
-    }
-
-    /// Checks the model in `folder` and gives it to the voice of `target`, replacing the one it
-    /// had. Returns false when it did nothing: another model was being added, or the voice was
-    /// deleted while this one was checked.
-    async fn attach(&self, target: VoiceTarget, folder: PathBuf) -> Result<bool, Failure> {
         if !self.models.is_installed() {
-            return Err(Failure(Unready::NoModels.message()));
+            self.events
+                .emit(AppEvent::error(Unready::NoModels.message()));
+            return;
         }
         if self.is_adding_model.swap(true, Ordering::Relaxed) {
-            return Ok(false);
+            return;
         }
         let added = self.trained.add(folder, TrainedModel::new_id()).await;
         self.is_adding_model.store(false, Ordering::Relaxed);
-        let model = added?;
+        let model = match added {
+            Ok(model) => model,
+            Err(Failure(reason)) => {
+                self.events.emit(AppEvent::error(reason));
+                return;
+            }
+        };
 
         let new_id = model.id.clone();
         // The voice may have been deleted while the model was checked.
@@ -731,11 +705,12 @@ impl VoiceSession {
             }
             Ok(None) => {
                 self.trained.remove(&new_id);
-                return Ok(false);
+                return;
             }
-            Err(failure) => {
+            Err(Failure(reason)) => {
                 self.trained.remove(&new_id);
-                return Err(failure);
+                self.events.emit(AppEvent::error(reason));
+                return;
             }
         }
         self.settings
@@ -748,7 +723,6 @@ impl VoiceSession {
             [name],
         )));
         self.apply();
-        Ok(true)
     }
 
     /// Takes the trained model off a voice, which goes back to the instant engine.
@@ -887,17 +861,6 @@ impl VoiceSession {
 
     /// Tells the interface about a voice cloned elsewhere.
     pub(crate) fn refresh(&self) {
-        self.publish();
-    }
-
-    /// Shows how the training of voices goes, on the voice screen.
-    pub(crate) fn show_training(&self, summary: TrainingSummary) {
-        let mut training = self.training.lock().expect("training lock poisoned");
-        if *training == summary {
-            return;
-        }
-        *training = summary;
-        drop(training);
         self.publish();
     }
 

@@ -12,7 +12,7 @@ use instantpad_domain::cloning::VoiceLibrary;
 use instantpad_domain::voice::VoiceEffect;
 use instantpad_storage::{
     AppDataFolder, FolderSoundStore, JsonBoardRepository, JsonFavoritesRepository,
-    JsonSettingsRepository, JsonTrainingRepository, JsonVoiceLibraryRepository,
+    JsonSettingsRepository, JsonVoiceLibraryRepository,
 };
 use instantpad_test_support::contract;
 use tempfile::TempDir;
@@ -46,7 +46,6 @@ fn the_repositories_keep_what_they_save() {
     contract::favorites_repository(&JsonFavoritesRepository::new(&folder));
     contract::settings_repository(&JsonSettingsRepository::new(&folder));
     contract::voice_library_repository(&JsonVoiceLibraryRepository::new(&folder));
-    contract::training_repository(&JsonTrainingRepository::new(&folder));
 }
 
 #[test]

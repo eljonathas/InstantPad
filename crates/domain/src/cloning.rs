@@ -104,8 +104,8 @@ pub enum DesignRefusal {
 }
 
 /// A model trained on one voice, which speaks with it far more like it than a voiceprint does,
-/// and needs a faster processor. The user trains it with the kit in `tools/voice-training` and
-/// adds it to one of the AI voices.
+/// and needs a faster processor. The maintainers train it with the kit in `tools/voice-training`,
+/// and the user adds it to one of the AI voices.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrainedModel {

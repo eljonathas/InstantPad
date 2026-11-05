@@ -3,17 +3,13 @@
 *[Leia em português](README.pt-BR.md)*
 
 These scripts train an AI voice with [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
-and export it the way InstantPad loads it. They make the feminine voice of the app, and any
-other voice from your own recordings.
+and export it the way InstantPad loads it. The maintainers use them to train the voices the app
+offers, on a cloud machine with an NVIDIA graphics card; users never train
+([ADR 0008](../../docs/adr/0008-voices-trained-by-the-maintainers.md)).
 
-They run on Linux and on Windows through WSL 2. With a recent NVIDIA graphics card the feminine
+They run on Linux, and on Windows through WSL 2. With a recent NVIDIA graphics card the feminine
 voice trains in about an hour; without one it trains on the processor, which works but takes
 more than a day.
-
-The app trains cloned voices by itself with this same kit, on Windows and Linux, with nothing to
-install by hand ([ADR 0007](../../docs/adr/0007-training-voices-in-the-app.md)): pick a cloned
-voice and click **Train a model...**. What follows is for training outside the app, such as the
-feminine voice the app ships.
 
 ## Before you start
 
@@ -46,7 +42,7 @@ tools/voice-training/setup.sh
 | --- | --- |
 | `dataset` | Downloads 400 MB of [Hi-Fi TTS](https://www.openslr.org/109/) and takes 40 minutes of reader 92 (`--minutes` changes it). |
 | `train` | Cuts the speech into pieces, finds their pitch and words, and trains from RVC's base model: 200 epochs (`--epochs`), 8 pieces at once (`--batch`; lower it if the card runs out of memory). A stopped training resumes from its last save. |
-| `export` | Writes the voice for the app to `~/instantpad-voice-training/voices/feminine/app` and checks the ONNX files against PyTorch. |
+| `export` | Writes the voice for the app to `~/instantpad-voice-training/voices/feminine/app` and checks the ONNX files against PyTorch. `--title` sets the name the app shows for the voice. |
 
 To hear it, convert a recording of yourself:
 
@@ -95,19 +91,6 @@ music and as little noise as you can, then:
 | `noise` | `[1, 192, played + 24]` | Normal random values times 0.66666. |
 
 `audio`, its output, is `[1, 1, played × 400]`: the last `played` frames of the window.
-
-## What the app downloads
-
-The app installs the same tools as `setup.sh`, on Windows too, from the files in
-`environments/`: every wheel of each computer (Windows or Linux, with an NVIDIA card or the
-processor) with its address, size and SHA-256. `pin.py` writes them from `requirements.txt` and
-`requirements.lock`; run it again after changing either, and commit what changes:
-
-```bash
-uv run --no-project --python 3.12 tools/voice-training/pin.py
-```
-
-The app builds `voicekit.py` in, so a change to it reaches users with the next version.
 
 ## Sources and licences
 

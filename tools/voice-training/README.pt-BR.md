@@ -3,17 +3,13 @@
 *[Read in English](README.md)*
 
 Estes scripts treinam uma voz de IA com o [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI)
-e a exportam do jeito que o InstantPad carrega. São eles que fazem a voz feminina do app, e
-qualquer outra voz a partir das suas gravações.
+e a exportam do jeito que o InstantPad carrega. Os mantenedores os usam para treinar as vozes que
+o app oferece, numa máquina na nuvem com placa de vídeo NVIDIA; os usuários nunca treinam
+([ADR 0008](../../docs/adr/0008-voices-trained-by-the-maintainers.md)).
 
-Rodam no Linux e no Windows pelo WSL 2. Com uma placa de vídeo NVIDIA recente a voz feminina
+Rodam no Linux, e no Windows pelo WSL 2. Com uma placa de vídeo NVIDIA recente a voz feminina
 treina em cerca de uma hora; sem ela o treino roda no processador, o que funciona, mas leva mais
 de um dia.
-
-O app treina vozes clonadas sozinho com este mesmo kit, no Windows e no Linux, sem nada para
-instalar à mão ([ADR 0007](../../docs/adr/0007-training-voices-in-the-app.md)): escolha uma voz
-clonada e clique em **Treinar um modelo...**. O que vem abaixo é para treinar fora do app, como a
-voz feminina que o app traz.
 
 ## Antes de começar
 
@@ -47,7 +43,7 @@ de uma parada:
 | --- | --- |
 | `dataset` | Baixa 400 MB do [Hi-Fi TTS](https://www.openslr.org/109/) e separa 40 minutos da leitora 92 (`--minutes` muda isso). |
 | `train` | Corta a fala em pedaços, acha o tom e as palavras de cada um e treina a partir do modelo base do RVC: 200 épocas (`--epochs`), 8 pedaços por vez (`--batch`; diminua se faltar memória na placa). Um treino interrompido continua do último ponto salvo. |
-| `export` | Grava a voz para o app em `~/instantpad-voice-training/voices/feminine/app` e confere os arquivos ONNX contra o PyTorch. |
+| `export` | Grava a voz para o app em `~/instantpad-voice-training/voices/feminine/app` e confere os arquivos ONNX contra o PyTorch. `--title` define o nome que o app mostra para a voz. |
 
 Para ouvir, converta uma gravação sua:
 
@@ -82,20 +78,6 @@ sem música e com o mínimo de ruído possível, e então:
 | `content.onnx` | O HuBERT, que entende o que é dito. É o mesmo para todas as vozes. |
 
 O formato das entradas e saídas está no [README em inglês](README.md#what-the-app-gets).
-
-## O que o app baixa
-
-O app instala as mesmas ferramentas do `setup.sh`, no Windows também, a partir dos arquivos em
-`environments/`: cada wheel de cada computador (Windows ou Linux, com placa NVIDIA ou no
-processador) com seu endereço, tamanho e SHA-256. O `pin.py` os escreve a partir do
-`requirements.txt` e do `requirements.lock`; rode-o de novo depois de mudar algum dos dois, e
-faça commit do que mudar:
-
-```bash
-uv run --no-project --python 3.12 tools/voice-training/pin.py
-```
-
-O app embute o `voicekit.py`, então uma mudança nele chega aos usuários na próxima versão.
 
 ## Fontes e licenças
 

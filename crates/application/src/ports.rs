@@ -8,9 +8,6 @@ use instantpad_domain::cloning::{TrainedModel, VoiceLibrary, Voiceprint};
 use instantpad_domain::cuts::Cut;
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
-use instantpad_domain::training::{
-    GraphicsCard, System, TrainingDevice, TrainingJob, TrainingPlan,
-};
 use instantpad_domain::voice::{Conversion, VoiceChain, VoicePreset};
 use serde::Serialize;
 use specta::Type;
@@ -210,8 +207,8 @@ pub trait VoiceModels: Send + Sync {
     async fn install(&self, progress: &(dyn Fn(u8) + Send + Sync)) -> Result<(), Failure>;
 }
 
-/// Models trained on a voice with the kit in `tools/voice-training`, which the user adds to one
-/// of the AI voices.
+/// Models the maintainers trained on a voice with the kit in `tools/voice-training`, which the
+/// user adds to one of the AI voices.
 #[async_trait]
 pub trait TrainedVoiceModels: Send + Sync {
     /// Checks the voice the kit exported to `folder` and keeps a copy of it as the model `id`.
@@ -220,119 +217,6 @@ pub trait TrainedVoiceModels: Send + Sync {
 
     /// Deletes the files of a model no voice uses anymore.
     fn remove(&self, id: &str);
-}
-
-/// The tools a training needs, for one kind of device.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TrainingTools {
-    pub is_installed: bool,
-    /// What is still to download, rounded up.
-    pub download_megabytes: u32,
-    /// What they take on disk once installed.
-    pub installed_megabytes: u32,
-}
-
-/// What a training is doing, as the kit reports it.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub enum TrainingStage {
-    /// Cutting the speech into pieces.
-    Cutting,
-    /// Finding the pitch of each piece.
-    Pitch,
-    /// Finding the words of each piece.
-    Words,
-    /// Going through the pieces, epoch after epoch.
-    Learning,
-    /// Writing and checking the voice for the app.
-    Exporting,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum TrainingProgress {
-    Stage(TrainingStage),
-    /// `epoch` is done; the first one reported may be where a stopped training went on from.
-    Epoch {
-        epoch: u32,
-        seconds: f32,
-    },
-}
-
-/// How a long piece of work ended without failing.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Outcome<T> {
-    Done(T),
-    /// [`VoiceTrainer::stop`] ended it, and it can go on later.
-    Stopped,
-}
-
-/// A training the trainer runs.
-#[derive(Clone, Debug, PartialEq)]
-pub struct TrainingRun {
-    /// The folder of the training, from [`instantpad_domain::training::TrainingJob::id`].
-    pub job: String,
-    pub plan: TrainingPlan,
-    /// The name the model gets.
-    pub title: String,
-}
-
-/// Trains models of voices on this computer, with tools it downloads when the user agrees. See
-/// ADR 0007. Speech is mono at 48 kHz.
-#[async_trait]
-pub trait VoiceTrainer: Send + Sync {
-    /// Whether the app trains voices on this system at all.
-    fn is_supported(&self) -> bool;
-
-    /// The system the training runs on, which sets the oldest driver of a card that works.
-    fn system(&self) -> System;
-
-    /// The NVIDIA card, when the system has one with a driver.
-    async fn graphics_card(&self) -> Option<GraphicsCard>;
-
-    fn tools(&self, device: TrainingDevice) -> TrainingTools;
-
-    /// How much room the installed tools take, to tell the user what removing them frees.
-    fn installed_megabytes(&self) -> u32;
-
-    /// Free room where the training lives, or `None` when the system does not say.
-    fn free_megabytes(&self) -> Option<u64>;
-
-    /// Downloads and checks the tools for `device`, picking up a download that stopped.
-    /// Reports 0 to 100.
-    async fn install(
-        &self,
-        device: TrainingDevice,
-        progress: &(dyn Fn(u8) + Send + Sync),
-    ) -> Result<Outcome<()>, Failure>;
-
-    /// Ends the install or the training that runs, which then returns [`Outcome::Stopped`].
-    fn stop(&self);
-
-    /// Deletes the tools. A training of a voice keeps its own folder.
-    fn remove_tools(&self);
-
-    /// Writes a take of speech to the folder of the training `job`.
-    async fn keep_take(&self, job: &str, take: &str, speech: Vec<f32>) -> Result<(), Failure>;
-
-    fn remove_take(&self, job: &str, take: &str);
-
-    /// Trains the voice from the takes of the job, going on from its last save, and exports it.
-    /// Returns the folder `TrainedVoiceModels::add` takes.
-    async fn train(
-        &self,
-        run: &TrainingRun,
-        progress: &(dyn Fn(TrainingProgress) + Send + Sync),
-    ) -> Result<Outcome<PathBuf>, Failure>;
-
-    /// Deletes everything of the training `job`: its takes, what RVC made of them and its model.
-    fn discard(&self, job: &str);
-}
-
-/// Keeps the training in progress, so it goes on after the app closes.
-pub trait TrainingRepository: Send + Sync {
-    fn load(&self) -> Option<TrainingJob>;
-
-    fn save(&self, job: Option<&TrainingJob>) -> Result<(), Failure>;
 }
 
 /// Listens to speech with the AI models, which must be installed. Speech is mono at 48 kHz.

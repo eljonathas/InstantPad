@@ -154,14 +154,14 @@ Start with a small blend, between 20% and 40%, and change the timbre a little at
 
 ### Trained voices
 
-For a voice that sounds far more like the original, train a model of it on your computer with the kit in [`tools/voice-training`](tools/voice-training/README.md), which uses RVC. It takes about an hour on an NVIDIA graphics card, on Windows through WSL, and more than a day on the processor. Then pick **Feminine AI** or a cloned voice and click **Add a trained model...**, and choose the folder the kit exported.
+For a voice that sounds far more like the original, a voice can speak through a model trained on it with RVC. The InstantPad team trains these models and publishes them, so nothing trains on your computer. Pick **Feminine AI** or a cloned voice, click **Add a trained model...** and choose the folder of the model.
 
 The voice now has two engines, and **Engine** switches between them:
 
 - **Trained** speaks through the model. It needs no learning of your voice, and moves your pitch to the voice's by itself; **Pitch** moves it further, up to an octave either way. It answers in about half a second and needs a fast processor. If your computer falls behind, the app tells you to switch to Instant.
 - **Instant** is the AI voice as before.
 
-**Replace model...** adds a newer training, and **Remove model** takes it off. The first model you add brings HuBERT, about 380 MB, which every trained voice shares.
+**Replace model...** adds a newer model, and **Remove model** takes it off. The first model you add brings HuBERT, about 380 MB, which every trained voice shares.
 
 ### Playback options
 

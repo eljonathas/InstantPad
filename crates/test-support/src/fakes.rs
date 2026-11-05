@@ -8,11 +8,10 @@ use instantpad_application::hotkeys::HotkeyCommand;
 use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{
     AppUpdater, AudioDevice, AudioMix, AudioRouter, BoardRepository, CatalogPage, DeviceRole,
-    EventSink, FavoritesRepository, HotkeyHost, NowPlaying, Outcome, PlaybackTag,
-    SettingsRepository, SoundCatalog, SoundFileStore, SoundPlayer, SpeechConverter, StreamStop,
-    SystemAudio, TrainedVoiceModels, TrainingProgress, TrainingRepository, TrainingRun,
-    TrainingTools, VirtualCable, VoiceAnalyzer, VoiceChanger, VoiceLibraryRepository, VoiceModels,
-    VoiceRecorder, VoiceTrainer, Waveform,
+    EventSink, FavoritesRepository, HotkeyHost, NowPlaying, PlaybackTag, SettingsRepository,
+    SoundCatalog, SoundFileStore, SoundPlayer, SpeechConverter, StreamStop, SystemAudio,
+    TrainedVoiceModels, VirtualCable, VoiceAnalyzer, VoiceChanger, VoiceLibraryRepository,
+    VoiceModels, VoiceRecorder, Waveform,
 };
 use instantpad_application::settings::AppSettings;
 use instantpad_domain::board::PadBoard;
@@ -20,7 +19,6 @@ use instantpad_domain::cloning::{TrainedModel, VoiceLibrary, Voiceprint};
 use instantpad_domain::cuts::Cut;
 use instantpad_domain::hotkeys::Hotkey;
 use instantpad_domain::sounds::SoundSource;
-use instantpad_domain::training::{GraphicsCard, System, TrainingDevice, TrainingJob};
 use instantpad_domain::voice::{Conversion, VoiceChain, VoicePreset};
 
 pub fn device(id: &str, name: &str) -> AudioDevice {
@@ -654,17 +652,11 @@ pub struct FakeTrainedModels {
     pub removed: Mutex<Vec<String>>,
     /// Makes adding fail, like a folder the kit did not export.
     pub fails: Mutex<Option<Failure>>,
-    /// Runs once, while the next model is being checked, for what happens meanwhile.
-    pub meanwhile: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
 #[async_trait]
 impl TrainedVoiceModels for FakeTrainedModels {
     async fn add(&self, folder: PathBuf, id: String) -> Result<TrainedModel, Failure> {
-        let meanwhile = self.meanwhile.lock().unwrap().take();
-        if let Some(meanwhile) = meanwhile {
-            meanwhile();
-        }
         if let Some(failure) = self.fails.lock().unwrap().clone() {
             return Err(failure);
         }
@@ -705,190 +697,6 @@ impl VoiceLibraryRepository for InMemoryVoiceLibrary {
             return Err(Failure::text(TextKey::SaveFailed));
         }
         *self.library.lock().unwrap() = library.clone();
-        Ok(())
-    }
-}
-
-/// Trains in no time: it reports the progress tests prepare and ends as they say.
-pub struct FakeTrainer {
-    pub is_supported: Mutex<bool>,
-    pub card: Mutex<Option<GraphicsCard>>,
-    /// The device whose tools are installed.
-    pub tools: Mutex<Option<TrainingDevice>>,
-    pub free_megabytes: Mutex<Option<u64>>,
-    /// Makes the next install fail.
-    pub install_fails: Mutex<Option<Failure>>,
-    /// Every take written: the training, the take and how many samples it had.
-    pub takes: Mutex<Vec<(String, String, usize)>>,
-    pub removed_takes: Mutex<Vec<(String, String)>>,
-    pub discarded: Mutex<Vec<String>>,
-    pub runs: Mutex<Vec<TrainingRun>>,
-    /// What the next training reports before it ends.
-    pub progress: Mutex<Vec<TrainingProgress>>,
-    /// How the next training ends; by default with a folder named after the title.
-    pub ending: Mutex<Option<Result<Outcome<PathBuf>, Failure>>>,
-    /// Runs while an install or a training is in progress, for what the user does meanwhile.
-    pub meanwhile: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
-    /// Set by `stop`, which ends the work in progress.
-    pub is_stopped: Mutex<bool>,
-    pub tools_removed: Mutex<bool>,
-}
-
-impl Default for FakeTrainer {
-    fn default() -> Self {
-        Self {
-            is_supported: Mutex::new(true),
-            card: Mutex::new(None),
-            tools: Mutex::new(None),
-            free_megabytes: Mutex::new(Some(100_000)),
-            install_fails: Mutex::new(None),
-            takes: Mutex::new(Vec::new()),
-            removed_takes: Mutex::new(Vec::new()),
-            discarded: Mutex::new(Vec::new()),
-            runs: Mutex::new(Vec::new()),
-            progress: Mutex::new(Vec::new()),
-            ending: Mutex::new(None),
-            meanwhile: Mutex::new(None),
-            is_stopped: Mutex::new(false),
-            tools_removed: Mutex::new(false),
-        }
-    }
-}
-
-impl FakeTrainer {
-    pub const CARD_DOWNLOAD: u32 = 4_200;
-    pub const PROCESSOR_DOWNLOAD: u32 = 1_200;
-
-    /// Runs what the test does meanwhile, and tells whether it stopped the work.
-    fn while_working(&self) -> bool {
-        *self.is_stopped.lock().unwrap() = false;
-        if let Some(meanwhile) = &*self.meanwhile.lock().unwrap() {
-            meanwhile();
-        }
-        std::mem::take(&mut *self.is_stopped.lock().unwrap())
-    }
-}
-
-#[async_trait]
-impl VoiceTrainer for FakeTrainer {
-    fn is_supported(&self) -> bool {
-        *self.is_supported.lock().unwrap()
-    }
-
-    fn system(&self) -> System {
-        System::Windows
-    }
-
-    async fn graphics_card(&self) -> Option<GraphicsCard> {
-        self.card.lock().unwrap().clone()
-    }
-
-    fn tools(&self, device: TrainingDevice) -> TrainingTools {
-        let is_installed = *self.tools.lock().unwrap() == Some(device);
-        let (download, installed) = if device.is_card() {
-            (Self::CARD_DOWNLOAD, 9_000)
-        } else {
-            (Self::PROCESSOR_DOWNLOAD, 3_000)
-        };
-        TrainingTools {
-            is_installed,
-            download_megabytes: if is_installed { 0 } else { download },
-            installed_megabytes: installed,
-        }
-    }
-
-    fn installed_megabytes(&self) -> u32 {
-        let device = *self.tools.lock().unwrap();
-        device.map_or(0, |device| self.tools(device).installed_megabytes)
-    }
-
-    fn free_megabytes(&self) -> Option<u64> {
-        *self.free_megabytes.lock().unwrap()
-    }
-
-    async fn install(
-        &self,
-        device: TrainingDevice,
-        progress: &(dyn Fn(u8) + Send + Sync),
-    ) -> Result<Outcome<()>, Failure> {
-        progress(40);
-        if self.while_working() {
-            return Ok(Outcome::Stopped);
-        }
-        if let Some(failure) = self.install_fails.lock().unwrap().take() {
-            return Err(failure);
-        }
-        progress(100);
-        *self.tools.lock().unwrap() = Some(device);
-        Ok(Outcome::Done(()))
-    }
-
-    fn stop(&self) {
-        *self.is_stopped.lock().unwrap() = true;
-    }
-
-    fn remove_tools(&self) {
-        *self.tools.lock().unwrap() = None;
-        *self.tools_removed.lock().unwrap() = true;
-    }
-
-    async fn keep_take(&self, job: &str, take: &str, speech: Vec<f32>) -> Result<(), Failure> {
-        self.takes
-            .lock()
-            .unwrap()
-            .push((job.to_owned(), take.to_owned(), speech.len()));
-        Ok(())
-    }
-
-    fn remove_take(&self, job: &str, take: &str) {
-        self.removed_takes
-            .lock()
-            .unwrap()
-            .push((job.to_owned(), take.to_owned()));
-    }
-
-    async fn train(
-        &self,
-        run: &TrainingRun,
-        progress: &(dyn Fn(TrainingProgress) + Send + Sync),
-    ) -> Result<Outcome<PathBuf>, Failure> {
-        self.runs.lock().unwrap().push(run.clone());
-        if !self.tools(run.plan.device).is_installed {
-            return Err(Failure::because(TextKey::TrainingFailed, "no tools"));
-        }
-        let steps = std::mem::take(&mut *self.progress.lock().unwrap());
-        for step in steps {
-            progress(step);
-        }
-        if self.while_working() {
-            return Ok(Outcome::Stopped);
-        }
-        let ending = self.ending.lock().unwrap().take();
-        ending.unwrap_or_else(|| Ok(Outcome::Done(PathBuf::from(&run.title))))
-    }
-
-    fn discard(&self, job: &str) {
-        self.discarded.lock().unwrap().push(job.to_owned());
-    }
-}
-
-#[derive(Default)]
-pub struct InMemoryTraining {
-    pub job: Mutex<Option<TrainingJob>>,
-    /// Makes saving fail, like a disk that cannot be written.
-    pub fails: Mutex<bool>,
-}
-
-impl TrainingRepository for InMemoryTraining {
-    fn load(&self) -> Option<TrainingJob> {
-        self.job.lock().unwrap().clone()
-    }
-
-    fn save(&self, job: Option<&TrainingJob>) -> Result<(), Failure> {
-        if *self.fails.lock().unwrap() {
-            return Err(Failure::text(TextKey::SaveFailed));
-        }
-        *self.job.lock().unwrap() = job.cloned();
         Ok(())
     }
 }

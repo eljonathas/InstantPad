@@ -17,7 +17,6 @@ instantpad-domain = { path = "crates/domain" }
 instantpad-platform = { path = "crates/platform" }
 instantpad-storage = { path = "crates/storage" }
 instantpad-test-support = { path = "crates/test-support" }
-instantpad-training = { path = "crates/training" }
 instantpad-voice-ai = { path = "crates/voice-ai" }
 
 async-trait = "0.1"

@@ -102,17 +102,6 @@ fn specta_builder() -> Builder<Wry> {
             commands::cloning::import_clone_sample,
             commands::cloning::save_cloned_voice,
             commands::cloning::close_cloning,
-            commands::training::open_training,
-            commands::training::accept_training,
-            commands::training::start_training_take,
-            commands::training::finish_training_take,
-            commands::training::import_training_take,
-            commands::training::remove_training_take,
-            commands::training::train_voice,
-            commands::training::stop_training,
-            commands::training::discard_training,
-            commands::training::close_training,
-            commands::training::remove_training_tools,
         ])
         .events(collect_events![BackendEvent, MeterEvent])
         .disable_serde_phases()

@@ -1,23 +1,13 @@
 //! The format everything is converted to before mixing.
 
 use instantpad_domain::cloning::MAX_SAMPLE_SECONDS;
-use instantpad_domain::training::MAX_TAKE_SECONDS;
 
 pub(crate) const SAMPLE_RATE: u32 = 48_000;
 pub(crate) const CHANNELS: usize = 2;
 
-/// The longest speech the engine takes from a file or a recording: the longest the app takes, a
-/// sample to clone or a take to train, and a second more, so that the application is the one
-/// that reports a sample just over the limit.
-pub(crate) const MAX_SPEECH_SECONDS: u32 = max(MAX_SAMPLE_SECONDS, MAX_TAKE_SECONDS) + 1;
-
-const fn max(a: u32, b: u32) -> u32 {
-    if a > b { a } else { b }
-}
-
-// A take to train is twice as long as a sample to clone; neither may be cut by the engine.
-const _: () = assert!(MAX_SPEECH_SECONDS > MAX_TAKE_SECONDS);
-const _: () = assert!(MAX_SPEECH_SECONDS > MAX_SAMPLE_SECONDS);
+/// The longest speech the engine takes from a file or a recording: what the app takes and a
+/// second more, so that the application is the one that reports a sample just over the limit.
+pub(crate) const MAX_SPEECH_SECONDS: u32 = MAX_SAMPLE_SECONDS + 1;
 
 /// How many frames `milliseconds` of engine audio take, which is also how many mono samples.
 pub(crate) const fn frames_for(milliseconds: usize) -> usize {

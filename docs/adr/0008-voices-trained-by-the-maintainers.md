@@ -1,0 +1,10 @@
+# 0008: Voices are trained by the maintainers and shipped trained
+
+[ADR 0007](0007-training-voices-in-the-app.md) let users train a voice inside the app: it downloaded Python, PyTorch and RVC, about 8 GB, and trained on their computer. That takes about an hour on a recent NVIDIA card and more than a day on the processor, which is what most users have, and a training that long on a gaming computer is not something users finish. The maintainers can train the same voice in minutes on a cloud GPU.
+
+- **The app no longer trains.** The training dialog, its download of the training tools, the `VoiceTrainer` port and its adapter (`crates/training`) are gone, with the pinned environments the app downloaded. The installer and the program are back to their size before ADR 0007. A training folder left by an earlier version, under `training` in the local data folder, is not read; the user can delete it.
+- **The maintainers train, in the cloud.** The kit in `tools/voice-training` stays the one way to train, on Linux with an NVIDIA card, as ADR 0006 has it. It keeps what ADR 0007 changed that suits any computer: RVC comes as a zip of the pinned commit, so no git is needed, and `export --title` names the voice the app shows. What only the app used, `--events` and `pin.py`, is gone.
+- **Users add the models the maintainers publish.** A trained voice still reaches the app through **Add a trained model...**, from the folder the kit exported, checked by `TrainedVoiceModels::add` as before. The engine, the engine switch per voice and HuBERT kept once are those of ADR 0006. How the published models are offered, downloaded on demand and pinned by SHA-256 the way the models of ADR 0003 are, is a separate decision.
+- **Recordings never touch the disk again.** ADR 0007 amended [ADR 0005](0005-voice-cloning-without-checks.md) so that training could keep takes on disk. With no training in the app, ADR 0005 holds as written: a recording lives only in memory, while cloning.
+
+The engine lives in `crates/voice-ai/src/rvc.rs`, the adding of a model in `crates/voice-ai/src/trained.rs`, and the kit in `tools/voice-training`.

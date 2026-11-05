@@ -1,5 +1,7 @@
 # 0007: The user trains a voice inside the app
 
+> Superseded by [0008](0008-voices-trained-by-the-maintainers.md). Kept for what it decided and why it was dropped.
+
 [ADR 0006](0006-trained-voice-models.md) made a voice speak through an RVC model trained on it, and left the training to a kit run from a terminal, on Linux or WSL, with Python and PyTorch installed by hand. That suits the developer, who trains the voices the app ships. The users who clone a voice cannot do it: they have no terminal, no WSL and no Python. They have to train their own voices from the app, with nothing installed beforehand. Distributing the voices trained by the developer is a separate decision.
 
 - **Training is an optional feature, which the installer does not carry.** Its tools take about 8 GB once installed, where the whole app takes 13 MB, so the installer ships only the dialog and the code that runs the kit. That grows the app's program from 13.38 MB to 13.91 MB, and the installer, compressed, by about 0.12 MB. The user installs "Voice training" from inside the app, sees its size first, follows the download, stops it and resumes it, and every file is checked against its SHA-256; "Remove training tools" uninstalls it. Without it the app works as before: cloned voices, the instant engine and added trained models need none of it.

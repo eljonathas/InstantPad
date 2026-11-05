@@ -8,10 +8,9 @@ use crate::ports::VoiceRecorder;
 pub(crate) enum Recording {
     Calibration,
     Cloning,
-    Training,
 }
 
-/// The one recorder, shared by the learning of the user's voice, cloning and training. Only one of them records at a time, and
+/// The one recorder, shared by the learning of the user's voice and cloning. Only one of them records at a time, and
 /// only the one that started a recording can stop it.
 pub struct SharedRecorder {
     recorder: Arc<dyn VoiceRecorder>,

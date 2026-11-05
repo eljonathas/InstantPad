@@ -20,7 +20,7 @@ async function addModel(page: Page) {
 }
 
 test("an AI voice offers to add a trained model, and says where one comes from", async ({ page }) => {
-  await expect(page.getByText("tools/voice-training", { exact: false })).toBeVisible();
+  await expect(page.getByText("trained by the InstantPad team", { exact: false })).toBeVisible();
   await expect(engines(page)).toHaveCount(0);
   await expect(page.getByText("about a third of a second of delay")).toBeVisible();
 });

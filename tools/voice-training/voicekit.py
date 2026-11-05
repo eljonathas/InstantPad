@@ -9,9 +9,6 @@
     voicekit.py all --name feminine        dataset, train and export, one after the other
 
 Every step can be run again: what is done already is kept. See README.md.
-
-With --events before the step, it also writes one line of JSON for each step and each epoch,
-after "@instantpad ", which is how InstantPad follows a training it runs.
 """
 
 from __future__ import annotations
@@ -24,7 +21,6 @@ import json
 import math
 import os
 import random
-import re
 import shutil
 import subprocess
 import sys
@@ -39,8 +35,6 @@ HOME = Path(
 RVC = HOME / "rvc"
 DOWNLOADS = HOME / "downloads"
 VOICES = HOME / "voices"
-# Programs RVC calls by name, such as ffmpeg, when the computer has none.
-TOOLS = HOME / "bin"
 
 # RVC (MIT), the commit the scripts were checked with: Python 3.12, HuBERT through Transformers.
 # It comes as an archive of that commit, so no git is needed.
@@ -127,25 +121,12 @@ FORMAT = 1
 
 # ------------------------------------------------------------------------------------ helpers
 
-# Set by --events.
-EVENTS = False
-EVENT_PREFIX = "@instantpad "
-# The line RVC writes at the end of each epoch, in any of its languages: "====> Epoch: 12 ...".
-EPOCH_LINE = re.compile(r"====>\D*(\d+)")
-
-
-def event(**fields) -> None:
-    """Tells the app where the work is, when it runs the kit."""
-    if EVENTS:
-        print(EVENT_PREFIX + json.dumps(fields), flush=True)
-
 
 def say(message: str) -> None:
     print(f"\n==> {message}", flush=True)
 
 
 def fail(message: str) -> None:
-    event(error=message)
     sys.exit(f"error: {message}")
 
 
@@ -182,7 +163,6 @@ def download(url: str, target: Path, size: int, digest: str) -> None:
                     done += len(block)
                     if time.monotonic() - shown > 2 or done == size:
                         shown = time.monotonic()
-                        event(download=target.name, done=done, size=size)
                         print(
                             f"\r    {target.name}: {done / 1e6:.0f} of {size / 1e6:.0f} MB",
                             end="",
@@ -201,38 +181,14 @@ def python() -> str:
     return sys.executable
 
 
-def run(arguments: list, log: Path | None = None, on_line=None) -> None:
-    """Runs a script of RVC, `arguments` starting with its path, from RVC's folder. `on_line`
-    hears each line it writes, which still reaches the terminal."""
+def run(arguments: list, log: Path | None = None) -> None:
+    """Runs a script of RVC, `arguments` starting with its path, from RVC's folder."""
     # The scripts import RVC's packages from its root, as its web interface runs them. -P keeps
     # the script's own folder out of the path: train/train.py would hide the package train.
     command = [python(), "-P", *(str(argument) for argument in arguments)]
     print("    $ " + " ".join(command[2:]), flush=True)
-    environment = dict(
-        os.environ,
-        PYTHONUNBUFFERED="1",
-        PYTHONUTF8="1",
-        PYTHONPATH=str(RVC),
-        PATH=str(TOOLS) + os.pathsep + os.environ.get("PATH", ""),
-        # RVC writes in the language of the system, and the epochs are read in English.
-        LANG="en_US.UTF-8",
-        LC_ALL="en_US.UTF-8",
-    )
-    process = subprocess.Popen(
-        command,
-        cwd=RVC,
-        env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    for line in process.stdout:
-        print(line, end="", flush=True)
-        if on_line:
-            on_line(line)
-    process.wait()
+    environment = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONPATH=str(RVC))
+    process = subprocess.run(command, cwd=RVC, env=environment, check=False)
     if process.returncode != 0:
         where = f" (see {log})" if log else ""
         fail(f"{Path(command[2]).name} stopped with code {process.returncode}{where}")
@@ -257,7 +213,6 @@ def cuda() -> bool:
 
 
 def setup(_: argparse.Namespace) -> None:
-    event(step="setup")
     say(f"RVC at {RVC_COMMIT[:7]}")
     commit = RVC / ".commit"
     if not commit.exists() or commit.read_text(encoding="utf-8").strip() != RVC_COMMIT:
@@ -275,14 +230,6 @@ def setup(_: argparse.Namespace) -> None:
     if not (RVC / "logs" / "mute").exists():
         with zipfile.ZipFile(DOWNLOADS / name) as archive:
             archive.extractall(RVC / "logs")
-
-    if not shutil.which("ffmpeg") and not any(TOOLS.glob("ffmpeg*")):
-        # RVC decodes the recordings with the ffmpeg program when it trains on the processor.
-        import imageio_ffmpeg
-
-        TOOLS.mkdir(parents=True, exist_ok=True)
-        program = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
-        shutil.copy(imageio_ffmpeg.get_ffmpeg_exe(), TOOLS / program)
 
     import torch
 
@@ -402,7 +349,6 @@ def train(arguments: argparse.Namespace) -> None:
     # Written once the pieces are all there, so a stop halfway cuts them again.
     cut = folder / "preprocess.done"
     if not cut.exists():
-        event(step="cut")
         say("Cutting the recordings into pieces")
         run(
             [
@@ -418,7 +364,6 @@ def train(arguments: argparse.Namespace) -> None:
         )
         cut.write_text("done\n", encoding="utf-8")
 
-    event(step="pitch")
     say("Finding the pitch of each piece")
     if on_gpu:
         run(
@@ -431,7 +376,6 @@ def train(arguments: argparse.Namespace) -> None:
             folder / "extract_f0_feature.log",
         )
 
-    event(step="words")
     say("Finding what is said in each piece")
     run(
         [
@@ -454,12 +398,6 @@ def train(arguments: argparse.Namespace) -> None:
         )  # RVC's own choice for v2-40k
 
     say(f"Learning the voice: {arguments.epochs} epochs")
-    event(
-        step="learn",
-        epoch=saved_epoch(folder),
-        epochs=arguments.epochs,
-        device="cuda" if on_gpu else "cpu",
-    )
     # Where RVC saves the voice at the end, which its web interface makes when it starts.
     (RVC / "assets" / "weights").mkdir(parents=True, exist_ok=True)
     command = [
@@ -491,20 +429,7 @@ def train(arguments: argparse.Namespace) -> None:
     ]
     if on_gpu:
         command += ["-g", 0]
-    started = [time.monotonic()]
-
-    def on_line(line: str) -> None:
-        epoch = EPOCH_LINE.search(line)
-        if epoch:
-            now = time.monotonic()
-            event(
-                epoch=int(epoch.group(1)),
-                epochs=arguments.epochs,
-                seconds=round(now - started[0], 1),
-            )
-            started[0] = now
-
-    run(command, folder / "train.log", on_line)
+    run(command, folder / "train.log")
     weights = RVC / "assets" / "weights" / f"{name}.pth"
     if not weights.exists():
         fail(f"training ended without {weights}; see {folder / 'train.log'}")
@@ -518,20 +443,6 @@ def train(arguments: argparse.Namespace) -> None:
     }
     (VOICES / name / "trained.json").write_text(json.dumps(trained), encoding="utf-8")
     say(f"The voice is learned: {weights}")
-
-
-def saved_epoch(folder: Path) -> int:
-    """The epoch of RVC's last save, which a training that stopped goes on from; 0 for none."""
-    checkpoint = folder / "G_2333333.pth"
-    if not checkpoint.exists():
-        return 0
-    import torch
-
-    try:
-        saved = torch.load(checkpoint, map_location="cpu", weights_only=False)
-    except Exception:  # a save cut short by a stop, which RVC starts over from
-        return 0
-    return int(saved.get("iteration", 0))
 
 
 def sf_duration(path: Path) -> float:
@@ -773,7 +684,6 @@ def export(arguments: argparse.Namespace) -> None:
     import torch
 
     name = arguments.name
-    event(step="export")
     using_rvc()
     patch_for_onnx()
     out = VOICES / name / "app"
@@ -884,7 +794,6 @@ def export(arguments: argparse.Namespace) -> None:
     (out / "voice.json").write_text(
         json.dumps(voice, indent=2) + "\n", encoding="utf-8"
     )
-    event(exported=str(out))
     say(f"The voice for the app is in {out}")
     for file in sorted(out.iterdir()):
         print(f"    {file.name}: {file.stat().st_size / 1e6:.1f} MB")
@@ -965,9 +874,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument(
-        "--events", action="store_true", help="write the progress as JSON for the app"
-    )
     steps = parser.add_subparsers(dest="step", required=True)
     steps.add_parser("setup", help="downloads RVC and its base models")
 
@@ -1029,8 +935,6 @@ def main() -> None:
     export_options(everything)
 
     arguments = parser.parse_args()
-    global EVENTS
-    EVENTS = arguments.events
     if arguments.step == "setup":
         setup(arguments)
     elif arguments.step == "dataset":

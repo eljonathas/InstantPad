@@ -1,6 +1,5 @@
 use instantpad_domain::hotkeys::{Hotkey, NumericScheme};
 use instantpad_domain::sounds::SoundSource;
-use instantpad_domain::training::{Take, TrainingDevice};
 use instantpad_domain::trending::TRENDING_REGIONS;
 use instantpad_domain::voice::{VoiceEffect, VoiceEngine, VoiceParam};
 use instantpad_domain::{board, palette};
@@ -8,7 +7,7 @@ use serde::Serialize;
 use specta::Type;
 
 use crate::message::{Message, TextKey};
-use crate::ports::{AudioDevice, NowPlaying, TrainingStage};
+use crate::ports::{AudioDevice, NowPlaying};
 use crate::settings::AppSettings;
 
 // `#[specta(type = u32)]` exports a float as a plain `number`. Specta adds `| null` for NaN,
@@ -218,52 +217,6 @@ pub struct VoiceView {
     pub cloned_voices: Vec<ClonedVoiceView>,
     /// `None` while the voice designer is closed.
     pub designer: Option<DesignerView>,
-    pub training: TrainingSummary,
-}
-
-/// What the voice screen shows of training models in the app.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct TrainingSummary {
-    /// Whether the app trains voices on this system.
-    pub is_supported: bool,
-    /// The training in progress, of one cloned voice.
-    pub job: Option<TrainingJobView>,
-    /// What removing the training tools frees, or 0 when they are not there.
-    pub tools_megabytes: u32,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct TrainingJobView {
-    pub clone_id: String,
-    pub phase: TrainingPhase,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Type)]
-#[serde(
-    tag = "kind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum TrainingPhase {
-    /// The speech is still being gathered.
-    Takes {
-        seconds: u32,
-        min_seconds: u32,
-    },
-    Installing {
-        percent: u8,
-    },
-    Running {
-        epoch: u32,
-        epochs: u32,
-    },
-    /// Stopped by the user or by closing the app, and goes on from `epoch`.
-    Paused {
-        epoch: u32,
-        epochs: u32,
-    },
 }
 
 /// The voice designer, which the backend keeps open so a failed save loses nothing.
@@ -299,64 +252,6 @@ pub enum CloneStep {
     Analyzing,
     /// The AI heard the voice, which only needs a name.
     Name,
-}
-
-/// Where the user is in training a model of a cloned voice. Each step only opens once the one
-/// before is done.
-#[derive(Clone, Debug, PartialEq, Serialize, Type)]
-#[serde(
-    tag = "step",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum TrainStep {
-    Closed,
-    /// Looking for a graphics card.
-    Checking,
-    /// Where the voice trains, what that downloads and the room it needs, for the user to agree.
-    Prepare {
-        voice: String,
-        device: TrainingDevice,
-        /// The NVIDIA card, when there is one, even if it is not used.
-        card: Option<String>,
-        download_megabytes: u32,
-        needed_megabytes: u32,
-        /// Set when the disk is short of room, which stops the training from starting.
-        missing_megabytes: Option<u32>,
-        /// How long 40 minutes of speech take to train.
-        estimated_seconds: u32,
-        problem: Option<Message>,
-    },
-    Installing {
-        voice: String,
-        percent: u8,
-    },
-    /// The speech the voice learns from, recorded or picked from files.
-    Takes {
-        voice: String,
-        takes: Vec<Take>,
-        seconds: u32,
-        min_seconds: u32,
-        max_seconds: u32,
-        max_take_seconds: u32,
-        is_recording: bool,
-        /// A take being written or a file being read.
-        is_busy: bool,
-        /// How long the speech gathered so far takes to train.
-        estimated_seconds: u32,
-        problem: Option<Message>,
-    },
-    Training {
-        voice: String,
-        device: TrainingDevice,
-        stage: TrainingStage,
-        epoch: u32,
-        epochs: u32,
-        /// Known once an epoch has run.
-        remaining_seconds: Option<u32>,
-        is_running: bool,
-        problem: Option<Message>,
-    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Type)]
@@ -399,7 +294,6 @@ pub enum AppEvent {
     Update(UpdateView),
     Voice(VoiceView),
     Cloning(CloneStep),
-    Training(TrainStep),
     Display(DisplayEvent),
 }
 

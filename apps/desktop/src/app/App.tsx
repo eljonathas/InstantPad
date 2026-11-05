@@ -3,7 +3,6 @@ import { CutEditor } from "../features/cuts/CutEditor";
 import { CloneDialog } from "../features/voice/CloneDialog";
 import { UpdateDialog } from "../features/updates/UpdateDialog";
 import { DesignDialog } from "../features/voice/DesignDialog";
-import { TrainDialog } from "../features/voice/TrainDialog";
 import { useBackend } from "../shared/store/backend";
 import { useText } from "../shared/store/text";
 import { OverlayProvider } from "../shared/ui/overlay";
@@ -39,7 +38,6 @@ export function App() {
       <Device />
       <CloneDialog />
       <DesignDialog />
-      <TrainDialog />
       <CutEditor />
       <UpdateDialog />
     </OverlayProvider>

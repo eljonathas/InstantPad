@@ -1,6 +1,7 @@
 //! Sends the voice through the AI converter. The converter takes far longer than a callback to
 //! answer, so a thread of its own runs it, and rings carry the voice there and back.
 
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
@@ -9,6 +10,7 @@ use std::time::Duration;
 use instantpad_application::events::AppEvent;
 use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{EventSink, SpeechConverter};
+use instantpad_application::sync::lock;
 use instantpad_domain::voice::Conversion;
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -34,10 +36,70 @@ const PIECE: usize = 480;
 
 /// What the callback, the thread and the control side agree on.
 pub(crate) struct AiShared {
-    /// Whether the voice goes through the converter.
-    is_routing: AtomicBool,
-    /// Counts the conversions started. What the converter answers to an earlier one is dropped.
-    generation: AtomicU64,
+    /// Whether the voice goes through the converter (the lowest bit), and the count of
+    /// conversions started (the rest). What the converter answers to an earlier one is dropped.
+    /// They share a word so that giving up the conversion that failed cannot switch off one that
+    /// started in the meantime.
+    state: AtomicU64,
+    /// Whether the conversion that runs is a trained voice, which decides what the user is told
+    /// when it falls behind.
+    is_trained: AtomicBool,
+}
+
+impl AiShared {
+    const ROUTING: u64 = 1;
+
+    /// Whether the voice goes through the converter, and the conversion it is.
+    fn snapshot(&self) -> (bool, u64) {
+        let state = self.state.load(Ordering::Acquire);
+        (state & Self::ROUTING != 0, state >> 1)
+    }
+
+    fn is_routing(&self) -> bool {
+        self.snapshot().0
+    }
+
+    fn generation(&self) -> u64 {
+        self.snapshot().1
+    }
+
+    /// Counts a new conversion, so that nothing the old one made is delivered or fed to the
+    /// converter, which [`AiShared::resume`] then lets through.
+    fn begin(&self, is_trained: bool) {
+        self.is_trained.store(is_trained, Ordering::Relaxed);
+        self.state.fetch_add(1 << 1, Ordering::AcqRel);
+    }
+
+    fn resume(&self) {
+        self.state.fetch_or(Self::ROUTING, Ordering::AcqRel);
+    }
+
+    fn stop(&self) {
+        self.state.fetch_and(!Self::ROUTING, Ordering::AcqRel);
+    }
+
+    /// Switches off `generation`, unless a newer conversion has started.
+    fn stop_if_current(&self, generation: u64) -> bool {
+        let running = (generation << 1) | Self::ROUTING;
+        self.state
+            .compare_exchange(
+                running,
+                generation << 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    /// What the user is told when the converter cannot keep up. A trained voice that cannot has
+    /// the instant engine to fall back on.
+    fn too_slow(&self) -> TextKey {
+        if self.is_trained.load(Ordering::Relaxed) {
+            TextKey::AiTrainedTooSlow
+        } else {
+            TextKey::AiTooSlow
+        }
+    }
 }
 
 /// The ends of the rings that the thread keeps.
@@ -68,12 +130,12 @@ pub(crate) struct AiStage {
 impl AiStage {
     /// Hands `emit` the voice as it is, or as the AI turned it. Runs in the capture callback.
     pub(crate) fn process(&mut self, stereo: &[f32], mut emit: impl FnMut(&[f32])) {
-        if !self.shared.is_routing.load(Ordering::Relaxed) {
+        let (is_routing, generation) = self.shared.snapshot();
+        if !is_routing {
             self.was_routing = false;
             emit(stereo);
             return;
         }
-        let generation = self.shared.generation.load(Ordering::Relaxed);
         if !self.was_routing || generation != self.generation {
             // What the last conversion left must not play before the new voice.
             self.was_routing = true;
@@ -134,8 +196,8 @@ impl AiBridge {
             converter,
             events,
             shared: Arc::new(AiShared {
-                is_routing: AtomicBool::new(false),
-                generation: AtomicU64::new(0),
+                state: AtomicU64::new(0),
+                is_trained: AtomicBool::new(false),
             }),
             active: Mutex::new(None),
             ends: Arc::default(),
@@ -162,21 +224,20 @@ impl AiBridge {
     }
 
     pub(crate) fn attach(&self, ends: Option<WorkerEnds>) {
-        *self.ends.lock().unwrap() = ends;
+        *lock(&self.ends) = ends;
     }
 
     /// Sends the voice through the converter for `conversion`, or back to the DSP chain alone.
     /// The same conversion again changes nothing, because a knob that moves asks for it on every
     /// step, and starting over would drop the voice that is being converted.
     pub(crate) fn route(&self, conversion: Option<&Conversion>) {
-        let mut active = self.active.lock().unwrap();
+        let mut active = lock(&self.active);
         let Some(conversion) = conversion else {
             *active = None;
-            self.shared.is_routing.store(false, Ordering::Relaxed);
+            self.shared.stop();
             return;
         };
-        let is_routing = self.shared.is_routing.load(Ordering::Relaxed);
-        if let Some(running) = active.as_ref().filter(|_| is_routing)
+        if let Some(running) = active.as_ref().filter(|_| self.shared.is_routing())
             && running.same_voice(conversion)
         {
             // Only the pitch of a trained voice moved, which it follows as it speaks.
@@ -191,16 +252,12 @@ impl AiBridge {
 
         // The new generation comes first, so that nothing the old speakers made is delivered
         // or fed to the converter once it has started over.
-        self.shared.generation.fetch_add(1, Ordering::Relaxed);
+        self.shared
+            .begin(matches!(conversion, Conversion::Trained { .. }));
         self.converter.start(conversion);
         *active = Some(conversion.clone());
-        self.shared.is_routing.store(true, Ordering::Relaxed);
+        self.shared.resume();
         let converter = Converting {
-            // A trained voice that cannot keep up has the instant engine to fall back on.
-            too_slow: match conversion {
-                Conversion::Trained { .. } => TextKey::AiTrainedTooSlow,
-                Conversion::Timbre { .. } => TextKey::AiTooSlow,
-            },
             ends: Arc::downgrade(&self.ends),
             shared: self.shared.clone(),
             converter: self.converter.clone(),
@@ -213,8 +270,6 @@ impl AiBridge {
 
 /// What the thread of the conversion works with.
 struct Converting {
-    /// What the user is told when the converter cannot keep up.
-    too_slow: TextKey,
     ends: Weak<Slot>,
     shared: Arc<AiShared>,
     converter: Arc<dyn SpeechConverter>,
@@ -231,7 +286,7 @@ enum Heard {
 impl Converting {
     fn serve(self) {
         let mut speech = vec![0.0; MAX_BACKLOG];
-        let mut generation = self.shared.generation.load(Ordering::Relaxed);
+        let mut generation = self.shared.generation();
         // The converter may load its model while it converts the first piece of a conversion,
         // which takes longer than the backlog allows and is not falling behind.
         let mut is_warm = false;
@@ -239,13 +294,13 @@ impl Converting {
             let Some(ends) = self.ends.upgrade() else {
                 return;
             };
-            if !self.shared.is_routing.load(Ordering::Relaxed) {
+            let (is_routing, current) = self.shared.snapshot();
+            if !is_routing {
                 drop(ends);
                 thread::park();
                 continue;
             }
 
-            let current = self.shared.generation.load(Ordering::Relaxed);
             if generation != current {
                 generation = current;
                 is_warm = false;
@@ -253,8 +308,10 @@ impl Converting {
             } else {
                 match hear(&ends, is_warm, &mut speech) {
                     Heard::Nothing => {}
-                    Heard::TooMuch => self.give_up(generation, Message::text(self.too_slow)),
-                    Heard::Speech(count) => match self.converter.convert(&speech[..count]) {
+                    Heard::TooMuch => {
+                        self.give_up(generation, Message::text(self.shared.too_slow()))
+                    }
+                    Heard::Speech(count) => match self.convert(&speech[..count]) {
                         Ok(converted) => {
                             deliver(&ends, &self.shared, generation, &converted);
                             if !is_warm {
@@ -271,11 +328,23 @@ impl Converting {
         }
     }
 
+    /// Runs the converter, which is foreign code. A panic in it becomes a failure, because a dead
+    /// thread would leave the voice routed to a converter that never answers, and so muted.
+    fn convert(&self, speech: &[f32]) -> Result<Vec<f32>, Failure> {
+        panic::catch_unwind(AssertUnwindSafe(|| self.converter.convert(speech))).unwrap_or_else(
+            |_| {
+                Err(Failure::because(
+                    TextKey::AiLoadFailed,
+                    "the voice converter stopped unexpectedly",
+                ))
+            },
+        )
+    }
+
     /// Goes back to the voice without the AI, once, and says why. A conversion that started
     /// since is not told off for the failure of the one before it.
     fn give_up(&self, generation: u64, reason: Message) {
-        if self.shared.generation.load(Ordering::Relaxed) == generation {
-            self.shared.is_routing.store(false, Ordering::Relaxed);
+        if self.shared.stop_if_current(generation) {
             self.events.emit(AppEvent::error(reason));
         }
     }
@@ -284,7 +353,7 @@ impl Converting {
 /// Drops the voice that is waiting, which belongs to an earlier conversion or came in while the
 /// converter was getting ready.
 fn forget(ends: &Slot) {
-    if let Some(ends) = ends.lock().unwrap().as_mut()
+    if let Some(ends) = lock(ends).as_mut()
         && let Ok(chunk) = ends.heard.read_chunk(ends.heard.slots())
     {
         chunk.commit_all();
@@ -293,7 +362,7 @@ fn forget(ends: &Slot) {
 
 /// Takes what the callback sent. Only a converter that is ready can be told it falls behind.
 fn hear(ends: &Slot, is_warm: bool, speech: &mut [f32]) -> Heard {
-    let mut ends = ends.lock().unwrap();
+    let mut ends = lock(ends);
     let Some(ends) = ends.as_mut() else {
         return Heard::Nothing;
     };
@@ -308,10 +377,10 @@ fn hear(ends: &Slot, is_warm: bool, speech: &mut [f32]) -> Heard {
 }
 
 fn deliver(ends: &Slot, shared: &AiShared, generation: u64, converted: &[f32]) {
-    if shared.generation.load(Ordering::Relaxed) != generation {
+    if shared.generation() != generation {
         return;
     }
-    if let Some(ends) = ends.lock().unwrap().as_mut() {
+    if let Some(ends) = lock(ends).as_mut() {
         // When the output does not keep up, the newest voice is dropped.
         let _ = ends.converted.push_partial_slice(converted);
     }
@@ -331,6 +400,13 @@ pub(crate) mod tests {
         Conversion::Timbre {
             source: Voiceprint::new(vec![0.1]),
             target: Voiceprint::new(vec![0.2]),
+        }
+    }
+
+    fn other_speakers() -> Conversion {
+        Conversion::Timbre {
+            source: Voiceprint::new(vec![0.1]),
+            target: Voiceprint::new(vec![0.9]),
         }
     }
 
@@ -384,7 +460,7 @@ pub(crate) mod tests {
         /// Hands over the first block whole. The thread forgets what came in while it warmed
         /// up, which would be the rest of a block it caught halfway.
         fn process_first(&mut self, stereo: &[f32]) -> Vec<f32> {
-            let _held = self.bridge.ends.lock().unwrap();
+            let _held = lock(&self.bridge.ends);
             let mut output = Vec::new();
             self.stage
                 .process(stereo, |voice| output.extend_from_slice(voice));
@@ -393,7 +469,7 @@ pub(crate) mod tests {
 
         /// Plays the part of the converter, which answers whenever it likes.
         fn feed(&self, converted: &[f32]) {
-            let mut ends = self.bridge.ends.lock().unwrap();
+            let mut ends = lock(&self.bridge.ends);
             let _ = ends
                 .as_mut()
                 .unwrap()
@@ -612,7 +688,7 @@ pub(crate) mod tests {
     fn a_converter_that_takes_long_on_its_first_piece_is_not_falling_behind() {
         let (rig, _release) = warmed_up_gate();
 
-        assert!(rig.bridge.shared.is_routing.load(Ordering::Relaxed));
+        assert!(rig.bridge.shared.is_routing());
         assert_eq!(rig.errors(), []);
     }
 
@@ -644,7 +720,7 @@ pub(crate) mod tests {
 
         rig.bridge.route(Some(&conversion()));
 
-        assert!(rig.bridge.shared.is_routing.load(Ordering::Relaxed));
+        assert!(rig.bridge.shared.is_routing());
         let voice = ramp(0, 480);
         assert_ne!(rig.process(&voice), voice);
     }
@@ -693,15 +769,12 @@ pub(crate) mod tests {
         rig.bridge.route(Some(&conversion()));
         rig.process(&[]);
         rig.feed(&mono(0, PRIME));
-        let generation = rig.bridge.shared.generation.load(Ordering::Relaxed);
+        let generation = rig.bridge.shared.generation();
 
         rig.bridge.route(Some(&conversion()));
 
         assert_eq!(converter.started.lock().unwrap().len(), 1);
-        assert_eq!(
-            rig.bridge.shared.generation.load(Ordering::Relaxed),
-            generation
-        );
+        assert_eq!(rig.bridge.shared.generation(), generation);
         // The cushion of the first start plays out, and then what was converted.
         for _ in 0..CUSHION / PIECE {
             rig.process(&ramp(0, PIECE));
@@ -744,7 +817,7 @@ pub(crate) mod tests {
         let converter = Arc::new(FakeConverter::default());
         let rig = Rig::new(converter.clone());
         rig.bridge.route(Some(&trained(0.0)));
-        let generation = rig.bridge.shared.generation.load(Ordering::Relaxed);
+        let generation = rig.bridge.shared.generation();
 
         rig.bridge.route(Some(&trained(3.0)));
         rig.bridge.route(Some(&trained(3.0)));
@@ -752,10 +825,7 @@ pub(crate) mod tests {
 
         assert_eq!(converter.started.lock().unwrap().len(), 1);
         assert_eq!(*converter.retuned.lock().unwrap(), [3.0, -2.0]);
-        assert_eq!(
-            rig.bridge.shared.generation.load(Ordering::Relaxed),
-            generation
-        );
+        assert_eq!(rig.bridge.shared.generation(), generation);
     }
 
     #[test]
@@ -792,5 +862,76 @@ pub(crate) mod tests {
             rig.errors(),
             [AppEvent::error(Message::text(TextKey::AiTrainedTooSlow))]
         );
+    }
+
+    /// Fails like a converter that panics, and counts how many pieces it was asked to convert.
+    struct Panicking(AtomicU64);
+
+    impl SpeechConverter for Panicking {
+        fn start(&self, _: &Conversion) {}
+
+        fn convert(&self, _: &[f32]) -> Result<Vec<f32>, Failure> {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            panic!("the converter fails");
+        }
+    }
+
+    #[test]
+    fn a_converter_that_panics_goes_back_to_the_plain_voice_and_says_so() {
+        let mut rig = Rig::new(Arc::new(Panicking(AtomicU64::new(0))));
+        rig.bridge.route(Some(&conversion()));
+        rig.process(&ramp(0, PIECE));
+
+        eventually("the failure was not reported", || !rig.errors().is_empty());
+
+        let voice = ramp(0, 700);
+        assert_eq!(rig.process(&voice), voice);
+        assert_eq!(rig.errors().len(), 1);
+    }
+
+    #[test]
+    fn a_conversion_started_after_a_panic_tries_the_converter_again() {
+        let converter = Arc::new(Panicking(AtomicU64::new(0)));
+        let mut rig = Rig::new(converter.clone());
+        rig.bridge.route(Some(&conversion()));
+        rig.process(&ramp(0, PIECE));
+        eventually("the failure was not reported", || !rig.errors().is_empty());
+
+        rig.bridge.route(Some(&conversion()));
+
+        // The thread drops what came before it noticed the new conversion, so the voice goes on.
+        eventually("the converter was not asked again", || {
+            rig.process(&ramp(0, PIECE));
+            converter.0.load(Ordering::Relaxed) >= 2
+        });
+    }
+
+    #[test]
+    fn switching_the_kind_of_conversion_changes_what_a_slow_converter_is_told() {
+        let (mut rig, release) = warmed_up_gate();
+        // The same bridge goes on to a trained voice, whose thread is the one that is running.
+        rig.bridge.route(Some(&trained(0.0)));
+        assert_eq!(rig.bridge.shared.too_slow(), TextKey::AiTrainedTooSlow);
+        rig.bridge.route(Some(&conversion()));
+        assert_eq!(rig.bridge.shared.too_slow(), TextKey::AiTooSlow);
+        rig.bridge.route(Some(&trained(0.0)));
+        drop(release);
+
+        eventually("the thread did not warm up", || {
+            rig.process(&ramp(0, PIECE));
+            rig.bridge.shared.is_routing()
+        });
+        assert_eq!(rig.bridge.shared.too_slow(), TextKey::AiTrainedTooSlow);
+    }
+
+    #[test]
+    fn giving_up_an_old_conversion_leaves_the_new_one_running() {
+        let rig = Rig::new(Arc::new(FakeConverter::default()));
+        rig.bridge.route(Some(&conversion()));
+        let old = rig.bridge.shared.generation();
+        rig.bridge.route(Some(&other_speakers()));
+
+        assert!(!rig.bridge.shared.stop_if_current(old));
+        assert!(rig.bridge.shared.is_routing());
     }
 }

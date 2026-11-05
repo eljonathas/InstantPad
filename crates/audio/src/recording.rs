@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::Duration;
 
+use instantpad_application::sync::lock;
 use rtrb::{Consumer, Producer, RingBuffer};
 
 use crate::format::{MAX_SPEECH_SECONDS, downmix, frames_for};
@@ -99,14 +100,14 @@ impl Recorder {
 
     /// Follows another microphone, or none, and keeps what the last one still had.
     pub(crate) fn attach(&self, ring: Option<Consumer<f32>>) {
-        let mut kept = self.kept.lock().unwrap();
+        let mut kept = lock(&self.kept);
         kept.collect();
         kept.ring = ring;
     }
 
     /// Starts over, dropping anything recorded before.
     pub(crate) fn start(&self) {
-        let mut kept = self.kept.lock().unwrap();
+        let mut kept = lock(&self.kept);
         kept.forget();
         self.is_recording.store(true, Ordering::Relaxed);
         drop(kept);
@@ -119,14 +120,14 @@ impl Recorder {
 
     /// What has been recorded so far, while the recording goes on.
     pub(crate) fn peek(&self) -> Vec<f32> {
-        let mut kept = self.kept.lock().unwrap();
+        let mut kept = lock(&self.kept);
         kept.collect();
         kept.speech.clone()
     }
 
     pub(crate) fn stop(&self) -> Vec<f32> {
         self.is_recording.store(false, Ordering::Relaxed);
-        let mut kept = self.kept.lock().unwrap();
+        let mut kept = lock(&self.kept);
         kept.collect();
         std::mem::take(&mut kept.speech)
     }
@@ -140,7 +141,7 @@ fn drain(kept: Weak<Mutex<Kept>>, is_recording: Arc<AtomicBool>) {
             return;
         };
         if is_recording.load(Ordering::Relaxed) {
-            kept.lock().unwrap().collect();
+            lock(&kept).collect();
             drop(kept);
             thread::sleep(DRAIN_EVERY);
         } else {

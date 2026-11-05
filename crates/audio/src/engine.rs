@@ -14,6 +14,7 @@ use instantpad_application::ports::{
     AudioDevice, AudioMix, AudioRouter, DeviceRole, EventSink, NowPlaying, PlaybackTag,
     SoundPlayer, SpeechConverter, StreamStop, VoiceChanger, VoiceRecorder, Waveform,
 };
+use instantpad_application::sync::lock;
 use instantpad_domain::cuts::Cut;
 use instantpad_domain::voice::{Conversion, VoiceChain};
 use tokio::sync::OnceCell;
@@ -122,12 +123,12 @@ impl Output {
     }
 
     fn with_voices<R>(&self, work: impl FnOnce(&mut MixerHandle) -> R) -> Option<R> {
-        self.voices.lock().unwrap().as_mut().map(work)
+        lock(&self.voices).as_mut().map(work)
     }
 
     async fn open(&self, device_id: Option<&str>) -> Result<(), Failure> {
         // The old device is closed first, and its voices would never finish on the new one.
-        *self.voices.lock().unwrap() = None;
+        *lock(&self.voices) = None;
         let health = self.health.renew();
 
         let Some(id) = device_id.map(str::to_owned) else {
@@ -143,7 +144,7 @@ impl Output {
             })
             .await?;
 
-        *self.voices.lock().unwrap() = Some(handle);
+        *lock(&self.voices) = Some(handle);
         Ok(())
     }
 }
@@ -162,12 +163,12 @@ impl HealthSlot {
     /// have stopped, no longer speaks for the role.
     fn renew(&self) -> Arc<StreamHealth> {
         let health = Arc::new(StreamHealth::default());
-        *self.0.lock().unwrap() = health.clone();
+        *lock(&self.0) = health.clone();
         health
     }
 
     fn take_stop(&self) -> Option<StreamStop> {
-        self.0.lock().unwrap().take_stop()
+        lock(&self.0).take_stop()
     }
 }
 
@@ -181,8 +182,9 @@ struct Microphone {
     health: HealthSlot,
 }
 
-/// Plays sounds and routes the microphone, with nothing in the audio callbacks that locks,
-/// allocates or waits.
+/// Plays sounds and routes the microphone, with nothing in the audio callbacks that allocates or
+/// waits. The one lock a callback takes is the microphone slot's `try_lock`, which gives up
+/// instead of waiting.
 pub struct AudioEngine {
     ai: AiBridge,
     recorder: Recorder,
@@ -218,7 +220,7 @@ impl AudioEngine {
     }
 
     async fn load(&self, path: &str) -> Result<Arc<SoundClip>, Failure> {
-        let entry = self.clips.lock().unwrap().entry(path);
+        let entry = lock(&self.clips).entry(path);
 
         // A failed load leaves the entry empty, so it is retried next time.
         let clip = entry
@@ -232,7 +234,7 @@ impl AudioEngine {
             .await?;
         let clip = clip.clone();
         // The clip in hand keeps itself from being dropped, so a sound just loaded stays.
-        self.clips.lock().unwrap().trim();
+        lock(&self.clips).trim();
         Ok(clip)
     }
 
@@ -243,7 +245,7 @@ impl AudioEngine {
         } else {
             clip.peaks_of(range)
         };
-        let mut started = self.started.lock().unwrap();
+        let mut started = lock(&self.started);
         started.retain(|item| item.tag != tag);
         started.push(Started {
             tag,
@@ -321,7 +323,7 @@ impl SoundPlayer for AudioEngine {
     }
 
     fn forget(&self, path: &str) {
-        self.clips.lock().unwrap().entries.remove(path);
+        lock(&self.clips).entries.remove(path);
     }
 
     fn stop(&self, tag: PlaybackTag) {
@@ -343,7 +345,7 @@ impl SoundPlayer for AudioEngine {
     }
 
     fn now_playing(&self) -> Option<NowPlaying> {
-        let mut started = self.started.lock().unwrap();
+        let mut started = lock(&self.started);
         started.retain(|item| self.is_playing(item.tag));
         let newest = started.last()?;
 
@@ -367,8 +369,8 @@ impl AudioRouter for AudioEngine {
 
     async fn set_microphone(&self, device_id: Option<&str>) -> Result<(), Failure> {
         let microphone = &self.microphone;
-        *microphone.reader.lock().unwrap() = None;
-        *microphone.hearing.lock().unwrap() = None;
+        *lock(&microphone.reader) = None;
+        *lock(&microphone.hearing) = None;
         self.recorder.attach(None);
         self.ai.attach(None);
         microphone.level.store(0.0);
@@ -398,8 +400,8 @@ impl AudioRouter for AudioEngine {
         self.recorder.attach(Some(recording));
         self.ai.attach(Some(converting));
 
-        *microphone.reader.lock().unwrap() = Some(reader);
-        *microphone.hearing.lock().unwrap() = Some(hearing);
+        *lock(&microphone.reader) = Some(reader);
+        *lock(&microphone.hearing) = Some(hearing);
         Ok(())
     }
 

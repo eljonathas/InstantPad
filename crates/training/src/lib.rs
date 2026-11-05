@@ -140,9 +140,8 @@ impl KitTrainer {
         self.home.join("voices").join(job)
     }
 
-    /// A command with the folders of the training, and nothing of the app's environment but
-    /// what the programs need: nothing of a Python the user may have, and none of the settings
-    /// of uv or of the loader that something else set.
+    /// A command with the folders of the training, and none of the settings of a Python, pip,
+    /// uv or loader the user may have.
     fn command(&self, program: &Path) -> Command {
         let mut command = Command::new(program);
         command.env_clear();
@@ -447,49 +446,13 @@ fn join(lines: &VecDeque<String>) -> String {
         .join(" ")
 }
 
-/// Whether a variable of the app's environment reaches the programs of the training: what they
-/// need to find their files, the network and the card, and no setting of Python, uv or the
-/// loader.
+/// Whether a variable of the app's environment reaches the programs of the training. All of it
+/// does, which is what Windows, the driver of the card and a proxy need, except what would point
+/// Python, pip, uv or the loader somewhere else than the folders the app installed.
 fn passes_to_programs(name: &str) -> bool {
-    const NAMES: [&str; 31] = [
-        "PATH",
-        "PATHEXT",
-        "HOME",
-        "USER",
-        "LOGNAME",
-        "USERNAME",
-        "USERPROFILE",
-        "HOMEDRIVE",
-        "HOMEPATH",
-        "APPDATA",
-        "LOCALAPPDATA",
-        "PROGRAMDATA",
-        "SYSTEMROOT",
-        "SYSTEMDRIVE",
-        "WINDIR",
-        "COMSPEC",
-        "TEMP",
-        "TMP",
-        "TMPDIR",
-        "LANG",
-        "NUMBER_OF_PROCESSORS",
-        "PROCESSOR_ARCHITECTURE",
-        "LD_LIBRARY_PATH",
-        "HTTP_PROXY",
-        "HTTPS_PROXY",
-        "NO_PROXY",
-        "ALL_PROXY",
-        "SSL_CERT_FILE",
-        "SSL_CERT_DIR",
-        "REQUESTS_CA_BUNDLE",
-        "CURL_CA_BUNDLE",
-    ];
-    NAMES
-        .iter()
-        .any(|allowed| name.eq_ignore_ascii_case(allowed))
-        || ["LC_", "CUDA_", "NVIDIA_"]
-            .iter()
-            .any(|prefix| name.to_ascii_uppercase().starts_with(prefix))
+    const PREFIXES: [&str; 6] = ["PYTHON", "PIP_", "UV_", "CONDA", "VIRTUAL_ENV", "LD_PRELOAD"];
+    let name = name.to_ascii_uppercase();
+    !PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }
 
 /// The file name at the end of an address, with the `+` of PyTorch's versions decoded.
@@ -919,7 +882,7 @@ mod tests {
     }
 
     #[test]
-    fn programs_get_what_they_need_of_the_environment_and_no_setting_of_python_or_uv() {
+    fn programs_get_the_environment_without_the_settings_of_python_pip_uv_or_the_loader() {
         for needed in [
             "PATH",
             "Path",
@@ -928,6 +891,8 @@ mod tests {
             "HTTPS_PROXY",
             "CUDA_VISIBLE_DEVICES",
             "LC_ALL",
+            "ProgramFiles",
+            "XDG_CACHE_HOME",
         ] {
             assert!(passes_to_programs(needed), "{needed}");
         }
@@ -938,7 +903,8 @@ mod tests {
             "UV_PYTHON_INSTALL_MIRROR",
             "LD_PRELOAD",
             "PYTHONSTARTUP",
-            "AWS_SECRET_ACCESS_KEY",
+            "PIP_INDEX_URL",
+            "CONDA_PREFIX",
         ] {
             assert!(!passes_to_programs(unwanted), "{unwanted}");
         }

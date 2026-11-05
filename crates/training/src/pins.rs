@@ -92,6 +92,7 @@ pub(crate) fn environment(on_card: bool) -> Environment {
 }
 
 /// A fingerprint of what an install of these packages is, to tell when the app pins others.
+/// The pinned Python is part of the file it hashes.
 pub(crate) fn fingerprint(on_card: bool) -> String {
     use sha2::{Digest, Sha256};
 
@@ -101,11 +102,12 @@ pub(crate) fn fingerprint(on_card: bool) -> String {
         system::PROCESSOR
     };
     let digest = Sha256::digest(text.as_bytes());
-    digest
-        .iter()
-        .take(8)
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    instantpad_download::hex(&digest[..8])
+}
+
+/// Which uv is pinned, to tell when the app pins another.
+pub(crate) fn uv_id() -> String {
+    format!("{UV_VERSION}-{}", system::UV_SHA256)
 }
 
 pub(crate) fn installed_megabytes(on_card: bool) -> u32 {
@@ -161,6 +163,29 @@ mod tests {
         assert!(has_cuda(true));
         assert!(!has_cuda(false));
         assert!(environment(true).wheel_bytes() > environment(false).wheel_bytes());
+    }
+
+    #[test]
+    fn the_sizes_the_app_counts_for_the_kit_are_the_ones_the_kit_pins() {
+        // The pinned files are listed between RVC's archive and the dataset, and each size is a
+        // number alone on its line.
+        let pins = VOICEKIT
+            .split_once("RVC_ARCHIVE = (")
+            .and_then(|(_, rest)| rest.split_once("# Hi-Fi TTS"))
+            .map(|(pins, _)| pins)
+            .unwrap();
+        let sizes: u64 = pins
+            .lines()
+            .filter_map(|line| {
+                line.trim()
+                    .strip_suffix(',')?
+                    .replace('_', "")
+                    .parse::<u64>()
+                    .ok()
+            })
+            .sum();
+
+        assert_eq!(sizes, KIT_DOWNLOAD_BYTES);
     }
 
     #[test]

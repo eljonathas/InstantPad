@@ -2,12 +2,19 @@
 
 use std::io::{self, Write};
 
+/// The size of the data of `samples` and of the whole file, if both fit in the header. The
+/// header adds 36 bytes to the data, and that sum must fit as well.
+fn sizes(samples: usize) -> Option<(u32, u32)> {
+    let data = u32::try_from(samples.checked_mul(2)?).ok()?;
+    Some((data, data.checked_add(36)?))
+}
+
 /// Mono 16-bit PCM at `rate`, with the samples clipped to -1..1.
 pub(crate) fn write(target: &mut impl Write, speech: &[f32], rate: u32) -> io::Result<()> {
-    let data = u32::try_from(speech.len() * 2)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "take too long for a WAV"))?;
+    let (data, riff) = sizes(speech.len())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "take too long for a WAV"))?;
     target.write_all(b"RIFF")?;
-    target.write_all(&(36 + data).to_le_bytes())?;
+    target.write_all(&riff.to_le_bytes())?;
     target.write_all(b"WAVEfmt ")?;
     target.write_all(&16_u32.to_le_bytes())?;
     target.write_all(&1_u16.to_le_bytes())?; // PCM
@@ -33,6 +40,15 @@ pub(crate) fn write(target: &mut impl Write, speech: &[f32], rate: u32) -> io::R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_take_whose_header_would_overflow_is_refused() {
+        assert_eq!(sizes(4), Some((8, 44)));
+        let biggest = (u32::MAX as usize - 36) / 2;
+        assert!(sizes(biggest).is_some());
+        assert_eq!(sizes(biggest + 1), None);
+        assert_eq!(sizes(usize::MAX), None);
+    }
 
     #[test]
     fn a_take_becomes_a_mono_16_bit_wav() {

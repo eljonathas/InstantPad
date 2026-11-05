@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use instantpad_application::hotkeys::HotkeyCommand;
 use instantpad_application::ports::HotkeyHost;
+use instantpad_application::sync::lock;
 use instantpad_domain::hotkeys::Hotkey;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_global_shortcut::{
@@ -28,7 +29,7 @@ impl GlobalHotkeys {
     }
 
     fn command_for(&self, shortcut: &Shortcut) -> Option<HotkeyCommand> {
-        let commands = self.commands.lock().expect("hotkey lock poisoned");
+        let commands = lock(&self.commands);
         commands.get(&shortcut.id()).cloned()
     }
 }
@@ -40,7 +41,7 @@ impl HotkeyHost for GlobalHotkeys {
         };
         let registered = self.app.global_shortcut().register(shortcut).is_ok();
         if registered {
-            let mut commands = self.commands.lock().expect("hotkey lock poisoned");
+            let mut commands = lock(&self.commands);
             commands.insert(shortcut.id(), command);
         }
         registered
@@ -48,7 +49,7 @@ impl HotkeyHost for GlobalHotkeys {
 
     fn clear(&self) {
         let _ = self.app.global_shortcut().unregister_all();
-        self.commands.lock().expect("hotkey lock poisoned").clear();
+        lock(&self.commands).clear();
     }
 }
 

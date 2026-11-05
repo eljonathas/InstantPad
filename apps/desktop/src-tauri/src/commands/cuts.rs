@@ -37,7 +37,7 @@ pub async fn preview_cut(core: State<'_, Core>, start_ms: u32, end_ms: u32) -> R
     core.cuts.preview(start_ms, end_ms).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn stop_cut_preview(core: State<'_, Core>) {
     core.cuts.stop_preview();
@@ -49,7 +49,7 @@ pub async fn place_cuts(core: State<'_, Core>, pieces: Vec<CutPiece>) -> Result<
     core.cuts.place(pieces).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn close_cut_editor(core: State<'_, Core>) {
     core.cuts.close();

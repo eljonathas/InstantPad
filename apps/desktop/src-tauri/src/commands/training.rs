@@ -16,7 +16,7 @@ pub async fn accept_training(core: State<'_, Core>) -> Result<(), ()> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn start_training_take(core: State<'_, Core>) {
     core.training.start_take();
@@ -36,7 +36,7 @@ pub async fn import_training_take(core: State<'_, Core>, path: String) -> Result
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn remove_training_take(core: State<'_, Core>, id: String) {
     core.training.remove_take(&id);
@@ -50,25 +50,25 @@ pub async fn train_voice(core: State<'_, Core>) -> Result<(), ()> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn stop_training(core: State<'_, Core>) {
     core.training.stop();
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn discard_training(core: State<'_, Core>) {
     core.training.discard();
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn close_training(core: State<'_, Core>) {
     core.training.close();
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn remove_training_tools(core: State<'_, Core>) {
     core.training.remove_tools();

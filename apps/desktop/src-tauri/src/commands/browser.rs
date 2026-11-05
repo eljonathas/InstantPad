@@ -60,7 +60,7 @@ pub async fn save_to_computer(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn suggested_file_name(source: SoundSource) -> String {
     source.suggested_file_name()

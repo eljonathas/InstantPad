@@ -73,6 +73,8 @@ impl Color {
 
     /// Forgets the voice heard so far, so that old audio does not come out of a tail.
     pub(crate) fn reset(&mut self) {
+        self.growl = Growl::new();
+        self.brightness.state = [0.0; 2];
         self.whisper.is_idle = true;
         self.echo.is_idle = true;
     }
@@ -149,6 +151,8 @@ impl Growl {
             return;
         }
         let drive = 1.0 + (GROWL_MAX_DRIVE - 1.0) * amount;
+        // The same for the whole block, and a power is slow.
+        let loudness = drive.powf(0.75);
         for sample in block {
             let low = self
                 .low
@@ -172,7 +176,7 @@ impl Growl {
             let sign = if self.is_flipped { 1.0 } else { -1.0 };
             let sub = self.smooth.process(sign * self.envelope);
 
-            let driven = (*sample * drive).tanh() / drive.powf(0.75);
+            let driven = (*sample * drive).tanh() / loudness;
             *sample += (driven - *sample) * amount + sub * GROWL_SUB_LEVEL * amount;
         }
     }
@@ -680,6 +684,25 @@ mod tests {
         let wobbled = run(only(|color| color.tremolo = 1.0), &impulse);
 
         assert_eq!(wobbled[0], 0.5);
+    }
+
+    #[test]
+    fn a_reset_leaves_no_trace_of_the_voice_in_the_growl_and_the_shelf() {
+        let both = VoiceColor {
+            growl: 1.0,
+            brightness: 1.0,
+            ..VoiceColor::default()
+        };
+        let mut processor = Color::new();
+        processor.process(&mut voice(BLOCK), both);
+
+        processor.reset();
+
+        assert_eq!(processor.growl.envelope, 0.0);
+        assert_eq!(processor.brightness.state, [0.0; 2]);
+        let mut quiet = [0.0; BLOCK];
+        processor.process(&mut quiet, both);
+        assert!(quiet.iter().all(|&sample| sample == 0.0));
     }
 
     #[test]

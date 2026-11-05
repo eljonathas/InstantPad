@@ -14,7 +14,7 @@ use instantpad_application::sync::lock;
 use instantpad_domain::voice::Conversion;
 use rtrb::{Consumer, Producer, RingBuffer};
 
-use crate::format::{CHANNELS, downmix, frames_for};
+use crate::format::{CHANNELS, frames_for, push_downmixed};
 use crate::worker::Worker;
 
 const CAPACITY: usize = frames_for(2000);
@@ -150,9 +150,7 @@ impl AiStage {
 
         for piece in stereo.chunks(PIECE * CHANNELS) {
             // A full ring means the converter is not taking the voice, which the thread notices.
-            for sample in downmix(piece) {
-                let _ = self.to_ai.push(sample);
-            }
+            push_downmixed(&mut self.to_ai, piece);
             if !self.is_primed && self.from_ai.slots() >= PRIME {
                 self.is_primed = true;
             }

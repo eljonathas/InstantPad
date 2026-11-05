@@ -8,7 +8,7 @@ use std::time::Duration;
 use instantpad_application::sync::lock;
 use rtrb::{Consumer, Producer, RingBuffer};
 
-use crate::format::{MAX_SPEECH_SECONDS, downmix, frames_for};
+use crate::format::{MAX_SPEECH_SECONDS, frames_for, push_downmixed};
 use crate::worker::Worker;
 
 /// Mono samples the callback can leave before the drain thread has to come, which is a second.
@@ -30,11 +30,7 @@ impl RecordTap {
             return;
         }
         // A ring that is full means nobody drains it, and the newest audio is dropped.
-        for sample in downmix(stereo) {
-            if self.ring.push(sample).is_err() {
-                break;
-            }
-        }
+        push_downmixed(&mut self.ring, stereo);
     }
 }
 

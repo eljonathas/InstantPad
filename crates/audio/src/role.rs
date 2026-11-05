@@ -42,7 +42,17 @@ impl<S: 'static> Role<S> {
 
         let (reply, answer) = oneshot::channel();
         let job = Box::new(move |stream: &mut Option<S>| {
-            let _ = reply.send(work(stream));
+            // The caller gave up on a job that waited behind a stuck one. Running it now would
+            // open a stream that nobody reads.
+            if reply.is_closed() {
+                return;
+            }
+            let result = work(stream);
+            // A caller that gave up while the work ran does not know about the stream it left,
+            // and would never close it.
+            if reply.send(result).is_err() {
+                *stream = None;
+            }
         });
         self.jobs.send(job).map_err(|_| not_responding())?;
 
@@ -79,6 +89,53 @@ mod tests {
         );
         assert_eq!(other, Ok(()));
         drop(release);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_job_the_caller_gave_up_on_is_not_run_later() {
+        let role = Role::<()>::spawn("stuck");
+        let (release, wait) = mpsc::channel::<()>();
+        let (ran, was_run) = mpsc::channel::<()>();
+        let _ = role
+            .run(move |_| {
+                let _ = wait.recv();
+                Ok(())
+            })
+            .await;
+        let _ = role
+            .run(move |_| {
+                let _ = ran.send(());
+                Ok(())
+            })
+            .await;
+        tokio::time::resume();
+
+        drop(release);
+        role.run(|_| Ok(())).await.unwrap();
+
+        assert!(was_run.try_recv().is_err());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stream_opened_after_the_caller_gave_up_is_closed() {
+        let role = Role::<std::sync::Arc<()>>::spawn("late");
+        let stream = std::sync::Arc::new(());
+        let kept = stream.clone();
+        let (release, wait) = mpsc::channel::<()>();
+        let result = role
+            .run(move |state| {
+                let _ = wait.recv();
+                *state = Some(stream);
+                Ok(())
+            })
+            .await;
+        tokio::time::resume();
+        assert!(result.is_err());
+
+        drop(release);
+        role.run(|_| Ok(())).await.unwrap();
+
+        assert_eq!(std::sync::Arc::strong_count(&kept), 1);
     }
 
     #[tokio::test]

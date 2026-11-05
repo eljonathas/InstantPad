@@ -450,7 +450,14 @@ fn join(lines: &VecDeque<String>) -> String {
 /// does, which is what Windows, the driver of the card and a proxy need, except what would point
 /// Python, pip, uv or the loader somewhere else than the folders the app installed.
 fn passes_to_programs(name: &str) -> bool {
-    const PREFIXES: [&str; 6] = ["PYTHON", "PIP_", "UV_", "CONDA", "VIRTUAL_ENV", "LD_PRELOAD"];
+    const PREFIXES: [&str; 6] = [
+        "PYTHON",
+        "PIP_",
+        "UV_",
+        "CONDA",
+        "VIRTUAL_ENV",
+        "LD_PRELOAD",
+    ];
     let name = name.to_ascii_uppercase();
     !PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }

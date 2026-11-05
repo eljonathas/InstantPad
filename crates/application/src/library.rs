@@ -47,6 +47,7 @@ impl SoundLibrary {
 
     /// Gives the sound a permanent file, reusing the one it may have from being tried out.
     pub async fn ensure_downloaded(&self, source: &SoundSource) -> Result<(), Failure> {
+        let source = &self.trusted(source)?;
         if self.files.exists(&source.path) {
             return Ok(());
         }
@@ -65,6 +66,7 @@ impl SoundLibrary {
     /// A file to listen to without keeping it: the permanent one if the sound has it, or else
     /// a temporary one. Only `ensure_downloaded` makes a sound stay on disk.
     pub async fn file_to_hear(&self, source: &SoundSource) -> Result<String, Failure> {
+        let source = &self.trusted(source)?;
         if self.files.exists(&source.path) {
             return Ok(source.path.clone());
         }
@@ -80,6 +82,22 @@ impl SoundLibrary {
         Ok(preview)
     }
 
+    /// The webview sends back the sounds it was shown, but it is not trusted with where files
+    /// live or what is fetched. A catalog sound gets the path the store itself would give it,
+    /// and a sound without a URL is only accepted if its file is already in the store.
+    pub fn trusted(&self, source: &SoundSource) -> Result<SoundSource, Failure> {
+        let refused = || Failure::text(TextKey::SoundFileMissing);
+        match source.sound_url.as_deref() {
+            Some(url) if self.catalog.accepts(url) => Ok(SoundSource {
+                path: self.files.path_for_download(url),
+                ..source.clone()
+            }),
+            Some(_) => Err(refused()),
+            None if self.files.is_stored(&source.path) => Ok(source.clone()),
+            None => Err(refused()),
+        }
+    }
+
     pub fn clear_previews(&self) {
         self.files.clear_previews();
     }
@@ -90,6 +108,7 @@ impl SoundLibrary {
         source: &SoundSource,
         destination: &str,
     ) -> Result<(), Failure> {
+        let source = &self.trusted(source)?;
         self.ensure_downloaded(source).await?;
         self.files.export(&source.path, destination)
     }

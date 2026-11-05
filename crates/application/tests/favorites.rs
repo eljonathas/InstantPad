@@ -44,3 +44,18 @@ async fn a_local_file_that_is_gone_cannot_become_a_favorite() {
 
     assert!(world.favorites.list().is_empty());
 }
+
+#[tokio::test]
+async fn two_clicks_while_it_downloads_make_one_favorite() {
+    let world = World::new();
+    let sound = online("a");
+
+    let (first, second) = tokio::join!(
+        world.favorites.toggle(&sound),
+        world.favorites.toggle(&sound)
+    );
+    assert!(first.unwrap());
+    assert!(second.unwrap());
+
+    assert_eq!(world.favorites.list().len(), 1);
+}

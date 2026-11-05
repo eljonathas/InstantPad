@@ -421,7 +421,13 @@ impl SoundCatalog for FakeCatalog {
 
     async fn download(&self, sound_url: &str, _destination: &str) -> Result<(), Failure> {
         self.downloaded.lock().unwrap().push(sound_url.to_owned());
+        // A real download takes time, and other work gets in meanwhile.
+        tokio::task::yield_now().await;
         Ok(())
+    }
+
+    fn accepts(&self, sound_url: &str) -> bool {
+        sound_url.starts_with("https://site/")
     }
 }
 
@@ -473,6 +479,10 @@ impl SoundFileStore for FakeFileStore {
 
     fn exists(&self, path: &str) -> bool {
         self.files.lock().unwrap().contains(path)
+    }
+
+    fn is_stored(&self, path: &str) -> bool {
+        path.starts_with("store/") || self.files.lock().unwrap().contains(path)
     }
 }
 

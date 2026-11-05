@@ -443,6 +443,10 @@ pub trait SoundCatalog: Send + Sync {
     async fn trending(&self, region: &str, page: u32) -> Result<CatalogPage, Failure>;
 
     async fn download(&self, sound_url: &str, destination: &str) -> Result<(), Failure>;
+
+    /// Whether `sound_url` is one of the catalog's own sound files. The webview sends these
+    /// URLs back, so nothing else may be fetched.
+    fn accepts(&self, sound_url: &str) -> bool;
 }
 
 /// The folder where the app keeps its audio files, and the one for sounds only heard so far.
@@ -468,6 +472,10 @@ pub trait SoundFileStore: Send + Sync {
     fn delete(&self, stored_path: &str);
 
     fn exists(&self, path: &str) -> bool;
+
+    /// Whether `path` is a file of the store itself. The webview sends paths back, so nothing
+    /// outside the store may be read or overwritten.
+    fn is_stored(&self, path: &str) -> bool;
 }
 
 /// Finds, downloads and applies new versions of the app.

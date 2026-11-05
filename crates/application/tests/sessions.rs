@@ -617,3 +617,51 @@ fn a_country_the_settings_do_not_offer_is_refused() {
 
     assert_eq!(setup.session.view().trending_region, "fr");
 }
+
+#[tokio::test]
+async fn a_path_outside_the_store_sent_by_the_webview_is_refused() {
+    let world = World::new();
+    let foreign = SoundSource {
+        path: "/home/me/.config/autostart/a.desktop".to_owned(),
+        sound_url: None,
+        ..online()
+    };
+    rows(&world).preview(foreign.clone()).await;
+    rows(&world).add_to_pad(foreign.clone(), Some(0)).await;
+    rows(&world).save_to_computer(foreign, "/tmp/out.mp3").await;
+
+    assert_eq!(
+        *world.player.previewed.lock().unwrap(),
+        Vec::<String>::new()
+    );
+    assert!(world.files.exported.lock().unwrap().is_empty());
+    assert!(world.favorites.list().is_empty());
+}
+
+#[tokio::test]
+async fn a_url_of_another_site_sent_by_the_webview_is_not_downloaded() {
+    let world = World::new();
+    let foreign = SoundSource {
+        sound_url: Some("https://evil.example/payload".to_owned()),
+        ..online()
+    };
+
+    rows(&world).add_to_pad(foreign.clone(), Some(0)).await;
+    rows(&world).toggle_favorite(foreign).await;
+
+    assert!(world.catalog.downloaded.lock().unwrap().is_empty());
+    assert!(world.favorites.list().is_empty());
+}
+
+#[tokio::test]
+async fn the_path_of_a_catalog_sound_is_the_one_the_store_gives_it() {
+    let world = World::new();
+    let lying = SoundSource {
+        path: "/etc/cron.d/job".to_owned(),
+        ..online()
+    };
+
+    rows(&world).toggle_favorite(lying).await;
+
+    assert_eq!(world.favorites.list()[0].path, online().path);
+}

@@ -93,7 +93,7 @@ pub fn build(app: &AppHandle, hotkey_host: Arc<dyn HotkeyHost>) -> tauri::Result
         &folder,
     ))));
     let library = Arc::new(SoundLibrary::new(
-        Arc::new(MyInstantsCatalog::new()),
+        Arc::new(MyInstantsCatalog::new().map_err(std::io::Error::other)?),
         files.clone(),
         settings.clone(),
     ));

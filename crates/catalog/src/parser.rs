@@ -39,8 +39,16 @@ pub fn parse(html: &str, base_url: &str, page: u32) -> CatalogPage {
 
     CatalogPage {
         sounds,
-        has_more: html.contains(&format!("page={}", page + 1)),
+        has_more: links_to_page(html, page + 1),
     }
+}
+
+/// Whether the page links to `page=N`, and not to `page=N0` or `page=N5`.
+fn links_to_page(html: &str, page: u32) -> bool {
+    let needle = format!("page={page}");
+    html.match_indices(&needle).any(|(start, _)| {
+        !html[start + needle.len()..].starts_with(|next: char| next.is_ascii_digit())
+    })
 }
 
 #[cfg(test)]
@@ -88,5 +96,13 @@ mod tests {
     #[test]
     fn a_page_without_sounds_is_empty() {
         assert!(parse(EMPTY, BASE_URL, 1).sounds.is_empty());
+    }
+
+    #[test]
+    fn a_link_to_a_longer_page_number_is_not_the_next_page() {
+        let html = r#"<a href="/en/search/?name=a&page=20">20</a>"#;
+
+        assert!(!parse(html, BASE_URL, 1).has_more);
+        assert!(parse(html, BASE_URL, 19).has_more);
     }
 }

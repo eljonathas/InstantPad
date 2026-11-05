@@ -5,7 +5,7 @@ use crate::composition::Core;
 
 /// Called once the interface knows its language and the system's locale. The rest loads in the
 /// background.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn start(
     app: AppHandle,

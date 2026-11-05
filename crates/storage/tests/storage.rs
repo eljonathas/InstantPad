@@ -343,3 +343,130 @@ fn importing_a_missing_file_fails() {
         TextKey::SoundCopyFailed,
     );
 }
+
+#[test]
+fn importing_a_different_file_with_the_same_name_keeps_both() {
+    let (dir, folder) = folder();
+    let store = FolderSoundStore::new(&folder);
+    fs::create_dir(dir.path().join("a")).unwrap();
+    fs::create_dir(dir.path().join("b")).unwrap();
+    fs::write(dir.path().join("a/boom.mp3"), b"first").unwrap();
+    fs::write(dir.path().join("b/boom.mp3"), b"second").unwrap();
+
+    let first = store
+        .import(dir.path().join("a/boom.mp3").to_str().unwrap())
+        .unwrap();
+    let second = store
+        .import(dir.path().join("b/boom.mp3").to_str().unwrap())
+        .unwrap();
+
+    assert_ne!(first, second);
+    assert_eq!(fs::read(first).unwrap(), b"first");
+    assert_eq!(fs::read(second).unwrap(), b"second");
+}
+
+#[test]
+fn a_file_of_the_store_reached_by_another_spelling_is_not_copied_onto_itself() {
+    let (dir, folder) = folder();
+    let store = FolderSoundStore::new(&folder);
+    let inside = dir.path().join("sounds").join("a.mp3");
+    fs::write(&inside, b"audio").unwrap();
+    let detour = dir
+        .path()
+        .join("sounds")
+        .join("..")
+        .join("sounds")
+        .join("a.mp3");
+
+    let stored = store.import(detour.to_str().unwrap()).unwrap();
+
+    assert_eq!(Path::new(&stored), inside);
+    assert_eq!(fs::read(inside).unwrap(), b"audio");
+}
+
+#[test]
+fn only_files_directly_in_the_sounds_folder_count_as_stored() {
+    let (dir, folder) = folder();
+    let store = FolderSoundStore::new(&folder);
+
+    assert!(store.is_stored(dir.path().join("sounds/a.mp3").to_str().unwrap()));
+    assert!(!store.is_stored(dir.path().join("board.json").to_str().unwrap()));
+    assert!(!store.is_stored(dir.path().join("sounds/../board.json").to_str().unwrap()));
+    assert!(!store.is_stored(dir.path().join("previews/a.mp3").to_str().unwrap()));
+    assert!(!store.is_stored("/etc/passwd"));
+}
+
+#[test]
+fn the_query_of_a_url_is_not_part_of_the_file_name() {
+    let (dir, folder) = folder();
+    let store = FolderSoundStore::new(&folder);
+
+    let path = store.path_for_download("https://site/media/sounds/a.mp3?v=2#top");
+
+    assert_eq!(Path::new(&path), dir.path().join("sounds/a.mp3"));
+}
+
+#[test]
+fn names_that_cannot_be_files_get_a_usable_name() {
+    let (dir, folder) = folder();
+    let store = FolderSoundStore::new(&folder);
+    let sounds = dir.path().join("sounds");
+
+    for (url, expected) in [
+        ("https://site/media/sounds/", "sound"),
+        ("https://site/media/sounds/..", "sound"),
+        ("https://site/media/sounds/NUL.mp3", "_NUL.mp3"),
+        ("https://site/media/sounds/a.mp3.", "a.mp3"),
+    ] {
+        assert_eq!(
+            Path::new(&store.path_for_download(url)),
+            sounds.join(expected),
+            "{url}"
+        );
+    }
+}
+
+#[test]
+fn a_file_that_cannot_be_read_is_never_saved_over() {
+    let (dir, folder) = folder();
+    // A folder where the file should be: reading it fails, but not with "not found".
+    fs::create_dir(dir.path().join("board.json")).unwrap();
+    let repository = JsonBoardRepository::new(&folder);
+
+    assert_eq!(repository.load(), PadBoard::default());
+
+    failed_with(repository.save(&PadBoard::default()), TextKey::SaveFailed);
+    assert!(dir.path().join("board.json").is_dir());
+}
+
+#[test]
+fn a_second_damaged_file_does_not_replace_the_first_backup() {
+    let (dir, folder) = folder();
+    let file = dir.path().join("settings.json");
+    fs::write(&file, "first damage").unwrap();
+    JsonSettingsRepository::new(&folder).load();
+    fs::write(&file, "second damage").unwrap();
+    JsonSettingsRepository::new(&folder).load();
+
+    assert_eq!(
+        fs::read_to_string(dir.path().join("settings.json.bak")).unwrap(),
+        "first damage"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn saved_files_can_only_be_read_by_their_owner() {
+    use std::os::unix::fs::PermissionsExt;
+    let (dir, folder) = folder();
+
+    JsonVoiceLibraryRepository::new(&folder)
+        .save(&VoiceLibrary::default())
+        .unwrap();
+
+    let mode = fs::metadata(dir.path().join("voices.json"))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o600);
+}

@@ -38,6 +38,9 @@ impl SoundRows {
     }
 
     pub async fn preview(&self, source: SoundSource) {
+        let Some(source) = self.trusted(source) else {
+            return;
+        };
         let result = async {
             let file = self.file_to_hear(&source).await?;
             self.board.stop_others();
@@ -50,6 +53,9 @@ impl SoundRows {
     }
 
     pub async fn play_in_game(&self, source: SoundSource) {
+        let Some(source) = self.trusted(source) else {
+            return;
+        };
         let result = async {
             let file = self.file_to_hear(&source).await?;
             self.board.stop_others();
@@ -63,6 +69,9 @@ impl SoundRows {
 
     /// Without a `slot`, the sound goes to the pad the user picked or to the first free one.
     pub async fn add_to_pad(&self, source: SoundSource, slot: Option<u32>) {
+        let Some(source) = self.trusted(source) else {
+            return;
+        };
         let target = match slot {
             Some(slot) => Some(self.board.pad_on_screen(slot)),
             None => self.board.pad_for_new_sound(),
@@ -85,6 +94,9 @@ impl SoundRows {
     }
 
     pub async fn toggle_favorite(&self, source: SoundSource) {
+        let Some(source) = self.trusted(source) else {
+            return;
+        };
         self.show_downloading(&source);
         match self.favorites.toggle(&source).await {
             Ok(is_favorite) => {
@@ -101,6 +113,9 @@ impl SoundRows {
     }
 
     pub async fn save_to_computer(&self, source: SoundSource, destination: &str) {
+        let Some(source) = self.trusted(source) else {
+            return;
+        };
         self.show_downloading(&source);
         match self.library.save_to_computer(&source, destination).await {
             Ok(()) => {
@@ -111,6 +126,17 @@ impl SoundRows {
                 self.show(Message::with(TextKey::Saved, [Message::plain(file)]));
             }
             Err(failure) => self.show_failure(&source, failure),
+        }
+    }
+
+    /// The source as the backend knows it, or `None` after telling the user it was refused.
+    fn trusted(&self, source: SoundSource) -> Option<SoundSource> {
+        match self.library.trusted(&source) {
+            Ok(trusted) => Some(trusted),
+            Err(failure) => {
+                self.show_failure(&source, failure);
+                None
+            }
         }
     }
 

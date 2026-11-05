@@ -7,11 +7,13 @@ mod hotkeys;
 mod installer_step;
 mod updater;
 
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager, RunEvent, Wry};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_specta::{Builder, Event, collect_commands, collect_events};
 
 use crate::composition::Core;
@@ -121,10 +123,18 @@ fn specta_builder() -> Builder<Wry> {
 /// Levels and lit pads reach the interface on their own thread, far from the audio callbacks.
 fn start_meters(app: AppHandle) {
     thread::spawn(move || {
+        let mut last = None;
         loop {
-            let frame = app.state::<Core>().meter_frame();
-            // Only fails while the window is closing, when nobody is listening.
-            let _ = MeterEvent(frame).emit(&app);
+            // A panic in one round must not end the meters for the rest of the session.
+            let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+                let frame = app.state::<Core>().meter_frame();
+                // A silent board would send the same frame thirty times a second.
+                if last.as_ref() != Some(&frame) {
+                    // Only fails while the window is closing, when nobody is listening.
+                    let _ = MeterEvent(frame.clone()).emit(&app);
+                    last = Some(frame);
+                }
+            }));
             thread::sleep(METER_INTERVAL);
         }
     });
@@ -135,8 +145,10 @@ fn start_meters(app: AppHandle) {
 fn start_learning(app: AppHandle) {
     thread::spawn(move || {
         loop {
-            let core = app.state::<Core>();
-            tauri::async_runtime::block_on(core.voice.learn());
+            let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+                let core = app.state::<Core>();
+                tauri::async_runtime::block_on(core.voice.learn());
+            }));
             thread::sleep(LEARN_INTERVAL);
         }
     });
@@ -147,8 +159,10 @@ fn start_learning(app: AppHandle) {
 fn start_device_watch(app: AppHandle) {
     thread::spawn(move || {
         loop {
-            let core = app.state::<Core>();
-            tauri::async_runtime::block_on(core.setup.watch_devices());
+            let _ = panic::catch_unwind(AssertUnwindSafe(|| {
+                let core = app.state::<Core>();
+                tauri::async_runtime::block_on(core.setup.watch_devices());
+            }));
             thread::sleep(DEVICE_WATCH_INTERVAL);
         }
     });
@@ -185,7 +199,18 @@ pub fn run() {
 
             let hotkeys = Arc::new(GlobalHotkeys::new(app.handle().clone()));
             app.manage(hotkeys.clone());
-            app.manage(composition::build(app.handle(), hotkeys)?);
+            match composition::build(app.handle(), hotkeys) {
+                Ok(core) => app.manage(core),
+                Err(error) => {
+                    // Without a console, a failed start would only look like the app not opening.
+                    app.dialog()
+                        .message(format!("InstantPad could not start.\n\n{error}"))
+                        .title("InstantPad")
+                        .kind(MessageDialogKind::Error)
+                        .blocking_show();
+                    return Err(error.into());
+                }
+            };
             start_meters(app.handle().clone());
             start_learning(app.handle().clone());
             start_device_watch(app.handle().clone());

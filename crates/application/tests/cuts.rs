@@ -79,7 +79,7 @@ async fn a_sound_of_myinstants_is_downloaded_and_opens_from_its_start() {
         name: "Bruh".to_owned(),
         color: "#ff0000".to_owned(),
         path: "store/bruh.mp3".to_owned(),
-        sound_url: Some("https://myinstants/bruh.mp3".to_owned()),
+        sound_url: Some("https://site/bruh.mp3".to_owned()),
     };
 
     let view = editor
@@ -90,7 +90,7 @@ async fn a_sound_of_myinstants_is_downloaded_and_opens_from_its_start() {
 
     assert_eq!(
         *editor.world.catalog.downloaded.lock().unwrap(),
-        ["https://myinstants/bruh.mp3"]
+        ["https://site/bruh.mp3"]
     );
     assert_eq!(view.name, "Bruh");
     assert_eq!(view.color, "#ff0000");

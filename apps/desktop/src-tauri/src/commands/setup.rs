@@ -31,43 +31,43 @@ pub async fn choose_monitor_output(core: State<'_, Core>, id: Option<String>) ->
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn set_numeric_scheme(core: State<'_, Core>, scheme: NumericScheme) {
     core.setup.set_numeric_scheme(scheme);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn set_stop_hotkey(core: State<'_, Core>, hotkey: Hotkey) {
     core.setup.set_stop_hotkey(hotkey);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn set_one_sound_at_a_time(core: State<'_, Core>, enabled: bool) {
     core.setup.set_one_sound_at_a_time(enabled);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn set_press_again_to_stop(core: State<'_, Core>, enabled: bool) {
     core.setup.set_press_again_to_stop(enabled);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn set_quiet_updates(core: State<'_, Core>, enabled: bool) {
     core.setup.set_quiet_updates(enabled);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn set_language(core: State<'_, Core>, language: Option<String>) {
     core.setup.set_language(language);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn set_trending_region(core: State<'_, Core>, region: Option<String>) {
     core.setup.set_trending_region(region);
@@ -80,7 +80,7 @@ pub async fn install_driver(core: State<'_, Core>) -> Result<(), ()> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn open_sound_settings(core: State<'_, Core>) {
     core.setup.open_sound_settings();

@@ -2,13 +2,13 @@ use tauri::State;
 
 use crate::composition::Core;
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn open_cloning(core: State<'_, Core>) {
     core.cloning.open();
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn start_clone_sample(core: State<'_, Core>) {
     core.cloning.start_sample();
@@ -28,13 +28,13 @@ pub async fn import_clone_sample(core: State<'_, Core>, path: String) -> Result<
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn save_cloned_voice(core: State<'_, Core>, name: String) {
     core.cloning.save(&name);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn close_cloning(core: State<'_, Core>) {
     core.cloning.close();

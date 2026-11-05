@@ -31,7 +31,7 @@ impl SystemAudio for Endpoints {
     }
 
     fn open_sound_settings(&self) {
-        let _ = shell::open(Path::new("ms-settings:sound"));
+        shell::open(Path::new("ms-settings:sound"));
     }
 }
 

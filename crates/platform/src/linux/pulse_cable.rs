@@ -1,4 +1,7 @@
-use std::process::Command;
+use std::io::Read;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use instantpad_application::message::{Failure, Message, TextKey};
@@ -6,51 +9,50 @@ use instantpad_application::ports::{AudioDevice, VirtualCable};
 
 const SINK: &str = "InstantPad";
 const SOURCE: &str = "InstantPad_Mic";
+const PACTL_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// The app plays into a null sink, and the game reads its monitor through a remapped source,
-/// which apps list as a microphone (a bare monitor is hidden from them).
-#[derive(Default)]
-pub struct PulseCable {
-    /// Ids of the modules this cable loaded, unloaded when it is dropped.
-    modules: Vec<String>,
-}
+/// which apps list as a microphone (a bare monitor is hidden from them). Both stay loaded
+/// after the app closes, and the next start reuses them.
+pub struct PulseCable;
 
 impl PulseCable {
     /// Without `pactl`, or when it refuses, the cable simply finds nothing.
     #[cfg(target_os = "linux")]
     pub fn load() -> Self {
-        // A crash leaves the sink behind, and loading again would show a second device.
-        if pactl(&["list", "short", "sinks"]).is_some_and(|sinks| sinks.contains(SINK)) {
-            return Self::default();
-        }
-
-        let modules = [
+        // A crash can leave one half behind, and loading it again would show a second device.
+        // So each half is looked for on its own.
+        if !has_device("sinks", SINK) {
             pactl(&[
                 "load-module",
                 "module-null-sink",
                 &format!("sink_name={SINK}"),
                 &format!("sink_properties=device.description={SINK}"),
-            ]),
+            ]);
+        }
+        if !has_device("sources", SOURCE) {
             pactl(&[
                 "load-module",
                 "module-remap-source",
                 &format!("master={SINK}.monitor"),
                 &format!("source_name={SOURCE}"),
                 &format!("source_properties=device.description={SOURCE}"),
-            ]),
-        ];
-        Self {
-            modules: modules.into_iter().flatten().collect(),
+            ]);
         }
+        Self
     }
 }
 
-impl Drop for PulseCable {
-    fn drop(&mut self) {
-        for module in self.modules.iter().rev() {
-            pactl(&["unload-module", module]);
-        }
-    }
+/// Whether `pactl list short <kind>` has a device with exactly this name.
+fn has_device(kind: &str, name: &str) -> bool {
+    pactl(&["list", "short", kind]).is_some_and(|listing| listing_has_name(&listing, name))
+}
+
+/// A line of `pactl list short` is "index<TAB>name<TAB>driver...".
+fn listing_has_name(listing: &str, name: &str) -> bool {
+    listing
+        .lines()
+        .any(|line| line.split('\t').nth(1) == Some(name))
 }
 
 #[async_trait]
@@ -84,13 +86,31 @@ impl VirtualCable for PulseCable {
     }
 }
 
-/// The output of a `pactl` call that succeeded.
+/// The output of a `pactl` call that succeeded. A wedged sound server must not hold the app
+/// back, so a call that takes too long is given up on.
 fn pactl(args: &[&str]) -> Option<String> {
-    let output = Command::new("pactl").args(args).output().ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    let mut child = Command::new("pactl")
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait().ok()? {
+            Some(status) => break status,
+            None if started.elapsed() > PACTL_TIMEOUT => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            None => thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    let mut text = String::new();
+    child.stdout.take()?.read_to_string(&mut text).ok()?;
+    status.success().then(|| text.trim().to_owned())
 }
 
 #[cfg(test)]
@@ -103,7 +123,7 @@ mod tests {
     #[test]
     fn the_pulse_cable_keeps_the_cable_contract() {
         contract::virtual_cable(
-            &PulseCable::default(),
+            &PulseCable,
             &device("pulseaudio:in", "InstantPad"),
             &device("pulseaudio:out", "InstantPad_Mic"),
             &device("pulseaudio:real", "Built-in Audio Analog Stereo"),
@@ -113,8 +133,18 @@ mod tests {
     #[test]
     fn the_game_reads_the_remapped_source() {
         assert_eq!(
-            PulseCable::default().game_microphone_name(None),
+            PulseCable.game_microphone_name(None),
             "InstantPad_Mic"
         );
+    }
+
+    #[test]
+    fn a_device_is_found_by_its_exact_name_only() {
+        let listing =
+            "1\tInstantPad.monitor\tmodule-null-sink.c\n2\tInstantPad_Mic\tmodule-remap-source.c";
+
+        assert!(listing_has_name(listing, "InstantPad_Mic"));
+        assert!(!listing_has_name(listing, "InstantPad"));
+        assert!(!listing_has_name(listing, "Mic"));
     }
 }

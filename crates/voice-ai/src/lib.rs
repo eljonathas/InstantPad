@@ -15,10 +15,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use instantpad_application::message::Failure;
+use instantpad_application::message::{Failure, TextKey};
 use instantpad_application::ports::{
     SpeechConverter, TrainedVoiceModels, VoiceAnalyzer, VoiceModels,
 };
+use instantpad_application::sync::lock;
 use instantpad_domain::cloning::{TrainedModel, Voiceprint};
 use instantpad_domain::voice::{Conversion, VoicePreset};
 use ort::session::Session;
@@ -27,7 +28,7 @@ use ort::value::{Tensor, TensorRef};
 use crate::openvoice::Spectrogram;
 use crate::resample::{SPEECH_RATE, StreamResampler, resample};
 use crate::runtime::{Cached, load_failed, session};
-use crate::rvc::{FEATURES, Models, TrainedStream, Words};
+use crate::rvc::{FEATURES, FEATURES_OF_FLOW, Models, TrainedStream, Words};
 use crate::stream::Stream;
 
 // The smallest blocks of speech that 48 kHz and 22.05 kHz divide into, one way and the other.
@@ -36,10 +37,12 @@ const UP_BLOCK: usize = 147;
 
 pub struct OnnxVoices {
     folder: PathBuf,
-    /// The only model that stays loaded, because the conversion runs all the time. The one that
-    /// hears a voice serves a calibration or a clone now and then, and is loaded for each.
+    /// Stays loaded while a conversion of the timbre runs, because it runs all the time, and is
+    /// freed when another kind of conversion starts. The one that hears a voice serves a
+    /// calibration or a clone now and then, and is loaded for each.
     tone_color: Cached,
-    /// What the trained voices hear with, which stays loaded while one of them speaks.
+    /// What the trained voices hear with, which stays loaded while one of them speaks and is
+    /// freed when a conversion of the timbre starts.
     content: Cached,
     requested: Mutex<Option<Conversion>>,
     /// A new pitch for the trained voice that speaks, asked for since the last time.
@@ -63,7 +66,7 @@ impl OnnxVoices {
 
     /// The speakers asked for since the last time, if any.
     fn take_request(&self) -> Option<Conversion> {
-        self.requested.lock().unwrap().take()
+        lock(&self.requested).take()
     }
 }
 
@@ -151,10 +154,19 @@ impl Running {
             Conversion::Timbre { source, target } => {
                 Self::Timbre(Box::new(Timbre::new(source, target)))
             }
-            Conversion::Trained { model, semitones } => Self::Trained {
-                stream: Box::new(TrainedStream::new(model.pitch_hz, *semitones)),
-                synthesizer: session(folder, &synthesizer_path(model))?,
-            },
+            Conversion::Trained { model, semitones } => {
+                // The model comes from the settings file, which anyone can edit.
+                if !trained::is_plain_id(&model.id) {
+                    return Err(Failure::because(
+                        TextKey::TrainedModelInvalid,
+                        "not a name the app made",
+                    ));
+                }
+                Self::Trained {
+                    stream: Box::new(TrainedStream::new(model.pitch_hz, *semitones)),
+                    synthesizer: session(folder, &synthesizer_path(model))?,
+                }
+            }
         })
     }
 }
@@ -230,7 +242,7 @@ impl Models for TrainedModels<'_> {
     fn speak(&mut self, words: &Words) -> Result<Vec<f32>, Failure> {
         let frames = words.frames();
         let spoken = words.pitchf.len();
-        let flow = words.noise.len() / 192;
+        let flow = words.noise.len() / FEATURES_OF_FLOW;
         let mut run = || -> ort::Result<Vec<f32>> {
             let outputs = self.synthesizer.run(ort::inputs![
                 "phone" => TensorRef::from_array_view(([1, frames, FEATURES], words.phone))?,
@@ -238,7 +250,7 @@ impl Models for TrainedModels<'_> {
                 "pitch" => TensorRef::from_array_view(([1, frames], words.pitch))?,
                 "pitchf" => TensorRef::from_array_view(([1, spoken], words.pitchf))?,
                 "sid" => Tensor::from_array(([1], vec![0_i64]))?,
-                "noise" => TensorRef::from_array_view(([1, 192, flow], words.noise))?,
+                "noise" => TensorRef::from_array_view(([1, FEATURES_OF_FLOW, flow], words.noise))?,
             ])?;
             let (_, audio) = outputs["audio"].try_extract_tensor::<f32>()?;
             Ok(audio.to_vec())
@@ -254,18 +266,23 @@ impl SpeechConverter for OnnxVoices {
     fn start(&self, conversion: &Conversion) {
         // Cleared first, so a conversion that starts in between never takes the pitch of the
         // one before.
-        *self.retuned.lock().unwrap() = None;
-        *self.requested.lock().unwrap() = Some(conversion.clone());
+        *lock(&self.retuned) = None;
+        *lock(&self.requested) = Some(conversion.clone());
     }
 
     fn retune(&self, semitones: f32) {
-        *self.retuned.lock().unwrap() = Some(semitones);
+        *lock(&self.retuned) = Some(semitones);
     }
 
     fn convert(&self, speech: &[f32]) -> Result<Vec<f32>, Failure> {
-        let mut conversion = self.conversion.lock().unwrap();
+        let mut conversion = lock(&self.conversion);
         if let Some(speakers) = self.take_request() {
             *conversion = None;
+            // What the new conversion does not use is hundreds of megabytes it would keep.
+            match speakers {
+                Conversion::Timbre { .. } => self.content.unload(),
+                Conversion::Trained { .. } => self.tone_color.unload(),
+            }
             let mut running = Running::start(&self.folder, &speakers)?;
             // Both models load and run once now, in the first call of the conversion, which
             // may take long. Loading HuBERT at the first block instead, once the conversion
@@ -278,7 +295,7 @@ impl SpeechConverter for OnnxVoices {
             }
             *conversion = Some(running);
         }
-        let retuned = self.retuned.lock().unwrap().take();
+        let retuned = lock(&self.retuned).take();
         // With nobody to turn the voice into yet, nothing comes out.
         match conversion.as_mut() {
             None => Ok(Vec::new()),
@@ -386,5 +403,28 @@ mod tests {
     #[test]
     fn converting_before_a_conversion_starts_gives_nothing() {
         assert!(empty_folder().convert(&[0.1; 480]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_trained_model_with_an_id_that_leads_out_of_the_models_is_not_loaded() {
+        let model = TrainedModel {
+            id: "../../elsewhere".to_owned(),
+            name: "Voice".to_owned(),
+            credit: String::new(),
+            pitch_hz: 150.0,
+        };
+        let conversion = Conversion::Trained {
+            model,
+            semitones: 0.0,
+        };
+
+        let failure = Running::start(Path::new("/nowhere"), &conversion)
+            .err()
+            .unwrap();
+
+        let Failure(Message::Text { key, .. }) = failure else {
+            panic!("expected a translated message");
+        };
+        assert_eq!(key, TextKey::TrainedModelInvalid);
     }
 }

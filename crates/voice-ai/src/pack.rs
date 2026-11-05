@@ -2,19 +2,15 @@
 //!
 //! Every file is pinned by its size and SHA-256, so what runs is what was reviewed.
 
-use std::error::Error;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::sync::atomic::AtomicBool;
 
 use instantpad_application::message::{Failure, TextKey};
+use instantpad_download::{Interrupted, Pin, Progress, client, extract_zip_entry, sha256_file};
 use reqwest::Client;
-use sha2::{Digest, Sha256};
-use tokio::fs::{self, File};
-use tokio::io::AsyncWriteExt;
-use zip::ZipArchive;
+use tokio::fs;
 
 pub(crate) const TONE_EXTRACT: &str = "tone_extract.onnx";
 pub(crate) const TONE_COLOR: &str = "tone_color.onnx";
@@ -30,9 +26,7 @@ const RETIRED: [&str; 6] = [
     "tokenizer.json.part",
 ];
 
-const STALLED_AFTER: Duration = Duration::from_secs(30);
 const BYTES_PER_MEGABYTE: u64 = 1_000_000;
-const BLOCK: usize = 64 * 1024;
 
 struct Download {
     /// What the file is called in the model folder.
@@ -172,7 +166,8 @@ fn runtime() -> Result<&'static Download, String> {
 fn macos_runs_the_runtime() -> bool {
     static SUPPORTED: OnceLock<bool> = OnceLock::new();
     *SUPPORTED.get_or_init(|| {
-        Command::new("sw_vers")
+        // By its path, so a program of that name elsewhere in the search path is never run.
+        Command::new("/usr/bin/sw_vers")
             .arg("-productVersion")
             .output()
             .ok()
@@ -203,9 +198,25 @@ pub(crate) fn remove_retired(folder: &Path) {
     }
 }
 
-/// The bytes in hex.
-fn hex(digest: &[u8]) -> String {
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+/// Whether `name` is one of the files this pack downloads, which the interface can download
+/// again. Nothing else in the model folder can be: a trained voice and HuBERT come from the
+/// user's own training.
+pub(crate) fn is_pack_file(name: &str) -> bool {
+    OPENVOICE.iter().any(|file| file.name == name)
+}
+
+/// Checks the library on disk is the pinned one, because it is code the app is about to load
+/// and the size alone says little. A library that is not is deleted, so the interface offers the
+/// download again.
+pub(crate) fn verify_library(folder: &Path) -> Result<(), String> {
+    let runtime = runtime()?;
+    let path = folder.join(runtime.name);
+    let hash = sha256_file(&path).map_err(|error| format!("{}: {error}", runtime.name))?;
+    if hash == runtime.kept_sha256() {
+        return Ok(());
+    }
+    let _ = std::fs::remove_file(&path);
+    Err(unexpected(runtime.name))
 }
 
 /// Where ONNX Runtime is, once downloaded.
@@ -241,11 +252,7 @@ pub(crate) async fn install(
     report: &(dyn Fn(u8) + Send + Sync),
 ) -> Result<(), Failure> {
     let files = files().map_err(failed)?;
-    let http = Client::builder()
-        .connect_timeout(STALLED_AFTER)
-        .read_timeout(STALLED_AFTER)
-        .build()
-        .map_err(failed)?;
+    let http = client().map_err(interrupted)?;
     fs::create_dir_all(folder).await.map_err(failed)?;
 
     let mut progress = Progress::new(report, files.iter().map(|file| file.size).sum());
@@ -267,7 +274,7 @@ async fn is_intact(folder: &Path, file: &Download) -> bool {
     }
     let kept = folder.join(file.name);
     let path = kept.clone();
-    let intact = tokio::task::spawn_blocking(move || sha256_of(&path))
+    let intact = tokio::task::spawn_blocking(move || sha256_file(&path))
         .await
         .is_ok_and(|hash| hash.is_ok_and(|hash| hash == file.kept_sha256()));
     if !intact {
@@ -276,143 +283,58 @@ async fn is_intact(folder: &Path, file: &Download) -> bool {
     intact
 }
 
-fn sha256_of(path: &Path) -> std::io::Result<String> {
-    copy_hashed(&mut std::fs::File::open(path)?, &mut std::io::sink()).map(|(_, hash)| hash)
-}
-
-/// Copies everything and returns how much it was and its SHA-256.
-fn copy_hashed(source: &mut impl Read, target: &mut impl Write) -> std::io::Result<(u64, String)> {
-    let mut hasher = Sha256::new();
-    let mut size = 0;
-    let mut block = vec![0; BLOCK];
-    loop {
-        let read = source.read(&mut block)?;
-        if read == 0 {
-            return Ok((size, hex(&hasher.finalize())));
-        }
-        hasher.update(&block[..read]);
-        target.write_all(&block[..read])?;
-        size += read as u64;
-    }
-}
-
-/// Counts the bytes that arrived, and tells when the whole number of percent changes.
-struct Progress<'a> {
-    report: &'a (dyn Fn(u8) + Send + Sync),
-    total: u64,
-    done: u64,
-    shown: u8,
-}
-
-impl<'a> Progress<'a> {
-    fn new(report: &'a (dyn Fn(u8) + Send + Sync), total: u64) -> Self {
-        Self {
-            report,
-            total,
-            done: 0,
-            shown: 0,
-        }
-    }
-
-    fn advance(&mut self, bytes: u64) {
-        self.done += bytes;
-        let percent = (self.done * 100 / self.total) as u8;
-        if percent != self.shown {
-            self.shown = percent;
-            (self.report)(percent);
-        }
-    }
-}
-
-/// Downloads to a partial file, which only becomes the real one when it is what was pinned.
+/// Downloads a file, and takes the library out of the archive it comes in. Only the pinned
+/// file ever takes the place of the real one.
 async fn fetch(
     http: &Client,
     folder: &Path,
     file: &Download,
     progress: &mut Progress<'_>,
 ) -> Result<(), Failure> {
-    let partial = folder.join(format!("{}.part", file.name));
-    let archive = folder.join(format!("{}.zip.part", file.name));
-    let result = async {
-        match &file.unpack {
-            None => {
-                download(http, file, &partial, progress).await?;
-            }
-            Some(unpack) => {
-                download(http, file, &archive, progress).await?;
-                let (archive, partial, unpack) = (archive.clone(), partial.clone(), *unpack);
-                tokio::task::spawn_blocking(move || extract(&archive, &unpack, &partial))
-                    .await
-                    .map_err(failed)?
-                    .map_err(failed)?;
-            }
-        }
-        fs::rename(&partial, folder.join(file.name))
+    // Nothing here stops a download: closing the app does, and the next try goes on from there.
+    let never = AtomicBool::new(false);
+    let pin = Pin {
+        url: file.url,
+        size: file.size,
+        sha256: file.sha256,
+    };
+    let target = folder.join(file.name);
+    let mut arrived = |bytes| progress.advance(bytes);
+    let Some(unpack) = file.unpack else {
+        return instantpad_download::fetch(http, pin, &target, &never, &mut arrived)
             .await
-            .map_err(failed)
-    }
-    .await;
+            .map_err(interrupted);
+    };
 
-    // A download is never picked up where it stopped, and an archive is of no use once opened.
-    let _ = fs::remove_file(&archive).await;
-    let _ = fs::remove_file(&partial).await;
-    result
-}
-
-async fn download(
-    http: &Client,
-    file: &Download,
-    partial: &Path,
-    progress: &mut Progress<'_>,
-) -> Result<(), Failure> {
-    let mut response = http
-        .get(file.url)
-        .send()
+    let archive = folder.join(format!("{}.zip", file.name));
+    let result = async {
+        instantpad_download::fetch(http, pin, &archive, &never, &mut arrived)
+            .await
+            .map_err(interrupted)?;
+        let (opened, target) = (archive.clone(), target.clone());
+        tokio::task::spawn_blocking(move || {
+            let expected = Some((unpack.size, unpack.sha256));
+            extract_zip_entry(&opened, unpack.entry, expected, &target)
+        })
         .await
         .map_err(failed)?
-        .error_for_status()
-        .map_err(failed)?;
-    let mut target = File::create(partial).await.map_err(failed)?;
-    let mut hasher = Sha256::new();
-    let mut written = 0;
-    while let Some(chunk) = response.chunk().await.map_err(failed)? {
-        written += chunk.len() as u64;
-        // A server that sends more than was pinned is not sending the pinned file.
-        if written > file.size {
-            return Err(failed(unexpected(file.name)));
-        }
-        hasher.update(&chunk);
-        target.write_all(&chunk).await.map_err(failed)?;
-        progress.advance(chunk.len() as u64);
+        .map_err(interrupted)
     }
-    target.flush().await.map_err(failed)?;
-
-    if written == file.size && hex(&hasher.finalize()) == file.sha256 {
-        Ok(())
-    } else {
-        Err(failed(unexpected(file.name)))
-    }
-}
-
-/// Copies the one file out of the archive, and checks it is the pinned one.
-fn extract(
-    archive: &Path,
-    unpack: &Unpack,
-    partial: &Path,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let mut archive = ZipArchive::new(std::fs::File::open(archive)?)?;
-    let mut entry = archive.by_name(unpack.entry)?;
-    let mut target = std::fs::File::create(partial)?;
-    let (size, hash) = copy_hashed(&mut entry, &mut target)?;
-    if size == unpack.size && hash == unpack.sha256 {
-        Ok(())
-    } else {
-        Err(unexpected(unpack.entry).into())
-    }
+    .await;
+    // An archive is of no use once opened.
+    let _ = fs::remove_file(&archive).await;
+    result
 }
 
 fn unexpected(name: &str) -> String {
     format!("{name} is not the file that was expected")
+}
+
+fn interrupted(why: Interrupted) -> Failure {
+    match why {
+        Interrupted::Stopped => failed("the download was stopped"),
+        Interrupted::Failed(reason) => failed(reason),
+    }
 }
 
 fn failed(detail: impl ToString) -> Failure {
@@ -421,11 +343,13 @@ fn failed(detail: impl ToString) -> Failure {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Read, Write};
     use std::net::TcpListener;
-    use std::sync::Mutex;
     use std::thread;
 
     use instantpad_application::message::Message;
+
+    use sha2::Digest;
 
     use super::*;
 
@@ -447,6 +371,13 @@ mod tests {
         Box::leak(address.into_boxed_str())
     }
 
+    fn assert_download_failed(failure: Failure) {
+        let Failure(Message::Text { key, .. }) = failure else {
+            panic!("expected a translated message");
+        };
+        assert_eq!(key, TextKey::AiDownloadFailed);
+    }
+
     fn folder(name: &str) -> PathBuf {
         let folder =
             std::env::temp_dir().join(format!("instantpad-voice-{name}-{}", std::process::id()));
@@ -455,7 +386,7 @@ mod tests {
     }
 
     fn sha256_text(body: &[u8]) -> &'static str {
-        Box::leak(hex(&Sha256::digest(body)).into_boxed_str())
+        Box::leak(instantpad_download::hex(&sha2::Sha256::digest(body)).into_boxed_str())
     }
 
     fn pinned(url: &'static str, body: &[u8], unpack: Option<Unpack>) -> Download {
@@ -625,7 +556,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert_eq!(failure, failed(unexpected("model.bin")));
+        assert_download_failed(failure);
         assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 0);
         std::fs::remove_dir_all(&folder).unwrap();
     }
@@ -640,7 +571,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert_eq!(failure, failed(unexpected("model.bin")));
+        assert_download_failed(failure);
         assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 0);
         std::fs::remove_dir_all(&folder).unwrap();
     }
@@ -682,7 +613,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert_eq!(failure, failed(unexpected("pkg/capi/library.so")));
+        assert_download_failed(failure);
         assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 0);
         std::fs::remove_dir_all(&folder).unwrap();
     }
@@ -697,10 +628,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        let Failure(Message::Text { key, .. }) = failure else {
-            panic!("expected a translated message");
-        };
-        assert_eq!(key, TextKey::AiDownloadFailed);
+        assert_download_failed(failure);
         assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 0);
         std::fs::remove_dir_all(&folder).unwrap();
     }
@@ -722,15 +650,23 @@ mod tests {
     }
 
     #[test]
-    fn progress_reports_each_percent_once_and_ends_at_a_hundred() {
-        let reported = Mutex::new(Vec::new());
-        let report = |percent| reported.lock().unwrap().push(percent);
-        let mut progress = Progress::new(&report, 400);
+    fn only_the_files_of_the_pack_may_be_deleted_for_being_unreadable() {
+        assert!(is_pack_file("tone_color.onnx"));
+        assert!(is_pack_file("tone_extract.onnx"));
+        // A trained voice and HuBERT come from the user's training, and cannot be downloaded.
+        assert!(!is_pack_file("content.onnx"));
+        assert!(!is_pack_file("trained/0a1b/synthesizer.onnx"));
+    }
 
-        for _ in 0..8 {
-            progress.advance(50);
-        }
+    #[test]
+    fn a_library_that_is_not_the_pinned_one_is_refused_and_deleted() {
+        let Ok(runtime) = runtime() else { return };
+        let folder = folder("library");
+        std::fs::write(folder.join(runtime.name), b"not the library").unwrap();
 
-        assert_eq!(*reported.lock().unwrap(), [12, 25, 37, 50, 62, 75, 87, 100]);
+        assert!(verify_library(&folder).is_err());
+
+        assert!(!folder.join(runtime.name).exists());
+        std::fs::remove_dir_all(&folder).unwrap();
     }
 }

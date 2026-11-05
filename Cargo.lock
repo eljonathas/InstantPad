@@ -2175,6 +2175,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "instantpad-download"
+version = "0.0.0"
+dependencies = [
+ "reqwest",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "zip",
+]
+
+[[package]]
 name = "instantpad-platform"
 version = "0.0.0"
 dependencies = [
@@ -2241,6 +2252,7 @@ dependencies = [
  "async-trait",
  "instantpad-application",
  "instantpad-domain",
+ "instantpad-download",
  "ort",
  "realfft",
  "reqwest",
@@ -2248,6 +2260,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "tokio",
  "zip",
 ]

@@ -148,9 +148,8 @@ impl TrainedStream {
         self.down.push(speech, &mut self.heard);
         let mut spoken = Vec::new();
         while self.heard.len() >= BLOCK * FRAME {
-            let block: Vec<f32> = self.heard.drain(..BLOCK * FRAME).collect();
             self.window.drain(..BLOCK * FRAME);
-            self.window.extend_from_slice(&block);
+            self.window.extend(self.heard.drain(..BLOCK * FRAME));
             spoken.extend(self.speak_window(models)?);
         }
         let mut converted = Vec::new();
@@ -222,7 +221,7 @@ impl TrainedStream {
 }
 
 /// The channels of the noise the flow reads.
-const FEATURES_OF_FLOW: usize = 192;
+pub(crate) const FEATURES_OF_FLOW: usize = 192;
 /// Until the user has talked for a moment, their pitch is taken to be between a man's and a
 /// woman's.
 const ASSUMED_USER_HZ: f32 = 150.0;

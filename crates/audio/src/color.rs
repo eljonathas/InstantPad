@@ -270,9 +270,14 @@ impl Whisper {
         for (index, value) in self.frame.iter_mut().enumerate() {
             *value = self.heard[(self.position + index) % WHISPER_FRAME] * self.window[index];
         }
-        self.forward
-            .process_with_scratch(&mut self.frame, &mut self.spectrum, &mut self.scratch)
-            .expect("the buffers are sized for the plan");
+        // This runs in an audio callback, where a panic would end the stream without a word. The
+        // buffers are made for the plans, so a refusal would be a bug, and the frame goes on.
+        let analysed = self.forward.process_with_scratch(
+            &mut self.frame,
+            &mut self.spectrum,
+            &mut self.scratch,
+        );
+        debug_assert!(analysed.is_ok(), "the buffers are sized for the plan");
 
         for bin in &mut self.spectrum {
             let (sin, cos) = (next_random(&mut self.random) * TAU).sin_cos();
@@ -282,9 +287,12 @@ impl Whisper {
         // The first and the last bin have no phase, and the inverse refuses one.
         self.spectrum[0].im = 0.0;
         self.spectrum[WHISPER_FRAME / 2].im = 0.0;
-        self.inverse
-            .process_with_scratch(&mut self.spectrum, &mut self.frame, &mut self.scratch)
-            .expect("the buffers are sized for the plan");
+        let synthesised = self.inverse.process_with_scratch(
+            &mut self.spectrum,
+            &mut self.frame,
+            &mut self.scratch,
+        );
+        debug_assert!(synthesised.is_ok(), "the buffers are sized for the plan");
 
         for (index, value) in self.frame.iter().enumerate() {
             self.breath[(self.position + index) % WHISPER_FRAME] +=

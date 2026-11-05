@@ -29,7 +29,66 @@ use crate::recording::Recorder;
 use crate::role::Role;
 use crate::voice::VoiceControls;
 
-type Clips = HashMap<String, Arc<OnceCell<Arc<SoundClip>>>>;
+/// How much memory the decoded sounds may take together, about 22 minutes of audio. A board of
+/// whole songs keeps the ones played last and decodes the others again when they are needed.
+const CLIP_BUDGET_BYTES: usize = 1 << 30;
+
+struct CachedClip {
+    cell: Arc<OnceCell<Arc<SoundClip>>>,
+    /// When the sound was last asked for, to find the one nobody wants.
+    used: u64,
+}
+
+/// The decoded sounds, within a memory budget.
+struct Clips {
+    entries: HashMap<String, CachedClip>,
+    clock: u64,
+    budget: usize,
+}
+
+impl Clips {
+    fn new(budget: usize) -> Self {
+        Self {
+            entries: HashMap::new(),
+            clock: 0,
+            budget,
+        }
+    }
+
+    fn entry(&mut self, path: &str) -> Arc<OnceCell<Arc<SoundClip>>> {
+        self.clock += 1;
+        let item = self
+            .entries
+            .entry(path.to_owned())
+            .or_insert_with(|| CachedClip {
+                cell: Arc::default(),
+                used: 0,
+            });
+        item.used = self.clock;
+        item.cell.clone()
+    }
+
+    /// Drops the sounds used longest ago until the rest fits the budget. A sound that is
+    /// playing, or that someone is about to play, is held by more than the cache and stays.
+    /// It is dropped here, off the audio thread, because the mixer never holds the last
+    /// reference of a sound it has finished.
+    fn trim(&mut self) {
+        let size = |item: &CachedClip| item.cell.get().map_or(0, |clip| clip.bytes());
+        let mut total: usize = self.entries.values().map(size).sum();
+        while total > self.budget {
+            let oldest = self
+                .entries
+                .iter()
+                .filter(|(_, item)| item.cell.get().is_some_and(|c| Arc::strong_count(c) == 1))
+                .min_by_key(|(_, item)| item.used)
+                .map(|(path, _)| path.clone());
+            let Some(path) = oldest else { return };
+            if let Some(item) = self.entries.remove(&path) {
+                total -= size(&item);
+            }
+        }
+    }
+}
 
 /// A sound that started, for the display. The newest comes last.
 struct Started {
@@ -143,7 +202,7 @@ impl AudioEngine {
         Self {
             ai: AiBridge::new(converter, events),
             recorder: Recorder::new(),
-            clips: Mutex::default(),
+            clips: Mutex::new(Clips::new(CLIP_BUDGET_BYTES)),
             started: Mutex::default(),
             microphone: Microphone {
                 role: Role::spawn("microphone"),
@@ -159,13 +218,7 @@ impl AudioEngine {
     }
 
     async fn load(&self, path: &str) -> Result<Arc<SoundClip>, Failure> {
-        let entry = self
-            .clips
-            .lock()
-            .unwrap()
-            .entry(path.to_owned())
-            .or_default()
-            .clone();
+        let entry = self.clips.lock().unwrap().entry(path);
 
         // A failed load leaves the entry empty, so it is retried next time.
         let clip = entry
@@ -177,7 +230,10 @@ impl AudioEngine {
                     .map(Arc::new)
             })
             .await?;
-        Ok(clip.clone())
+        let clip = clip.clone();
+        // The clip in hand keeps itself from being dropped, so a sound just loaded stays.
+        self.clips.lock().unwrap().trim();
+        Ok(clip)
     }
 
     fn remember(&self, clip: &SoundClip, range: Range<usize>, tag: PlaybackTag) {
@@ -265,7 +321,7 @@ impl SoundPlayer for AudioEngine {
     }
 
     fn forget(&self, path: &str) {
-        self.clips.lock().unwrap().remove(path);
+        self.clips.lock().unwrap().entries.remove(path);
     }
 
     fn stop(&self, tag: PlaybackTag) {
@@ -454,6 +510,54 @@ mod tests {
             };
             (attach(&self.game), attach(&self.monitor))
         }
+    }
+
+    /// A cache entry that holds a clip of `samples` samples.
+    fn cached(clips: &mut Clips, path: &str, samples: usize) -> Arc<SoundClip> {
+        let clip = Arc::new(SoundClip::new(vec![0.0; samples]));
+        assert!(clips.entry(path).set(clip.clone()).is_ok());
+        clip
+    }
+
+    #[test]
+    fn the_sound_used_longest_ago_goes_first_when_the_budget_is_full() {
+        let mut clips = Clips::new(2000);
+        drop(cached(&mut clips, "old", 200));
+        drop(cached(&mut clips, "middle", 200));
+        drop(cached(&mut clips, "new", 200));
+        clips.entry("old");
+
+        clips.trim();
+
+        let kept: Vec<_> = ["old", "middle", "new"]
+            .into_iter()
+            .filter(|path| clips.entries.contains_key(*path))
+            .collect();
+        assert_eq!(kept, ["old", "new"]);
+    }
+
+    #[test]
+    fn a_sound_that_is_playing_stays_even_over_the_budget() {
+        let mut clips = Clips::new(1000);
+        let playing = cached(&mut clips, "playing", 200);
+        drop(cached(&mut clips, "idle", 200));
+
+        clips.trim();
+
+        assert!(clips.entries.contains_key("playing"));
+        assert!(!clips.entries.contains_key("idle"));
+        assert_eq!(Arc::strong_count(&playing), 2);
+    }
+
+    #[test]
+    fn sounds_within_the_budget_are_all_kept() {
+        let mut clips = Clips::new(1_000_000);
+        drop(cached(&mut clips, "a", 200));
+        drop(cached(&mut clips, "b", 200));
+
+        clips.trim();
+
+        assert_eq!(clips.entries.len(), 2);
     }
 
     fn engine() -> AudioEngine {

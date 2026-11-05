@@ -22,6 +22,10 @@ const RESAMPLE_CHUNK: usize = 1024;
 /// How many bars the display draws for a sound.
 const PEAK_BARS: usize = 44;
 
+/// The longest sound a pad keeps: a longer file is cut at this point, so that one huge file
+/// cannot fill the memory. Ten minutes take about 230 MB once decoded.
+pub(crate) const MAX_SOUND_SECONDS: u32 = 600;
+
 pub(crate) struct SoundClip {
     samples: Vec<f32>,
     peaks: Vec<f32>,
@@ -40,6 +44,11 @@ impl SoundClip {
             peaks,
             loudest,
         }
+    }
+
+    /// The memory the decoded samples take.
+    pub(crate) fn bytes(&self) -> usize {
+        self.samples.len() * size_of::<f32>()
     }
 
     pub(crate) fn duration_ms(&self) -> u32 {
@@ -112,7 +121,7 @@ impl SoundClip {
     }
 
     pub(crate) fn load(path: &str) -> Result<Self, Failure> {
-        load_stereo(path, None).map(Self::new)
+        load_stereo(path, Some(MAX_SOUND_SECONDS)).map(Self::new)
     }
 }
 
@@ -407,6 +416,15 @@ pub(crate) mod tests {
 
         assert_eq!(clip.samples().len(), 960);
         assert_eq!(&clip.samples()[..2], [level(8192), level(-8192)]);
+    }
+
+    #[test]
+    fn a_sound_longer_than_the_limit_keeps_only_its_start() {
+        let file = wav(48_000, &[8192, 8192], 48_000 * 3);
+
+        let (rate, samples) = decode(file.path(), Some(2)).unwrap();
+
+        assert_eq!(samples.len(), rate as usize * 2 * CHANNELS);
     }
 
     #[test]

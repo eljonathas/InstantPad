@@ -14,6 +14,7 @@ instantpad-application = { path = "crates/application" }
 instantpad-audio = { path = "crates/audio" }
 instantpad-catalog = { path = "crates/catalog" }
 instantpad-domain = { path = "crates/domain" }
+instantpad-download = { path = "crates/download" }
 instantpad-platform = { path = "crates/platform" }
 instantpad-storage = { path = "crates/storage" }
 instantpad-test-support = { path = "crates/test-support" }

@@ -16,9 +16,9 @@ mod pins;
 mod process;
 mod wav;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
@@ -30,8 +30,11 @@ use instantpad_application::message::{Failure, Message, TextKey};
 use instantpad_application::ports::{
     Outcome, TrainingProgress, TrainingRun, TrainingStage, TrainingTools, VoiceTrainer,
 };
+use instantpad_application::sync::lock;
 use instantpad_domain::training::{GraphicsCard, System, TrainingDevice};
 use serde::{Deserialize, Serialize};
+
+use instantpad_download::Progress;
 
 use crate::download::{Interrupted, client, fetch, is_there};
 use crate::events::KitEvent;
@@ -39,6 +42,10 @@ use crate::events::KitEvent;
 const BYTES_PER_MEGABYTE: u64 = 1_000_000;
 /// The rate of the speech the app hands over, which the takes keep.
 const SPEECH_RATE: u32 = 48_000;
+/// A log longer than this is set aside when the next training opens it.
+const LOG_LIMIT_BYTES: u64 = 4_000_000;
+/// Not measured yet, as `leftover_megabytes` has it.
+const UNMEASURED: u32 = u32::MAX;
 /// `nvidia-smi` answers at once, unless the driver is in a bad state.
 const CARD_TIMEOUT: Duration = Duration::from_secs(10);
 /// Where RVC keeps what it makes of a training, under `rvc`.
@@ -69,6 +76,9 @@ struct Installed {
     on_card: bool,
     /// Of the pinned packages, so new pins install again.
     fingerprint: String,
+    /// Of uv, so a new pin replaces the one installed.
+    #[serde(default)]
+    uv: String,
     megabytes: u32,
 }
 
@@ -79,6 +89,7 @@ pub struct KitTrainer {
     running: process::Slot,
     installed: Mutex<Option<Installed>>,
     /// What an install that stopped or failed left on disk, which removing the tools frees.
+    /// Measured when first asked, since walking a partial install delays the start of the app.
     leftover_megabytes: AtomicU32,
 }
 
@@ -87,11 +98,7 @@ impl KitTrainer {
         let installed: Option<Installed> = fs::read_to_string(home.join("tools.json"))
             .ok()
             .and_then(|text| serde_json::from_str(&text).ok());
-        let leftover = if installed.is_some() {
-            0
-        } else {
-            tools_on_disk(home)
-        };
+        let leftover = if installed.is_some() { 0 } else { UNMEASURED };
         Self {
             home: home.to_owned(),
             stopping: AtomicBool::new(false),
@@ -133,9 +140,17 @@ impl KitTrainer {
         self.home.join("voices").join(job)
     }
 
-    /// A command with the folders of the training, and nothing of a Python the user may have.
+    /// A command with the folders of the training, and nothing of the app's environment but
+    /// what the programs need: nothing of a Python the user may have, and none of the settings
+    /// of uv or of the loader that something else set.
     fn command(&self, program: &Path) -> Command {
         let mut command = Command::new(program);
+        command.env_clear();
+        for (name, value) in std::env::vars_os() {
+            if name.to_str().is_some_and(passes_to_programs) {
+                command.env(name, value);
+            }
+        }
         command
             .current_dir(&self.home)
             .env("INSTANTPAD_VOICE_HOME", &self.home)
@@ -144,18 +159,20 @@ impl KitTrainer {
             .env("UV_NO_CONFIG", "1")
             .env("UV_NO_CACHE", "1")
             .env("PYTHONUTF8", "1")
-            .env("PYTHONIOENCODING", "utf-8")
-            .env_remove("PYTHONPATH")
-            .env_remove("PYTHONHOME")
-            .env_remove("VIRTUAL_ENV");
+            .env("PYTHONIOENCODING", "utf-8");
         command
     }
 
-    fn kit(&self) -> Result<Command, Failure> {
+    async fn kit(&self) -> Result<Command, Failure> {
         let kit = self.home.join("voicekit.py");
-        fs::write(&kit, pins::VOICEKIT).map_err(failed)?;
+        tokio::fs::write(&kit, pins::VOICEKIT)
+            .await
+            .map_err(failed)?;
         let mut command = self.command(&self.python());
         command.arg(kit).arg("--events");
+        // The kit ends its own group when the app dies: see `process::Group`.
+        #[cfg(not(target_os = "windows"))]
+        command.arg("--end-with-input");
         Ok(command)
     }
 
@@ -168,12 +185,12 @@ impl KitTrainer {
             .filter(|wheel| !is_there(&self.wheels().join(file_name(&wheel.url)), wheel))
             .map(|wheel| wheel.size)
             .sum::<u64>();
-        let uv = if self.uv().exists() {
+        let uv = if self.uv_is_current() {
             0
         } else {
             pins::uv().file.size
         };
-        let python = if self.python().exists() {
+        let python = if self.python_is_current(on_card) {
             0
         } else {
             pins::PYTHON_BYTES
@@ -187,7 +204,26 @@ impl KitTrainer {
     }
 
     fn installed_lock(&self) -> std::sync::MutexGuard<'_, Option<Installed>> {
-        self.installed.lock().expect("tools lock poisoned")
+        lock(&self.installed)
+    }
+
+    /// Whether the uv on disk is the pinned one. One from an earlier install is replaced when
+    /// the app pins another.
+    fn uv_is_current(&self) -> bool {
+        self.uv().exists()
+            && self
+                .installed_lock()
+                .as_ref()
+                .is_none_or(|kept| kept.uv == pins::uv_id())
+    }
+
+    /// Whether the Python of the venv is the one the packages for the device pin.
+    fn python_is_current(&self, on_card: bool) -> bool {
+        self.python().exists()
+            && self
+                .installed_lock()
+                .as_ref()
+                .is_none_or(|kept| kept.fingerprint == pins::fingerprint(on_card))
     }
 
     fn stopped(&self) -> bool {
@@ -205,24 +241,35 @@ impl KitTrainer {
             + pins::PYTHON_BYTES
             + environment.wheel_bytes()
             + pins::KIT_DOWNLOAD_BYTES;
-        let done = Mutex::new(0_u64);
-        let shown = Mutex::new(0_u8);
-        let advance = |bytes: u64| {
-            let mut done = done.lock().expect("progress lock poisoned");
-            *done = (*done + bytes).min(total);
-            let percent = (*done * 100 / total) as u8;
-            let mut shown = shown.lock().expect("progress lock poisoned");
-            if percent != *shown {
-                *shown = percent;
-                progress(percent);
-            }
-        };
+        let mut advance = Progress::new(progress, total);
         let http = client()?;
+
+        // What a new pin changes is installed again: the interpreter of a venv made by another
+        // Python, or a uv of another version.
+        let stale = self.installed_lock().as_ref().map(|kept| {
+            (
+                kept.uv != pins::uv_id(),
+                kept.fingerprint != pins::fingerprint(on_card),
+            )
+        });
+        if let Some((new_uv, new_packages)) = stale {
+            let home = self.home.clone();
+            tokio::task::spawn_blocking(move || {
+                if new_uv {
+                    let _ = fs::remove_dir_all(home.join("uv"));
+                }
+                if new_packages {
+                    let _ = fs::remove_dir_all(home.join("venv"));
+                }
+            })
+            .await
+            .map_err(|error| Interrupted::Failed(error.to_string()))?;
+        }
 
         if !self.uv().exists() {
             let archive = self.home.join("downloads").join(file_name(&uv.file.url));
             fetch(&http, &uv.file, &archive, &self.stopping, &mut |bytes| {
-                advance(bytes)
+                advance.advance(bytes)
             })
             .await?;
             let target = self.uv();
@@ -230,7 +277,7 @@ impl KitTrainer {
                 .await
                 .map_err(|error| Interrupted::Failed(error.to_string()))??;
         } else {
-            advance(uv.file.size);
+            advance.advance(uv.file.size);
         }
 
         if !self.python().exists() {
@@ -241,13 +288,13 @@ impl KitTrainer {
                 .arg(self.home.join("venv"));
             self.step(command, &mut |_| {}).await?;
         }
-        advance(pins::PYTHON_BYTES);
+        advance.advance(pins::PYTHON_BYTES);
 
         let mut files = Vec::new();
         for wheel in &environment.wheels {
             let target = self.wheels().join(file_name(&wheel.url));
             fetch(&http, wheel, &target, &self.stopping, &mut |bytes| {
-                advance(bytes)
+                advance.advance(bytes)
             })
             .await?;
             files.push(target);
@@ -270,27 +317,35 @@ impl KitTrainer {
         let mut kit_files: HashMap<String, u64> = HashMap::new();
         let mut command = self
             .kit()
+            .await
             .map_err(|Failure(reason)| Interrupted::Failed(format!("{reason:?}")))?;
         command.arg("setup");
         self.step(command, &mut |line| {
             if let Some(KitEvent::Download { file, done, .. }) = events::parse(line) {
                 let before = kit_files.insert(file, done).unwrap_or(0);
-                advance(done.saturating_sub(before));
+                advance.advance(done.saturating_sub(before));
             }
         })
         .await?;
-        advance(pins::KIT_DOWNLOAD_BYTES);
+        advance.advance(pins::KIT_DOWNLOAD_BYTES);
 
-        // The packages are installed, so their downloads only take room.
-        let _ = fs::remove_dir_all(self.wheels());
-        let _ = fs::remove_dir_all(self.home.join("cache"));
         let installed = Installed {
             on_card,
             fingerprint: pins::fingerprint(on_card),
+            uv: pins::uv_id(),
             megabytes: pins::installed_megabytes(on_card),
         };
         let text = serde_json::to_string(&installed).expect("tools serialize");
-        fs::write(self.home.join("tools.json"), text)?;
+        let home = self.home.clone();
+        // Deleting gigabytes is no work for a thread that serves other tasks. The packages are
+        // installed, so their downloads only take room.
+        tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+            let _ = fs::remove_dir_all(home.join("wheels"));
+            let _ = fs::remove_dir_all(home.join("cache"));
+            fs::write(home.join("tools.json"), text)
+        })
+        .await
+        .map_err(|error| Interrupted::Failed(error.to_string()))??;
         *self.installed_lock() = Some(installed);
         Ok(())
     }
@@ -304,7 +359,7 @@ impl KitTrainer {
         if self.stopped() {
             return Err(Interrupted::Stopped);
         }
-        let mut last = Vec::new();
+        let mut last = VecDeque::new();
         let status = process::run(command, &self.running, &self.stopping, &mut |line| {
             remember(&mut last, line);
             on_line(line);
@@ -316,7 +371,7 @@ impl KitTrainer {
         if status.success() {
             Ok(())
         } else {
-            Err(Interrupted::Failed(last.join(" ")))
+            Err(Interrupted::Failed(join(&last)))
         }
     }
 
@@ -325,17 +380,17 @@ impl KitTrainer {
     async fn run_kit(
         &self,
         arguments: &[String],
-        log: &mut fs::File,
+        log: &mut BufWriter<fs::File>,
         progress: &(dyn Fn(TrainingProgress) + Send + Sync),
     ) -> Result<Outcome<Option<PathBuf>>, Failure> {
         if self.stopped() {
             return Ok(Outcome::Stopped);
         }
-        let mut command = self.kit()?;
+        let mut command = self.kit().await?;
         command.args(arguments);
         let mut error = None;
         let mut exported = None;
-        let mut last = Vec::new();
+        let mut last = VecDeque::new();
         let status = process::run(command, &self.running, &self.stopping, &mut |line| {
             let _ = writeln!(log, "{line}");
             match events::parse(line) {
@@ -356,13 +411,16 @@ impl KitTrainer {
             }
         })
         .await
-        .map_err(failed)?;
+        .map_err(failed);
+        // Whatever the kit wrote is in the log, whether it ended well or not.
+        let _ = log.flush();
+        let status = status?;
         if self.stopped() {
             return Ok(Outcome::Stopped);
         }
         if !status.success() {
             return Err(Failure(Message::plain(
-                error.unwrap_or_else(|| last.join(" ")),
+                error.unwrap_or_else(|| join(&last)),
             )));
         }
         Ok(Outcome::Done(exported))
@@ -370,20 +428,83 @@ impl KitTrainer {
 }
 
 /// Keeps the last lines a program wrote, to tell what went wrong.
-fn remember(last: &mut Vec<String>, line: &str) {
+fn remember(last: &mut VecDeque<String>, line: &str) {
     let line = line.trim();
     if line.is_empty() {
         return;
     }
     if last.len() == LAST_LINES {
-        last.remove(0);
+        last.pop_front();
     }
-    last.push(line.to_owned());
+    last.push_back(line.to_owned());
+}
+
+fn join(lines: &VecDeque<String>) -> String {
+    lines
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Whether a variable of the app's environment reaches the programs of the training: what they
+/// need to find their files, the network and the card, and no setting of Python, uv or the
+/// loader.
+fn passes_to_programs(name: &str) -> bool {
+    const NAMES: [&str; 31] = [
+        "PATH",
+        "PATHEXT",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "USERNAME",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "PROGRAMDATA",
+        "SYSTEMROOT",
+        "SYSTEMDRIVE",
+        "WINDIR",
+        "COMSPEC",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "LANG",
+        "NUMBER_OF_PROCESSORS",
+        "PROCESSOR_ARCHITECTURE",
+        "LD_LIBRARY_PATH",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "ALL_PROXY",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+    ];
+    NAMES
+        .iter()
+        .any(|allowed| name.eq_ignore_ascii_case(allowed))
+        || ["LC_", "CUDA_", "NVIDIA_"]
+            .iter()
+            .any(|prefix| name.to_ascii_uppercase().starts_with(prefix))
 }
 
 /// The file name at the end of an address, with the `+` of PyTorch's versions decoded.
 fn file_name(url: &str) -> String {
     url.rsplit('/').next().unwrap_or(url).replace("%2B", "+")
+}
+
+/// The folder the kit exported, which is trusted only where the kit puts it. Any line of RVC's
+/// output can look like the kit's event, and the folder is added to the voices afterwards.
+fn exported_folder(training: &Path, reported: Option<PathBuf>) -> PathBuf {
+    let expected = training.join("app");
+    match reported {
+        Some(reported) if reported == expected => reported,
+        _ => expected,
+    }
 }
 
 /// A name the app made, which never leads out of its folder.
@@ -397,18 +518,17 @@ fn failed(detail: impl ToString) -> Failure {
 
 #[cfg(target_os = "windows")]
 fn unpack_uv(archive: &Path, entry: &str, target: &Path) -> Result<(), Interrupted> {
-    let mut archive = zip::ZipArchive::new(fs::File::open(archive)?)?;
-    let mut program = archive.by_name(entry)?;
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
     }
-    std::io::copy(&mut program, &mut fs::File::create(target)?)?;
-    Ok(())
+    instantpad_download::extract_zip_entry(archive, entry, None, target)
 }
 
 #[cfg(target_os = "linux")]
 fn unpack_uv(archive: &Path, entry: &str, target: &Path) -> Result<(), Interrupted> {
     use std::os::unix::fs::PermissionsExt;
+
+    use instantpad_download::write_atomic;
 
     let file = fs::File::open(archive)?;
     let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(file));
@@ -418,8 +538,12 @@ fn unpack_uv(archive: &Path, entry: &str, target: &Path) -> Result<(), Interrupt
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent)?;
             }
-            std::io::copy(&mut found, &mut fs::File::create(target)?)?;
-            fs::set_permissions(target, fs::Permissions::from_mode(0o755))?;
+            // Whole and executable before it takes the place of uv, so a stopped copy is never
+            // taken for the program.
+            write_atomic(target, |program| {
+                std::io::copy(&mut found, program)?;
+                program.set_permissions(fs::Permissions::from_mode(0o755))
+            })?;
             return Ok(());
         }
     }
@@ -434,6 +558,16 @@ fn unpack_uv(_archive: &Path, _entry: &str, _target: &Path) -> Result<(), Interr
     Err(Interrupted::Failed(
         "this system does not train voices".to_owned(),
     ))
+}
+
+/// Opens the log of a training to append to. A long one is set aside first, so a training that
+/// is resumed again and again does not grow it without end.
+fn open_log(folder: &Path) -> std::io::Result<fs::File> {
+    let log = folder.join("training.log");
+    if fs::metadata(&log).is_ok_and(|kept| kept.len() > LOG_LIMIT_BYTES) {
+        let _ = fs::rename(&log, folder.join("training.log.old"));
+    }
+    fs::OpenOptions::new().create(true).append(true).open(log)
 }
 
 /// The bytes of a file, or of everything in a folder. Links are not followed: a venv links to
@@ -513,22 +647,19 @@ impl VoiceTrainer for KitTrainer {
     }
 
     async fn graphics_card(&self) -> Option<GraphicsCard> {
-        let ask = tokio::task::spawn_blocking(|| {
-            let mut command = Command::new("nvidia-smi");
-            command.args([
+        let mut command = tokio::process::Command::new("nvidia-smi");
+        command
+            .args([
                 "--query-gpu=name,memory.total,driver_version",
                 "--format=csv,noheader,nounits",
-            ]);
-            #[cfg(target_os = "windows")]
-            {
-                use std::os::windows::process::CommandExt;
-                command.creation_flags(0x0800_0000);
-            }
-            command.output()
-        });
-        let output = tokio::time::timeout(CARD_TIMEOUT, ask)
+            ])
+            .stdin(std::process::Stdio::null())
+            // A driver in a bad state may never answer, and the program must not outlive the wait.
+            .kill_on_drop(true);
+        #[cfg(target_os = "windows")]
+        command.creation_flags(0x0800_0000);
+        let output = tokio::time::timeout(CARD_TIMEOUT, command.output())
             .await
-            .ok()?
             .ok()?
             .ok()?;
         if !output.status.success() {
@@ -555,10 +686,14 @@ impl VoiceTrainer for KitTrainer {
     }
 
     fn installed_megabytes(&self) -> u32 {
-        self.installed_lock().as_ref().map_or_else(
-            || self.leftover_megabytes.load(Ordering::Relaxed),
-            |installed| installed.megabytes,
-        )
+        if let Some(installed) = self.installed_lock().as_ref() {
+            return installed.megabytes;
+        }
+        if self.leftover_megabytes.load(Ordering::Relaxed) == UNMEASURED {
+            self.leftover_megabytes
+                .store(tools_on_disk(&self.home), Ordering::Relaxed);
+        }
+        self.leftover_megabytes.load(Ordering::Relaxed)
     }
 
     fn free_megabytes(&self) -> Option<u64> {
@@ -576,7 +711,10 @@ impl VoiceTrainer for KitTrainer {
         self.stopping.store(false, Ordering::Relaxed);
         #[cfg(target_os = "windows")]
         {
-            let length = self.home.as_os_str().len();
+            use std::os::windows::ffi::OsStrExt;
+
+            // Windows counts the units of UTF-16, not the bytes of the name.
+            let length = self.home.as_os_str().encode_wide().count();
             if length > MAX_HOME_CHARACTERS {
                 return Err(failed(format!(
                     "the folder {} is {length} characters long, and Windows needs it under \
@@ -675,11 +813,7 @@ impl VoiceTrainer for KitTrainer {
         }
         let folder = self.voice(&run.job);
         fs::create_dir_all(&folder).map_err(failed)?;
-        let mut log = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(folder.join("training.log"))
-            .map_err(failed)?;
+        let mut log = BufWriter::new(open_log(&folder).map_err(failed)?);
 
         let plan = run.plan;
         let train = [
@@ -700,14 +834,12 @@ impl VoiceTrainer for KitTrainer {
             "export".to_owned(),
             "--name".to_owned(),
             run.job.clone(),
-            "--title".to_owned(),
-            run.title.clone(),
+            // One argument, so a title that starts with a dash is not taken for an option.
+            format!("--title={}", run.title),
         ];
         match self.run_kit(&export, &mut log, progress).await? {
             Outcome::Stopped => Ok(Outcome::Stopped),
-            Outcome::Done(exported) => Ok(Outcome::Done(
-                exported.unwrap_or_else(|| folder.join("app")),
-            )),
+            Outcome::Done(exported) => Ok(Outcome::Done(exported_folder(&folder, exported))),
         }
     }
 
@@ -748,11 +880,143 @@ mod tests {
 
     #[test]
     fn a_failure_shows_the_last_lines_the_program_wrote() {
-        let mut last = Vec::new();
+        let mut last = VecDeque::new();
         for line in ["one", "", "two", "three", "four"] {
             remember(&mut last, line);
         }
 
-        assert_eq!(last, ["two", "three", "four"]);
+        assert_eq!(join(&last), "two three four");
+    }
+
+    #[test]
+    fn an_exported_folder_outside_the_training_is_not_believed() {
+        let training = Path::new("/home/voices/voice-1");
+
+        assert_eq!(exported_folder(training, None), training.join("app"));
+        assert_eq!(
+            exported_folder(training, Some(PathBuf::from("/home/voices/voice-1/app"))),
+            training.join("app")
+        );
+        assert_eq!(
+            exported_folder(training, Some(PathBuf::from("/elsewhere/app"))),
+            training.join("app")
+        );
+    }
+
+    #[test]
+    fn a_log_that_grew_too_long_is_set_aside_and_a_short_one_is_appended_to() {
+        let folder = tempfile::tempdir().unwrap();
+        let log = folder.path().join("training.log");
+        fs::write(&log, "short").unwrap();
+        writeln!(open_log(folder.path()).unwrap(), "more").unwrap();
+        assert_eq!(fs::read_to_string(&log).unwrap(), "shortmore\n");
+
+        fs::write(&log, vec![b'x'; LOG_LIMIT_BYTES as usize + 1]).unwrap();
+        writeln!(open_log(folder.path()).unwrap(), "fresh").unwrap();
+
+        assert_eq!(fs::read_to_string(&log).unwrap(), "fresh\n");
+        assert!(folder.path().join("training.log.old").exists());
+    }
+
+    #[test]
+    fn programs_get_what_they_need_of_the_environment_and_no_setting_of_python_or_uv() {
+        for needed in [
+            "PATH",
+            "Path",
+            "SystemRoot",
+            "TEMP",
+            "HTTPS_PROXY",
+            "CUDA_VISIBLE_DEVICES",
+            "LC_ALL",
+        ] {
+            assert!(passes_to_programs(needed), "{needed}");
+        }
+        for unwanted in [
+            "PYTHONPATH",
+            "PYTHONHOME",
+            "VIRTUAL_ENV",
+            "UV_PYTHON_INSTALL_MIRROR",
+            "LD_PRELOAD",
+            "PYTHONSTARTUP",
+            "AWS_SECRET_ACCESS_KEY",
+        ] {
+            assert!(!passes_to_programs(unwanted), "{unwanted}");
+        }
+    }
+
+    fn tools_json(home: &Path, uv: &str, fingerprint: &str) {
+        let installed = Installed {
+            on_card: false,
+            fingerprint: fingerprint.to_owned(),
+            uv: uv.to_owned(),
+            megabytes: 1,
+        };
+        fs::write(
+            home.join("tools.json"),
+            serde_json::to_string(&installed).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn a_uv_and_a_python_from_other_pins_are_not_current() {
+        let home = tempfile::tempdir().unwrap();
+        let trainer_at = |uv: &str, fingerprint: &str| {
+            tools_json(home.path(), uv, fingerprint);
+            KitTrainer::new(home.path())
+        };
+        let make = |trainer: &KitTrainer| {
+            for program in [trainer.uv(), trainer.python()] {
+                fs::create_dir_all(program.parent().unwrap()).unwrap();
+                fs::write(program, "").unwrap();
+            }
+        };
+
+        let current = trainer_at(&pins::uv_id(), &pins::fingerprint(false));
+        make(&current);
+        assert!(current.uv_is_current());
+        assert!(current.python_is_current(false));
+
+        let old = trainer_at("0.1.0-old", "old");
+        assert!(!old.uv_is_current());
+        assert!(!old.python_is_current(false));
+        // The size to download counts the uv that is not the pinned one.
+        assert!(old.missing_bytes(false) >= pins::uv().file.size + pins::PYTHON_BYTES);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn uv_is_unpacked_whole_and_executable_or_not_at_all() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let folder = tempfile::tempdir().unwrap();
+        let archive = folder.path().join("uv.tar.gz");
+        let mut tarball = tar::Builder::new(flate2::write::GzEncoder::new(
+            Vec::new(),
+            flate2::Compression::fast(),
+        ));
+        let content = b"#!/bin/sh\n";
+        let mut header = tar::Header::new_gnu();
+        header.set_size(content.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        tarball
+            .append_data(&mut header, "uv-dir/uv", &content[..])
+            .unwrap();
+        fs::write(&archive, tarball.into_inner().unwrap().finish().unwrap()).unwrap();
+        let target = folder.path().join("tools/uv");
+
+        unpack_uv(&archive, "uv-dir/uv", &target).unwrap();
+
+        assert_eq!(fs::read(&target).unwrap(), content);
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o755
+        );
+        assert!(!folder.path().join("tools/uv.part").exists());
+
+        let other = folder.path().join("tools/other");
+        assert!(unpack_uv(&archive, "uv-dir/missing", &other).is_err());
+        assert!(!other.exists());
     }
 }

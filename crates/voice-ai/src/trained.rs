@@ -2,13 +2,12 @@
 //! with `voice.json`, the synthesizer of the voice and HuBERT, which every voice shares.
 
 use std::fs;
-use std::io::Read;
 use std::path::Path;
 
 use instantpad_application::message::{Failure, TextKey};
 use instantpad_domain::cloning::TrainedModel;
+use instantpad_download::{copy_hashed, sha256_file, write_atomic};
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
 
 use crate::rvc::{CONTENT, SYNTHESIZER, TRAINED};
 
@@ -75,6 +74,9 @@ pub(crate) fn add(models: &Path, source: &Path, id: &str) -> Result<TrainedModel
         return Err(invalid("the pitch of the voice is out of range"));
     }
 
+    if !is_plain_id(id) {
+        return Err(invalid("not a name the app made"));
+    }
     let synthesizer = checked(source, &voice.synthesizer.file)?;
     let content = models.join(CONTENT);
     // Every export of HuBERT hears alike, so the one the app has serves every voice.
@@ -85,19 +87,22 @@ pub(crate) fn add(models: &Path, source: &Path, id: &str) -> Result<TrainedModel
     };
 
     let folder = models.join(TRAINED).join(id);
-    let copied = (|| -> std::io::Result<()> {
-        fs::create_dir_all(&folder)?;
-        copy(&synthesizer, &folder.join(SYNTHESIZER))?;
-        fs::write(folder.join(VOICE), &text)?;
+    let copied = (|| -> Result<(), Failure> {
+        fs::create_dir_all(&folder).map_err(saving)?;
+        copy(
+            &synthesizer,
+            &voice.synthesizer.file,
+            &folder.join(SYNTHESIZER),
+        )?;
+        fs::write(folder.join(VOICE), &text).map_err(saving)?;
         if let Some(new_content) = &new_content {
-            copy(new_content, &content)?;
+            copy(new_content, &voice.content, &content)?;
         }
         Ok(())
     })();
-    if let Err(error) = copied {
+    if let Err(failure) = copied {
         let _ = fs::remove_dir_all(&folder);
-        let _ = fs::remove_file(content.with_extension("part"));
-        return Err(Failure::because(TextKey::SaveFailed, error));
+        return Err(failure);
     }
 
     Ok(TrainedModel {
@@ -108,10 +113,18 @@ pub(crate) fn add(models: &Path, source: &Path, id: &str) -> Result<TrainedModel
     })
 }
 
+/// Whether `id` is a plain folder name, never a path out of the models.
+pub(crate) fn is_plain_id(id: &str) -> bool {
+    !id.is_empty() && !id.contains(['/', '\\', '.'])
+}
+
+fn saving(error: impl ToString) -> Failure {
+    Failure::because(TextKey::SaveFailed, error)
+}
+
 /// Deletes a model's folder.
 pub(crate) fn remove(models: &Path, id: &str) {
-    // Only a plain folder name, never a path out of the models.
-    if id.is_empty() || id.contains(['/', '\\', '.']) {
+    if !is_plain_id(id) {
         return;
     }
     let _ = fs::remove_dir_all(models.join(TRAINED).join(id));
@@ -135,7 +148,8 @@ fn checked(source: &Path, listed: &File) -> Result<std::path::PathBuf, Failure> 
     let size = fs::metadata(&path)
         .map_err(|error| invalid(format!("{}: {error}", listed.file)))?
         .len();
-    if size != listed.size || sha256(&path)? != listed.sha256.to_lowercase() {
+    let hash = sha256_file(&path).map_err(invalid)?;
+    if size != listed.size || hash != listed.sha256.to_lowercase() {
         return Err(invalid(format!(
             "{} is not the file the kit exported",
             listed.file
@@ -144,25 +158,27 @@ fn checked(source: &Path, listed: &File) -> Result<std::path::PathBuf, Failure> 
     Ok(path)
 }
 
-fn sha256(path: &Path) -> Result<String, Failure> {
-    let mut file = fs::File::open(path).map_err(invalid)?;
-    let mut digest = Sha256::new();
-    let mut block = vec![0; 1 << 20];
-    loop {
-        let read = file.read(&mut block).map_err(invalid)?;
-        if read == 0 {
-            break;
+/// Copies through a file of its own, so a copy that stops halfway never looks whole, and
+/// checks what was copied against the listed hash. The source was checked before, but it may
+/// have changed since, and the copy is what runs.
+fn copy(from: &Path, listed: &File, to: &Path) -> Result<(), Failure> {
+    let mut changed = false;
+    write_atomic(to, |target| {
+        let (size, hash) = copy_hashed(&mut fs::File::open(from)?, target)?;
+        changed = size != listed.size || hash != listed.sha256.to_lowercase();
+        if changed {
+            Err(std::io::Error::other("it changed while it was copied"))
+        } else {
+            Ok(())
         }
-        digest.update(&block[..read]);
-    }
-    Ok(format!("{:x}", digest.finalize()))
-}
-
-/// Copies through a file of its own, so a copy that stops halfway never looks whole.
-fn copy(from: &Path, to: &Path) -> std::io::Result<()> {
-    let part = to.with_extension("part");
-    fs::copy(from, &part)?;
-    fs::rename(&part, to)
+    })
+    .map_err(|error| {
+        if changed {
+            invalid(format!("{}: {error}", listed.file))
+        } else {
+            saving(error)
+        }
+    })
 }
 
 #[cfg(test)]
@@ -170,6 +186,8 @@ mod tests {
     use std::path::PathBuf;
 
     use instantpad_application::message::Message;
+
+    use sha2::Digest;
 
     use super::*;
 
@@ -203,7 +221,7 @@ mod tests {
     }
 
     fn digest(bytes: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(bytes))
+        format!("{:x}", sha2::Sha256::digest(bytes))
     }
 
     /// What the kit exports, with small files standing for the models.
@@ -346,5 +364,36 @@ mod tests {
 
         assert!(!folders.models().join("trained/abc").exists());
         assert!(folders.models().join(CONTENT).exists());
+    }
+
+    #[test]
+    fn a_file_that_changes_after_it_was_checked_is_not_copied() {
+        let folders = Folders::new("changed-while-copied");
+        let source = folders.export().join("synthesizer.onnx");
+        fs::write(&source, b"changed after the check").unwrap();
+        let listed = File {
+            file: "synthesizer.onnx".to_owned(),
+            sha256: digest(b"what was checked"),
+            size: 16,
+        };
+        let to = folders.models().join("synthesizer.onnx");
+
+        let failure = copy(&source, &listed, &to).unwrap_err();
+
+        assert_eq!(key(&failure), TextKey::TrainedModelInvalid);
+        assert!(!to.exists());
+        assert!(!folders.models().join("synthesizer.onnx.part").exists());
+    }
+
+    #[test]
+    fn an_id_that_leads_out_of_the_models_is_refused() {
+        let folders = Folders::new("bad-id");
+        export(&folders.export(), |_| {});
+
+        let failure = add(&folders.models(), &folders.export(), "../outside").unwrap_err();
+
+        assert_eq!(key(&failure), TextKey::TrainedModelInvalid);
+        assert!(is_plain_id("0a1b-2c"));
+        assert!(!is_plain_id("a/b"));
     }
 }

@@ -1,10 +1,23 @@
 //! Runs the programs of the training so that stopping one stops everything it started: RVC's
 //! training starts processes of its own, which outlive their parent when only it is ended.
+//!
+//! A program ends in this order: it exits, the processes it left behind are ended with its
+//! group, and then what they still wrote is read, for a short while only.
 
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, Read};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use instantpad_application::sync::lock;
+use tokio::time::Instant;
+
+/// How long the output of a program that already ended is still read. Everything it wrote is in
+/// the pipe by then, unless a process that escaped its group holds the pipe open.
+const DRAIN_FOR: Duration = Duration::from_secs(2);
+/// The longest line kept. Longer ones are cut, so output without line breaks stays small.
+const LONGEST_LINE: usize = 64 * 1024;
 
 /// The processes of one program and everything it started.
 pub(crate) struct Group {
@@ -12,6 +25,11 @@ pub(crate) struct Group {
     job: windows_job::Job,
     #[cfg(not(target_os = "windows"))]
     leader: u32,
+    /// The program's input, which only this app holds the writing end of. When the app dies for
+    /// any reason the system closes it, and the kit, which watches it, ends its own group. A
+    /// Unix process has no job object to do that for it.
+    #[cfg(not(target_os = "windows"))]
+    _lifeline: Option<std::process::ChildStdin>,
 }
 
 impl Group {
@@ -21,11 +39,13 @@ impl Group {
         self.job.terminate();
         #[cfg(not(target_os = "windows"))]
         {
-            // The leader's id is the group's, and a minus sends to the whole group. Without the
-            // `--`, kill takes the minus for an option.
-            let _ = Command::new("kill")
-                .args(["-s", "KILL", "--", &format!("-{}", self.leader)])
-                .status();
+            use rustix::process::{Pid, Signal, kill_process_group};
+
+            // The leader's id is the group's. A group with nobody left is already ended, and the
+            // only other failure, a missing right, cannot happen to a group this app started.
+            if let Some(group) = i32::try_from(self.leader).ok().and_then(Pid::from_raw) {
+                let _ = kill_process_group(group, Signal::KILL);
+            }
         }
     }
 }
@@ -44,16 +64,13 @@ pub(crate) async fn run(
 ) -> io::Result<ExitStatus> {
     // One pipe for both, so the lines come in the order they were written.
     let (reader, writer) = io::pipe()?;
-    command
-        .stdin(Stdio::null())
-        .stdout(writer.try_clone()?)
-        .stderr(writer);
-    hide(&mut command);
+    command.stdout(writer.try_clone()?).stderr(writer);
+    prepare(&mut command);
     let mut child = command.spawn()?;
     // The command holds the writing end too, which must close for the reading to end.
     drop(command);
-    let group = Arc::new(contain(&child)?);
-    *slot.lock().expect("process lock poisoned") = Some(group.clone());
+    let group = Arc::new(contain(&mut child)?);
+    *lock(slot) = Some(group.clone());
     // Read after the program is in the slot, and `stop` sets it before it looks in the slot, so
     // one of the two always ends the program.
     if stopping.load(Ordering::SeqCst) {
@@ -61,27 +78,32 @@ pub(crate) async fn run(
     }
 
     let (lines, mut received) = tokio::sync::mpsc::unbounded_channel();
-    std::thread::spawn(move || {
-        for line in BufReader::new(reader).split(b'\n') {
-            let Ok(line) = line else {
-                break;
-            };
-            let text = String::from_utf8_lossy(&line)
-                .trim_end_matches('\r')
-                .to_owned();
-            if lines.send(text).is_err() {
-                break;
-            }
+    let reading = std::thread::spawn(move || read_lines(reader, |line| lines.send(line).is_ok()));
+    let mut exit = tokio::task::spawn_blocking(move || child.wait());
+    let mut open = true;
+    let status = loop {
+        tokio::select! {
+            // The program ending is what ends the run, not the pipe closing: a process it
+            // started may hold the pipe long after it.
+            status = &mut exit => break status.map_err(io::Error::other)?,
+            line = received.recv(), if open => match line {
+                Some(line) => on_line(&line),
+                None => open = false,
+            },
         }
-    });
-    while let Some(line) = received.recv().await {
+    };
+    // What the program left behind goes with it, which also lets the pipe close.
+    group.end();
+    let deadline = Instant::now() + DRAIN_FOR;
+    while let Ok(Some(line)) = tokio::time::timeout_at(deadline, received.recv()).await {
         on_line(&line);
     }
-    let status = tokio::task::spawn_blocking(move || child.wait())
-        .await
-        .map_err(io::Error::other)?;
+    // Joined only when the pipe closed, since a process that escaped the group may hold it.
+    if reading.is_finished() {
+        let _ = reading.join();
+    }
 
-    let mut current = slot.lock().expect("process lock poisoned");
+    let mut current = lock(slot);
     if current
         .as_ref()
         .is_some_and(|kept| Arc::ptr_eq(kept, &group))
@@ -93,30 +115,70 @@ pub(crate) async fn run(
 
 /// Ends the program in `slot` and everything it started, if one runs.
 pub(crate) fn end(slot: &Slot) {
-    if let Some(group) = slot.lock().expect("process lock poisoned").take() {
+    if let Some(group) = lock(slot).take() {
         group.end();
     }
 }
 
+/// Hands every line of `reader` to `send`, until the end or until `send` says no. A line ends at
+/// `\n` or `\r`, because progress is drawn with a bare `\r`, and empty lines are left out.
+fn read_lines(mut reader: impl Read, mut send: impl FnMut(String) -> bool) {
+    let mut line = Vec::new();
+    let mut block = [0; 8192];
+    loop {
+        let read = match reader.read(&mut block) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => read,
+        };
+        for &byte in &block[..read] {
+            let ends = byte == b'\n' || byte == b'\r';
+            if !ends {
+                line.push(byte);
+            }
+            if (ends || line.len() >= LONGEST_LINE) && !line.is_empty() {
+                if !send(String::from_utf8_lossy(&line).into_owned()) {
+                    return;
+                }
+                line.clear();
+            }
+        }
+    }
+    if !line.is_empty() {
+        send(String::from_utf8_lossy(&line).into_owned());
+    }
+}
+
 #[cfg(target_os = "windows")]
-fn hide(command: &mut Command) {
+fn prepare(command: &mut Command) {
     use std::os::windows::process::CommandExt;
 
     // A console with no window, which the processes it starts share, so none opens one.
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    command.creation_flags(CREATE_NO_WINDOW);
+    command
+        .stdin(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW);
 }
 
 #[cfg(not(target_os = "windows"))]
-fn hide(command: &mut Command) {
+fn prepare(command: &mut Command) {
     use std::os::unix::process::CommandExt;
 
-    // A group of its own, which ends as one.
-    command.process_group(0);
+    // A group of its own, which ends as one, and an input that stays open as long as the app
+    // lives (see `Group`).
+    command.stdin(Stdio::piped()).process_group(0);
 }
 
+/// Puts the program in a job that ends with the app.
+///
+/// The program is already running when it is assigned, and a process it starts in between is
+/// outside the job. Closing that gap takes starting it suspended and resuming its first thread
+/// after the assignment, and `std` neither gives the handle of that thread nor takes a job when
+/// it creates the process (that is unstable). Finding the thread by walking the system's thread
+/// list is code that cannot be tried on a build machine without Windows, and a mistake in it
+/// leaves every training suspended, so the short gap is accepted: the programs run here are uv
+/// and Python, and what they start comes after they have loaded.
 #[cfg(target_os = "windows")]
-fn contain(child: &std::process::Child) -> io::Result<Group> {
+fn contain(child: &mut std::process::Child) -> io::Result<Group> {
     let job = windows_job::Job::new()?;
     if let Err(error) = job.assign(child) {
         let _ = std::process::Command::new("taskkill")
@@ -128,8 +190,11 @@ fn contain(child: &std::process::Child) -> io::Result<Group> {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn contain(child: &std::process::Child) -> io::Result<Group> {
-    Ok(Group { leader: child.id() })
+fn contain(child: &mut std::process::Child) -> io::Result<Group> {
+    Ok(Group {
+        leader: child.id(),
+        _lifeline: child.stdin.take(),
+    })
 }
 
 /// A job object, which ends its processes when it is closed, so they also end with the app.
@@ -282,5 +347,72 @@ mod tests {
 
         assert!(!status.success());
         assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[test]
+    fn a_line_ends_at_a_line_feed_or_a_carriage_return_and_empty_ones_are_left_out() {
+        let mut lines = Vec::new();
+
+        read_lines(
+            &b"one\r\ntwo\n\nprogress 1%\rprogress 2%\rlast"[..],
+            |line| {
+                lines.push(line);
+                true
+            },
+        );
+
+        assert_eq!(lines, ["one", "two", "progress 1%", "progress 2%", "last"]);
+    }
+
+    #[test]
+    fn a_line_without_an_end_is_cut() {
+        let mut lines = Vec::new();
+
+        read_lines(&vec![b'a'; LONGEST_LINE + 5][..], |line| {
+            lines.push(line.len());
+            true
+        });
+
+        assert_eq!(lines, [LONGEST_LINE, 5]);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_process_left_behind_does_not_keep_the_run_waiting_and_is_ended() {
+        let slot = Mutex::new(None);
+        let started = Instant::now();
+        let mut lines = Vec::new();
+
+        // The shell ends at once, and the sleep it started keeps the output open.
+        let status = run(
+            shell("sleep 30 & echo done"),
+            &slot,
+            &AtomicBool::new(false),
+            &mut |line| lines.push(line.to_owned()),
+        )
+        .await
+        .unwrap();
+
+        assert!(status.success());
+        assert_eq!(lines, ["done"]);
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_program_has_an_input_that_stays_open_until_the_app_lets_go() {
+        let slot = Arc::new(Mutex::new(None));
+        let ender = slot.clone();
+        let running = tokio::spawn(async move {
+            // Reads its input to the end, which a closed input would give at once.
+            run(shell("cat"), &ender, &AtomicBool::new(false), &mut |_| {}).await
+        });
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(!running.is_finished());
+        end(&slot);
+
+        let status = running.await.unwrap().unwrap();
+        assert!(!status.success());
     }
 }

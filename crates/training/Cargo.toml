@@ -17,7 +17,7 @@ instantpad-domain.workspace = true
 reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 serde.workspace = true
 serde_json.workspace = true
-sha2 = "0.10"
+sha2 = "0.11"
 tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "sync", "time"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
